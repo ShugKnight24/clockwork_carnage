@@ -11,7 +11,7 @@
 import { isPassable } from "./physics.js";
 import { holdOffFrozen } from "./stillness.js";
 import { clamp, decay } from "../utils/math.js";
-import { applyAimDelta, recenterAim, aimSensitivityScale, aimZoom } from "./aim.js";
+import { applyAimDelta, recenterAim, aimSensitivityScale, aimZoom, centredAim, centredLook } from "./aim.js";
 import { PLAYER, moveAABB, aabbOverlapsSolid } from "../world/voxel-physics.js";
 import {
   PLAYER_ADS_MOVE_MULT,
@@ -32,6 +32,12 @@ const SLIDE_ROLL = 0.05;
  */
 function applyMouseAim(p, mouse, settings) {
   if (mouse.dx === 0 && mouse.dy === 0) return false;
+  if (centredAim()) {
+    centredLook(p, mouse.dx, mouse.dy, settings);
+    mouse.dx = 0;
+    mouse.dy = 0;
+    return true;
+  }
   const sens = settings.sensitivity || 1;
   const invX = settings.invertX ? -1 : 1;
 
@@ -66,6 +72,7 @@ function applyVoxelLook(p, mouse, settings) {
   );
   p.aimOffsetX = 0;
   p.aimOffsetY = 0;
+  p.lookShiftY = 0;
   mouse.dx = 0;
   mouse.dy = 0;
   return true;
@@ -96,7 +103,7 @@ export class PlayerUpdateSystem {
    * @returns {{ tutorialSlid?: boolean, tutorialCrouched?: boolean, fallDamage?: number } | null}
    */
   update(ctx, dt) {
-    const { player: p, keys, keybinds: kb, mouse, settings, mode, audio, world, voiceProfile } = ctx;
+    const { player: p, keys, keybinds: kb, mouse, settings, mode, audio, world, voiceProfile, moveAxis = null } = ctx;
     let moveX = 0, moveY = 0;
     const cos = Math.cos(p.angle);
     const sin = Math.sin(p.angle);
@@ -259,12 +266,21 @@ export class PlayerUpdateSystem {
     if (!meltdownMode && (keys[kb.moveBack] || keys["ArrowDown"])) { moveX -= cos; moveY -= sin; }
     if (keys[kb.moveLeft]) { moveX += sin; moveY -= cos; }
     if (keys[kb.moveRight]) { moveX -= sin; moveY += cos; }
+    // A touch stick steers by its true direction (js/touch.js moveAxis), and
+    // leans in part way for a slower walk.
+    let throttle = 1;
+    if (moveAxis) {
+      const fwd = meltdownMode ? 0 : moveAxis.y;
+      moveX = cos * fwd - sin * moveAxis.x;
+      moveY = sin * fwd + cos * moveAxis.x;
+      throttle = Math.min(1, 0.45 + 0.55 * Math.hypot(moveAxis.x, moveAxis.y));
+    }
 
     // Normalize
     const len = Math.sqrt(moveX * moveX + moveY * moveY);
     if (len > 0) {
-      moveX = (moveX / len) * speed * dt;
-      moveY = (moveY / len) * speed * dt;
+      moveX = (moveX / len) * speed * throttle * dt;
+      moveY = (moveY / len) * speed * throttle * dt;
     }
 
     // Walking bob

@@ -55,6 +55,7 @@ import { LAYER } from "../src/data/levels/map-helpers.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 import { warmPropSet } from "../src/rendering/props.js";
+import { CITY_GLASS, warmCityView } from "../src/rendering/env/city-view.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -106,8 +107,19 @@ const KIT_AT = [
 /** The cadet's locker: the left of the pair in the south wall's cell (14, 47), and where to face it from. */
 const MY_LOCKER = { x: 14.3, y: 46.9 };
 const MY_LOCKER_CELL = { x: 14, y: 47 };
-/** Out of the locker room's door and up the main corridor, toward the Engine level. */
-const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5], [26.5, 41.5], [29.5, 41.5], [29.5, 30.5]];
+/** Out of the locker room's door and up the main corridor to the sim hall's door, on the way to Lift B. */
+const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5], [26.5, 41.5], [29.5, 41.5], [29.5, 30.5], [29.5, 12.8]];
+/** Through the sim hall's door toward Lift B: the squad goes down to the Engine level in it. */
+const INTO_SIM_HALL = [[29.5, 12.8], [29.5, 8.0]];
+/** Where the squad stands in Lift B's car, facing out: three to a trip, a body's width apart. */
+const CAR_SPOTS = [[29.4, 2.5], [30.6, 2.5], [30.0, 2.85]];
+/** Where the rest wait in the sim hall for the car to come back up. */
+const LIFT_QUEUE = [[27.6, 4.8], [26.6, 4.8], [32.4, 4.8], [33.4, 4.8]];
+/** Seconds the full car stands open before its doors shut, and a trip down and back. */
+const CAR_DWELL = 1.2;
+const CAR_TRIP = 5;
+/** On an iPhone browser, the gap between the station's people decoding a layer each (_prewarmStation). */
+const PEOPLE_PACE_MS = 300;
 /** The Supervisor's marks, step by step: where he walks to and waits. */
 const SUP_ROUTES = {
   // In at the door and round the benches, to where the cadet can see him.
@@ -822,13 +834,13 @@ const LOGIC = {
         c.phase = "leave";
         t.squad.forEach((o, i) => {
           o.faceTo(null);
-          setTimeoutGame(t, i * 0.6, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { leave: true, speed: 2.2 }));
+          setTimeoutGame(t, i * 0.6, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { speed: 2.2, then: (n) => t.squadToLift(g, n) }));
         });
         t.say([
           ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
           ["OFFICER", "Six years and you're still a cadet. Ugh.", "calm"],
           ["OFFICER", "Hold the fort, Cadet. Somebody's got to mind the coffee.", "happy"],
-          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Put it on, get used to it, and meet me at the range.", "calm"],
+          ["SUPERVISOR", "R&D sent something up for you this morning. It's in your locker. Put it on and meet me at the range. Dr. Orr's coming down to look you over.", "calm"],
         ]);
       }
       return c.phase === "leave" && t.scriptIdle();
@@ -1117,6 +1129,12 @@ const LOGIC = {
       return false;
     },
     progress: (t, g) => t.sheetText() + (t.cert.linBriefed && !t.cert.done.combat && inArea(g.player, "arena") ? "\nLIN · READY WHEN YOU ARE" : ""),
+    // A phone's folded card: the sheet in one line (a tap opens it again).
+    brief: (t, g) => {
+      const done = PROLOGUE_TRIALS.filter((tr) => t.cert.done[tr.id]).length;
+      const lin = t.cert.linBriefed && !t.cert.done.combat && inArea(g.player, "arena") ? " · LIN READY" : "";
+      return `TRIALS ${done} / ${PROLOGUE_TRIALS.length}${lin}`;
+    },
   },
 
   // ── Trial: weapons (the range) ─────────────────────────────────
@@ -2116,6 +2134,11 @@ export class TutorialSystem {
     this.liftOpen = false;
     /** The Supervisor is in Lift B, going down: gone when its doors shut. */
     this.supDown = false;
+    /**
+     * The squad on its way down in Lift B (squadToLift): who is in the car,
+     * who waits for it, and where its trips are. False before and after.
+     */
+    this.squadOut = false;
     this._timers = [];
     // Set pieces.
     this.alert = false;
@@ -2163,10 +2186,16 @@ export class TutorialSystem {
   _begin() {
     const g = this.game;
     if (g.hasCutsceneScript("clocking_in")) {
-      this._prewarmStation(g);
+      const warm = this._prewarmStation(g);
       g.startCutscene("clocking_in", () => {
-        g.ariaEnabled = true;
-        this.initLevel();
+        const start = () => {
+          g.ariaEnabled = true;
+          this.initLevel();
+        };
+        // Skipped early: finish the station behind a short hold rather than
+        // bake it under play (7 s at ~3 fps on an iPhone).
+        if (warm && !warm.done()) warm.finish(start);
+        else start();
       });
     } else {
       g.ariaEnabled = true;
@@ -2179,13 +2208,14 @@ export class TutorialSystem {
    * opening scene plays, a few walls per idle moment, then its people. Left
    * to the first frame in the station, the walls froze it for ~1 s while the
    * squad stood there in Legacy art. Whatever the scene leaves undone when it
-   * is skipped, the level finishes as before.
+   * is skipped, `finish` bakes behind a progress bar before the level starts.
+   * @returns {{ done: () => boolean, finish: (onDone: () => void) => void } | null}
    */
   _prewarmStation(g) {
     const r = g.renderer;
     const ctx = r?.ctx;
     const viewH = r?.height;
-    if (!r?.prewarmEnv || !ctx || !viewH || getArtStyle() === ART_LEGACY) return;
+    if (!r?.prewarmEnv || !ctx || !viewH || getArtStyle() === ART_LEGACY) return null;
     const act = r._actPalette || 1;
     const level = r._envLevel ?? null;
     // The rooms in view at the start first, the east wing after.
@@ -2199,30 +2229,133 @@ export class TutorialSystem {
     const people = ["officer", "supervisor", "officerKit", "rasczakKit", "kaelKit", "staff", "clerk"];
     let built = false;
     let uploaded = false;
-    const until = performance.now() + 20000;
+    const cityGlass = TUTORIAL_MAP.ownWalls.some((id) => CITY_GLASS[id] === 1);
+    let city = false;
+    const total = 3 + walls.length;
+    // An iPhone browser paints canvases later, in its GPU process: a bake
+    // costs next to nothing here and lands on whatever next waits for the GPU
+    // (a pixel read froze the comic 1.1 s; the first frames in the station
+    // waited on every 3D blit). Reading one pixel back makes each bake pay
+    // its own cost inside the slice that queued it.
+    const queued = typeof requestIdleCallback !== "function";
+    // There a person's layer costs 100-200 ms of GPU, ~180 of them, however
+    // they are spread (paced through play, every frame hitched). So they go
+    // under the comic, only at the near size (the far one is a cheap GPU
+    // downscale of it, raster.js deriveSmaller), and what the comic leaves
+    // goes on in play, a layer every PEOPLE_PACE_MS.
+    const peopleHeights = queued ? halfHeights.slice(0, 1) : halfHeights;
+    let peopleAt = 0;
+    const until = performance.now() + (queued ? 120000 : 20000);
+    const settle = () => {
+      if (!queued) return;
+      try {
+        ctx.getImageData(0, 0, 1, 1);
+      } catch (_) {
+        // A tainted or lost canvas: the next frame settles it instead.
+      }
+    };
+    // Safari has no requestIdleCallback. Its stand-in deadline must run out:
+    // a fixed timeRemaining() kept the loop below baking every wall in one
+    // slice, a ~4 s freeze in the opening comic on an iPhone.
     const idle = (fn) =>
-      typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 100 }) : setTimeout(() => fn({ timeRemaining: () => 8 }), 16);
-    const slice = (deadline) => {
-      // The level adopts the env once it starts: painting into it then
-      // would re-upload the wall pass for every wall.
-      if (g.mode !== "tutorial" || g.state === GameState.PLAYING || performance.now() > until) return;
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback(fn, { timeout: 100 })
+        : setTimeout(() => {
+            // 12 of every 16 ms: the opening's panels are mostly still, and
+            // the bake left at the comic's end shows as untextured walls.
+            const end = performance.now() + 12;
+            fn({ timeRemaining: () => Math.max(0, end - performance.now()) });
+          }, 16);
+    // One piece of the work; false once there is none left.
+    const work = (deadline) => {
       if (!built) {
         r.prewarmEnv(act, level);
         built = true;
       } else if (walls.length) {
         // At least one a slice: an idle callback that timed out has no time left.
-        do r.prewarmEnv(act, level, [walls.shift()]);
-        while (walls.length && deadline.timeRemaining() > 4);
+        do {
+          r.prewarmEnv(act, level, [walls.shift()]);
+          settle();
+        } while (walls.length && deadline.timeRemaining() > 4);
+      } else if (!city) {
+        // The city through the windows, a piece a slice: left to play, its
+        // pixel reads held the first second in the station (~300 ms each).
+        city = !cityGlass || warmCityView();
+        settle();
       } else if (!uploaded) {
         // Then onto the GPU, a few faces a slice.
         uploaded = r.prewarmWallPass(act, level, 8);
         if (uploaded) warmPropSet(viewH / 2);
-      } else if (prefetchEnemyModel(ctx, people[0], halfHeights, undefined, 2)) {
-        people.shift();
+        settle();
+      } else if (queued && g.state === GameState.PLAYING && performance.now() < peopleAt) {
+        return true;
+      } else {
+        peopleAt = performance.now() + PEOPLE_PACE_MS;
+        if (prefetchEnemyModel(ctx, people[0], peopleHeights, undefined, queued ? 1 : 2)) people.shift();
       }
-      if (people.length) idle(slice);
+      return people.length > 0;
+    };
+    const stationReady = () => built && !walls.length && city && uploaded;
+    let finishing = false;
+    const slice = (deadline) => {
+      // The level adopts the env once it starts: painting into it then
+      // would re-upload the wall pass for every wall.
+      if (finishing || g.mode !== "tutorial" || performance.now() > until) return;
+      // Once playing, only the people go on (and only where they wait for play).
+      if (g.state === GameState.PLAYING && !(queued && stationReady())) return;
+      if (work(deadline)) idle(slice);
     };
     idle(slice);
+
+    // The comic's last frame, dimmed, with how far the station has got.
+    const hold = () => {
+      const w = ctx.canvas.width;
+      const h = ctx.canvas.height;
+      const left = (built ? 0 : 1) + walls.length + (city ? 0 : 1) + (uploaded ? 0 : 1);
+      const bw = Math.min(260, w * 0.4);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "rgba(0,0,0,0.06)";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(w / 2 - bw / 2 - 12, h - 64, bw + 24, 44);
+      ctx.fillStyle = "#cfe";
+      ctx.font = "bold 12px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("PREPARING THE STATION", w / 2, h - 46);
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      ctx.fillRect(w / 2 - bw / 2, h - 34, bw, 4);
+      ctx.fillStyle = "#4ef";
+      ctx.fillRect(w / 2 - bw / 2, h - 34, bw * (1 - left / total), 4);
+      ctx.restore();
+    };
+    // The walls and their upload, which play would otherwise bake on sight.
+    // The people still decode as the steps call for them.
+    return {
+      done: stationReady,
+      finish(onDone) {
+        finishing = true;
+        // A slice a frame from the game's cutscene update (so a stepped test
+        // run drives it too). No scene is up meanwhile: the hook also keeps
+        // the game from taking that for a lost scene.
+        g.cutsceneHold = () => {
+          if (g.mode !== "tutorial") {
+            g.cutsceneHold = null;
+            return;
+          }
+          const end = performance.now() + 50;
+          const deadline = { timeRemaining: () => Math.max(0, end - performance.now()) };
+          while (!stationReady() && performance.now() < end) work(deadline);
+          if (stationReady()) {
+            g.cutsceneHold = null;
+            // The people go on at their pace in play (see peopleHeights).
+            finishing = false;
+            if (queued) idle(slice);
+            onDone();
+          } else hold();
+        };
+      },
+    };
   }
 
   initLevel() {
@@ -2396,6 +2529,7 @@ export class TutorialSystem {
     this._updateAlert(g);
     this._syncRoomLights(g);
     this._updateLift(g);
+    this._updateSquadOut(g);
     this._updateNotices(g);
     this._updateGap(g);
     this._updateBars(g);
@@ -2611,12 +2745,16 @@ export class TutorialSystem {
   /**
    * Rasterise an NPC look now, a few layers a frame, before a scene changes
    * someone into it: left to the swap, the new sprite blinked out while its
-   * layers decoded.
+   * layers decoded. Not on a phone (no requestIdleCallback): there the
+   * locker room's five looks held its first ~8 s at 2-5 fps (measured on an
+   * iPhone 15 Pro), with the page's own work under 20 ms a frame. A blink at
+   * the swap costs less. The opening comic still warms them (_prewarmStation).
    */
   warmNpc(g, kind) {
     const ctx = g.renderer?.ctx;
     const viewH = g.renderer?.height;
     if (!ctx || !viewH || getArtStyle() === ART_LEGACY || typeof requestAnimationFrame !== "function") return;
+    if (typeof requestIdleCallback !== "function") return;
     const halfHeights = [viewH / 2.4, viewH / 5];
     const until = performance.now() + 8000;
     const step = () => {
@@ -2790,6 +2928,15 @@ export class TutorialSystem {
   progressText() {
     try {
       return this.logic?.progress?.(this, this.game) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The counter a folded phone card shows, where the step has a shorter one than progressText. */
+  progressBrief() {
+    try {
+      return this.logic?.brief?.(this, this.game) ?? null;
     } catch {
       return null;
     }
@@ -3534,6 +3681,88 @@ export class TutorialSystem {
     else this.gone(g, "orr");
     // Gone down the shaft, whatever the alarm got to show.
     if (this.step > PROLOGUE_STEPS.findIndex((d) => d.id === "alarm") && this.sup?.active && this.sup.x < 36 && this.sup.y < 12) this.sup.active = false;
+  }
+
+  /**
+   * One of the squad at the sim hall's door, on the way down. The door
+   * (still locked to the cadet this early) opens for them and Lift B opens;
+   * four at a time step into the car and stand facing out until its doors
+   * shut on them, and the rest wait in the hall for it to come back up.
+   */
+  squadToLift(g, n) {
+    if (!this.squadOut) {
+      this.squadOut = { riders: [], queue: [], phase: "boarding", t: 0 };
+      this.openDoors(g, "door5");
+      this.lift(g, true);
+      g.audio.doorOpen?.();
+    }
+    const run = this.squadOut;
+    if (run.phase === "boarding" && run.riders.length < CAR_SPOTS.length) this._board(n, INTO_SIM_HALL);
+    else {
+      const [x, y] = LIFT_QUEUE[run.queue.length % LIFT_QUEUE.length];
+      run.queue.push(n);
+      n.walk([...INTO_SIM_HALL, [x, y]], { speed: 2.2, then: (o) => o.faceTo(LIFT_CAR) });
+    }
+  }
+
+  /** Into the next free spot in Lift B's car, by way of `via`, and turn to face out. */
+  _board(n, via) {
+    const run = this.squadOut;
+    const [x, y] = CAR_SPOTS[run.riders.length];
+    n._carSpot = [x, y];
+    run.riders.push(n);
+    n.walk([...via, [30.0, 4.2], [x, y]], { speed: 2.2, then: (o) => o.faceTo({ x: o.x, y: o.y + 4 }) });
+  }
+
+  /**
+   * Lift B's trips with the squad: a full car (or the last of them) stands
+   * a moment, shuts and goes down with them; it comes back up for whoever
+   * is waiting. With them all gone the sim hall locks again behind them,
+   * once the cadet is back on the corridor's side (never on them), unless
+   * the floor has opened up since.
+   */
+  _updateSquadOut(g) {
+    const run = this.squadOut;
+    if (!run) return;
+    const dt = g.deltaTime || 0;
+    if (run.phase === "boarding") {
+      const coming = this.squad.filter((o) => o.active && !run.riders.includes(o) && !run.queue.includes(o));
+      const full = run.riders.length === CAR_SPOTS.length || (!coming.length && !run.queue.length);
+      // Aboard once stopped, or close: a spot a body can't quite reach still counts.
+      const aboard = (o) => !o.walking || Math.hypot(o.x - o._carSpot[0], o.y - o._carSpot[1]) < 0.3;
+      if (run.riders.length && full && run.riders.every(aboard)) [run.phase, run.t] = ["closing", CAR_DWELL];
+    } else if (run.phase === "closing") {
+      run.t -= dt;
+      if (run.t > 0) return;
+      this.lift(g, false);
+      if (this.liftOpen) return;
+      for (const o of run.riders) o.active = false;
+      run.riders = [];
+      [run.phase, run.t] = ["down", CAR_TRIP];
+    } else if (run.phase === "down") {
+      if (run.queue.length) {
+        run.t -= dt;
+        if (run.t > 0) return;
+        this.lift(g, true);
+        run.phase = "boarding";
+        for (const o of run.queue.splice(0, CAR_SPOTS.length)) this._board(o, []);
+        // Whoever is left moves up the line.
+        run.queue.forEach((o, i) => o.walk([LIFT_QUEUE[i]], { speed: 1.4, then: (n) => n.faceTo(LIFT_CAR) }));
+        return;
+      }
+      if (this.squad.some((o) => o.active)) {
+        // Someone still on the way: the car comes back up for them.
+        run.t -= dt;
+        if (run.t > 0) return;
+        this.lift(g, true);
+        run.phase = "boarding";
+        return;
+      }
+      if (g.player.y < 12.2) return;
+      this.squadOut = false;
+      if (this.step >= PROLOGUE_STEPS.findIndex((d) => d.id === "certify")) return;
+      for (const d of TUTORIAL_MAP.doors.door5) g.map.grid[d.y][d.x] = TUTORIAL_MAP.grid[d.y][d.x];
+    }
   }
 
   /** Lift B's doors: open now, or shut as soon as nobody stands in them. */

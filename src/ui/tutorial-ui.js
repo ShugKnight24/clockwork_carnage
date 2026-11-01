@@ -288,7 +288,7 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
   ctx.font = TITLE_FONT;
   const titleW = ctx.measureText(step.title).width;
   ctx.font = HINT_FONT;
-  const hintLines = wrapText(ctx, step.hint, MAX_W - PAD_X * 2);
+  const hintLines = place.collapsed ? [] : wrapText(ctx, step.hint, MAX_W - PAD_X * 2);
   const hintW = hintLines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
   // ARIA's folded line, as a footer: "ARIA: ..." in her colour.
   const narr = narrationState(place.narration);
@@ -463,11 +463,54 @@ export function renderTutorialCard(ctx, w, h, state, lane = {}) {
   const now = performance.now();
   const fadeIn = Math.min(1, (now - tutorialStepTime) / 400);
   const pulse = 0.85 + 0.15 * Math.sin(now / 300);
-  const place = { caption: beatCaption(step.beat), progress: state.progress || "", top: 66, ...lane };
-  if (isModernArt()) {
-    return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
+  // On a phone the card folds to its title and counter once it has been read;
+  // a tap on it opens it again for as long, and a tap on an open one folds it (toggleCard).
+  const shown = Math.max(tutorialStepTime, cardOpenedAt);
+  const collapsed = !!lane.compact && !!isTouchDevice && (cardFoldedAt > shown || now - shown > CARD_COLLAPSE_AFTER * 1000);
+  const place = {
+    caption: beatCaption(step.beat),
+    progress: (collapsed && state.brief) || state.progress || "",
+    top: 66,
+    ...lane,
+    collapsed,
+  };
+  const bottom = isModernArt()
+    ? renderModernStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place)
+    : renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
+  noteCard(place, bottom, collapsed);
+  return bottom;
+}
+
+let cardOpenedAt = -Infinity;
+let teachOpenedAt = -Infinity;
+let cardFoldedAt = -Infinity;
+let lastCard = null;
+
+/** Where the last card drew (its lane's width, top to bottom), for a tap to find it. */
+function noteCard(place, bottom, collapsed) {
+  if (!bottom || !place.compact) {
+    lastCard = null;
+    return;
   }
-  return renderStepCard(ctx, w, h, step, fadeIn, pulse, tutorialStep, copy.length - 1, place);
+  const half = (place.maxW ?? 600) / 2;
+  const cx = place.cx ?? 0;
+  lastCard = { x: cx - half, y: (place.top ?? 60) - 6, w: half * 2, h: bottom - (place.top ?? 60) + 12, collapsed, at: performance.now() };
+}
+
+/**
+ * A tap at (x, y) on a phone card: a folded one opens again, hint and all, for
+ * another CARD_COLLAPSE_AFTER seconds; an open one folds now. True when the
+ * tap was on one.
+ */
+export function toggleCard(x, y) {
+  const c = lastCard;
+  if (!c || performance.now() - c.at > 250) return false;
+  if (x < c.x || x > c.x + c.w || y < c.y || y > c.y + c.h) return false;
+  if (c.collapsed) {
+    cardOpenedAt = performance.now();
+    teachOpenedAt = cardOpenedAt;
+  } else cardFoldedAt = performance.now();
+  return true;
 }
 
 /**
@@ -486,12 +529,19 @@ export function renderTutorialCard(ctx, w, h, state, lane = {}) {
 export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1, lay = {}) {
   const fadeIn = Math.min(1, elapsed / 0.4) * Math.max(0, Math.min(1, fade));
   if (fadeIn <= 0) return 0;
+  const now = performance.now();
+  const shown = Math.max(now - elapsed * 1000, teachOpenedAt);
+  if (lay.compact && (cardFoldedAt > shown || now - shown > CARD_COLLAPSE_AFTER * 1000)) lay = { ...lay, collapsed: true };
   const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 300);
-  if (isModernArt()) return renderModernStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
-  return renderStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
+  const bottom = isModernArt() ? renderModernStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay) : renderStepCard(ctx, w, h, step, fadeIn, pulse, 0, 0, lay);
+  noteCard(lay, bottom, !!lay.collapsed);
+  return bottom;
 }
 
 const NARRATION_TYPE_RATE = 60; // chars/s, ARIA's own plate rate
+
+/** Seconds a phone shows a card's hint before folding it to the title. */
+export const CARD_COLLAPSE_AFTER = 6;
 
 /**
  * A folded comms line's presence (0..1: in over 0.3 s, out over its last
@@ -790,7 +840,7 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   const cx = Math.round(place.cx ?? w / 2);
 
   const titleW = measureSpaced(titleFont, step.title, 1);
-  const lay = layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont, step.pad);
+  const lay = place.collapsed ? { lines: [], w: 0 } : layoutRich(step.hint, MAX_W - PAD_X * 2, hintFont, step.pad);
   // ARIA's folded line: a footer row under a hairline, typed as she speaks.
   const narr = narrationState(place.narration);
   const narrFont = uiFont(compact ? 11 : 13, 600);
@@ -806,7 +856,8 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   const PROG_H = progLines.length * PROG_LINE;
   const progW = progLines.reduce((m, l) => Math.max(m, measureSpaced(progFont, l, 1)), 0);
   const contentW = Math.max(titleW, lay.w, progW, narr ? Math.min(MAX_W - PAD_X * 2, tabW + measureSpaced(narrFont, place.narration.text)) : 0);
-  const boxW = Math.round(Math.min(MAX_W, contentW + PAD_X * 2));
+  // Folded, it keeps room for its chevron past the title.
+  const boxW = Math.round(Math.min(MAX_W, contentW + PAD_X * 2 + (place.collapsed ? 28 : 0)));
   const boxH = PAD_Y + TITLE_H + GAP + lay.lines.length * LINE_H + PROG_H + PAD_Y - 4 + narrH;
   const bx = Math.round(cx - boxW / 2);
   const by = Math.round(place.top ?? 60);
@@ -829,6 +880,14 @@ function renderModernStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalStep
   ctx.letterSpacing = "1px";
   inkText(ctx, step.title, cx, by + PAD_Y + Math.round(TITLE_SIZE * 0.9), step.color, compact ? 3 : 4);
   ctx.letterSpacing = "0px";
+  if (place.collapsed) {
+    // Folded: a chevron in the corner says a tap opens it again.
+    ctx.font = uiFont(10, 800);
+    ctx.textAlign = "right";
+    ctx.fillStyle = UI.textDim;
+    ctx.fillText("▾", bx + boxW - 7, by + PAD_Y + 10);
+    ctx.textAlign = "center";
+  }
 
   let midY = by + PAD_Y + TITLE_H + GAP + LINE_H / 2 - 1;
   for (const line of lay.lines) {

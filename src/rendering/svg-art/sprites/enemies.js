@@ -41,7 +41,17 @@ import { facingView } from "../../facing-view.js";
 import { CREATURES, CREATURE_DEFS } from "./creatures.js";
 import { BOSSES } from "./boss.js";
 
-const MAX_BITMAP_PX = 512;
+let MAX_BITMAP_PX = 512;
+/**
+ * A phone's cap on a figure layer's bitmap (setSpriteBitmapCap): on an
+ * iPhone each layer's decode costs its area in GPU time (100-200 ms at 512),
+ * and the prologue's ~180 people layers at 512 overran the phone's raster
+ * budget, so it evicted and decoded them again for half a minute.
+ */
+export const PHONE_SPRITE_PX = 256;
+export function setSpriteBitmapCap(px) {
+  MAX_BITMAP_PX = px;
+}
 const ATTACK_MS = 240;
 const HIT_POSE_MS = 160;
 const FLASH_MS = 150;

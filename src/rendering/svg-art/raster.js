@@ -14,7 +14,9 @@ const MAX_PX = 4096;
 // Phones get less (setRasterBudget): iOS caps all of a page's canvases at
 // ~384 MB, and the station's wall art needs its share of that.
 let BYTE_BUDGET = 256 * 1024 * 1024;
-export const PHONE_RASTER_BUDGET = 112 * 1024 * 1024;
+// 64 MB on a phone: at 112 the prologue's people alone held ~110 MB of an
+// iPhone's canvas memory, and Safari ended the page in the locker room.
+export const PHONE_RASTER_BUDGET = 64 * 1024 * 1024;
 /** Cap decoded art at `bytes`; idle layers past it are dropped on the next draw. */
 export function setRasterBudget(bytes) {
   BYTE_BUDGET = bytes;

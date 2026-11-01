@@ -610,7 +610,13 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
-  const skipFloorCeil = game.quality && !game.quality.enableFloorTexture;
+  // The governor's low tier drops the floor to save the CPU floor caster. A
+  // GPU floor costs next to nothing, and without one the room's floor is a
+  // black void that cuts every prop off at its base, so there only the
+  // player's or the preset's own switch removes it.
+  const gpuFloor = !!(game.renderer?.useWebGL && game.renderer.glRenderer);
+  const q = game.quality;
+  const skipFloorCeil = !!q && !(gpuFloor ? (q.caps?.enableFloorTexture ?? q.enableFloorTexture) : q.enableFloorTexture);
   if (game.world) {
     const voxelSprites = spriteListFromEntities(game);
     drawVoxelScene(

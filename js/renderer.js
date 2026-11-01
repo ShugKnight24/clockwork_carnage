@@ -125,6 +125,20 @@ const TP_CAM_SIDE = 0.6;
 // TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
 // TODO: Asset Pipeline for the above or is this overkill
 // TODO: Refine assets and improve variety
+/**
+ * Cap colours for walls a prewarm painted without them (prewarmEnv), read
+ * back in one go: the first readback waits on the GPU, the rest are ~1 ms.
+ */
+function averageUncapped(env) {
+  const ids = env._uncapped;
+  if (!ids?.length) return;
+  env._uncapped = null;
+  for (const id of ids) {
+    const mips = env.walls[id];
+    if (mips) averageColor(mips[mips.length - 1]);
+  }
+}
+
 export class Renderer {
   constructor(canvas, renderMode = 0) {
     this.canvas = canvas;
@@ -333,7 +347,11 @@ export class Renderer {
     // Names in `walls` are room finishes (map.bands' styles), baked the same way.
     const ids = walls.filter((w) => typeof w === "number");
     const styles = walls.filter((w) => typeof w === "string");
-    const walled = ids.length > 0 && ensureEnvWalls(env, ids, realistic);
+    // Cap colours wait (averageColor reads back from the GPU, a wait on
+    // its whole queue per wall): prewarmWallPass reads them all at once.
+    const before = new Set(Object.keys(env.walls));
+    const walled = ids.length > 0 && ensureEnvWalls(env, ids, realistic, false);
+    if (walled) for (const id of Object.keys(env.walls)) if (!before.has(id)) (env._uncapped ??= []).push(id);
     const banded = styles.length > 0 && ensureEnvBands(env, styles, realistic);
     if ((walled || banded) && this.glRenderer?._wallPass?.env === env) {
       this.glRenderer._wallPass.env = null;
@@ -356,8 +374,13 @@ export class Renderer {
     const env = [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(
       (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic,
     );
+    if (env) averageUncapped(env);
     const wp = env && this.glRenderer.wallPass();
-    return !wp || wp.prepareEnv(env, count);
+    const done = !wp || wp.prepareEnv(env, count);
+    // Its floor and ceiling too, once the walls are in: left to the first
+    // frame, the deck's upload and mipmaps were ~350 ms on an iPhone.
+    if (done && env) this.glRenderer.uploadModernDeck(env.deck.floor, env.deck.ceil);
+    return done;
   }
 
   /**
@@ -466,6 +489,7 @@ export class Renderer {
         this._modernEnv = alt;
       } else if (warm && warm.act === act && warm.level === level && warm.brutal === brutal && warm.realistic === realistic) {
         this._modernEnv = warm;
+        averageUncapped(warm);
       } else {
         this._modernEnv = generateModernEnv(act, brutal, level, { realistic });
         this._modernEnv.realistic = realistic;
@@ -1792,7 +1816,9 @@ export class Renderer {
     }
 
     // Render sprites
+    this._spriteShift = spriteShift;
     this.renderSprites(player, entities, time, planeMul, camX, camY, player._drawDistance);
+    this._spriteShift = 0;
 
     // Render particles
     if (player.particles) {
@@ -1994,8 +2020,12 @@ export class Renderer {
       // measured in that lifted space (_clipBias).
       const eyeLift = (this._eyeDrop * h) / transformY;
       this._clipBias = eyeLift;
-      const drawStartY = Math.max(eyeLift | 0, (-spriteHeight / 2 + h / 2) | 0);
-      const drawEndY = Math.min((h - 1 + eyeLift) | 0, (spriteHeight / 2 + h / 2) | 0);
+      // The screen's edges, in the same space: renderScene draws this pass
+      // moved by the view's shift (_spriteShift), so looking down by N px
+      // must not cut every prop N px above the bottom of the screen.
+      const edgeLift = eyeLift - (this._spriteShift || 0);
+      const drawStartY = Math.max(edgeLift | 0, (-spriteHeight / 2 + h / 2) | 0);
+      const drawEndY = Math.min((h - 1 + edgeLift) | 0, (spriteHeight / 2 + h / 2) | 0);
       const drawStartX = Math.max(
         0,
         (-spriteWidth / 2 + spriteScreenX) | 0,

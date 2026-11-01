@@ -11,7 +11,12 @@ export function isCompactPhone(h) {
   return h < COMPACT_PHONE_HEIGHT;
 }
 
-export function pauseLayout(w, h, mode) {
+/**
+ * @param {{ screen?: string|null, right?: number }} [opts] screen: the label of
+ * the full-screen button (touch only, when the browser can), right: the inset
+ * it keeps off the right edge.
+ */
+export function pauseLayout(w, h, mode, { screen = null, right = 0 } = {}) {
   const compact = isCompactPhone(h);
   const btnY = compact ? h * 0.55 : h / 2 + 115;
   const btnH = compact ? 40 : 50;
@@ -42,7 +47,10 @@ export function pauseLayout(w, h, mode) {
       }
     : null;
 
-  return { btnY, btnH, btnW, gap, buttons, saveBtn, compact };
+  // Top-right, clear of the menu: a phone's browser bars eat the screen.
+  const screenBtn = screen ? { label: screen, x: w - right - 12 - 150, y: 12, w: 150, h: compact ? 36 : 40 } : null;
+
+  return { btnY, btnH, btnW, gap, buttons, saveBtn, screenBtn, compact };
 }
 
 /** True when (x, y) is inside a {x, y, w, h} rect. */

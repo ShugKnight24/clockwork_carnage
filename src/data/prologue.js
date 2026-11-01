@@ -189,7 +189,8 @@ export const PROLOGUE_STEPS = [
     color: "#46e0ff",
     hint: "Dr. Orr is taking you up to R&D, at the north end of the east wing. Walk with her, or follow the marker.",
     lines: [
-      [SUP, "Not yet, Cadet. Orr wants that suit tuned to you first.", "calm"],
+      [SUP, "This is where you qualify on the new sidearm, Cadet. Before noon.", "calm"],
+      [SUP, "Not in a suit that doesn't know you yet, though. Orr tunes it, then you come back to me.", "calm"],
       [ORR, "Nadia Orr, R&D. Walk with me. Right now the suit's guessing at you; calibration teaches it you.", "warm"],
       [ORR, "Your body, your nerves, how your head runs. I'll be honest: it might not take.", "worried"],
       [ORR, "We read every officer on the force. Biomarkers, neural frequencies. You were the best match, by a distance.", "calm"],
@@ -248,7 +249,7 @@ export const PROLOGUE_STEPS = [
     color: "#ff8844",
     hint: {
       key: "CLICK to fire. Destroy the training drones at the end of the lane.",
-      touch: "Tap FIRE. Destroy the training drones at the end of the lane.",
+      touch: "Tap FIRE. Destroy the training drones at the end of the lane. Hold FIRE and drag to aim as you shoot.",
       pad: (b) => `Pull ${b("fire")} to fire. Destroy the training drones at the end of the lane.`,
     },
     lines: [[ARIA, "Holo-drones. They can't shoot back. Enjoy that while it lasts.", "happy"]],
@@ -261,7 +262,7 @@ export const PROLOGUE_STEPS = [
     color: "#66eeff",
     hint: {
       key: (k) => `Hold RIGHT MOUSE or ${k("aim")} to aim down sights, then fire. Slower feet, tighter shots. (Settings > Controls > Toggle Aim if holding is awkward.)`,
-      touch: "Hold AIM to aim down sights, then fire. Slower feet, tighter shots.",
+      touch: "Tap AIM to aim down sights (tap again to stop), then fire. Slower feet, tighter shots.",
       pad: (b) => `Hold ${b("aim")} to aim down sights, then fire. Slower feet, tighter shots.`,
     },
     lines: [
@@ -302,7 +303,7 @@ export const PROLOGUE_STEPS = [
     color: "#ffd24a",
     hint: {
       key: (k) => `Pistol. Empty it, or press ${k("reload")} to reload. Press ${k("reload")} again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.`,
-      touch: "Pistol. Empty it, or tap USE to reload. Tap USE again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.",
+      touch: "Pistol. Empty it, or tap RELOAD. Tap RELOAD again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.",
       pad: (b) => `Pistol. Empty it, or press ${b("reload")} to reload. Press ${b("reload")} again as the marker crosses the bright band: a faster reload, and the next mag hits harder. Miss and it jams.`,
     },
     lines: [[SUP, "Reload, then hit it again in the band. Quicker, and the next mag bites harder.", "calm"]],
@@ -330,7 +331,7 @@ export const PROLOGUE_STEPS = [
     color: "#ff44ff",
     hint: {
       key: (k) => `Hold ${k("sprint")} while you walk to sprint. The bar under your health is stamina: it drains while you sprint and comes back when you ease off.`,
-      touch: "Tap RUN while you walk to sprint. The bar under your health is stamina: it drains while you sprint and comes back when you ease off.",
+      touch: "Push the stick past its ring to sprint. The bar under your health is stamina: it drains while you sprint and comes back when you ease off.",
       pad: (b) => `Hold ${b("sprint")} while you walk to sprint. The bar under your health is stamina: it drains while you sprint and comes back when you ease off.`,
     },
     lines: [
@@ -394,7 +395,7 @@ export const PROLOGUE_STEPS = [
     color: "#ff44ff",
     hint: {
       key: (k) => `Stand on the start line, top of lane one: Vale counts you in. On "Go", hold ${k("sprint")}: the bar won't last the straight. Ease off before it's empty and it comes back.`,
-      touch: "Stand on the start line, top of lane one: Vale counts you in. On \"Go\", tap RUN: the bar won't last the straight. Ease off before it's empty and it comes back.",
+      touch: "Stand on the start line, top of lane one: Vale counts you in. On \"Go\", push the stick past its ring: the bar won't last the straight. Ease off before it's empty and it comes back.",
       pad: (b) => `Stand on the start line, top of lane one: Vale counts you in. On "Go", hold ${b("sprint")}: the bar won't last the straight. Ease off before it's empty and it comes back.`,
     },
     lines: [
@@ -472,7 +473,7 @@ export const PROLOGUE_STEPS = [
     color: "#7dfff0",
     hint: {
       key: (k) => `Face the holo block and press ${k("cover")}. Hold RIGHT MOUSE to pop up and fire; fire without it to shoot blind. Look at the next block and press ${k("dash")} to slide to it.`,
-      touch: "Face the holo block and tap DASH (it reads COVER). Hold AIM to pop up and fire; fire without it to shoot blind. Look at the next block and tap DASH to slide to it.",
+      touch: "Face the holo block and tap DASH (it reads COVER). Tap AIM to pop up and fire; fire without it to shoot blind. Look at the next block and tap DASH to slide to it.",
       pad: (b) => `Face the holo block and press ${b("dash")}. Hold ${b("aim")} to pop up and fire; fire without it to shoot blind. Look at the next block and press ${b("dash")} to slide to it.`,
     },
     lines: [[LIN, "Before the full sim: cover. Get on that block.", "calm"]],
@@ -622,7 +623,7 @@ export const PROLOGUE_STEPS = [
     color: "#8844ff",
     hint: {
       key: (k) => `Hold ${k("chronoShift")} to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.`,
-      touch: "Hold SLOW to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.",
+      touch: "Tap SLOW to Chrono Shift: the world slows, you don't. It drains the violet energy bar; tap SLOW again to stop and let it refill.",
       pad: (b) => `Hold ${b("chronoShift")} to Chrono Shift: the world slows, you don't. It drains the violet energy bar, which refills when you let go.`,
     },
     lines: [
@@ -637,7 +638,7 @@ export const PROLOGUE_STEPS = [
     color: "#ff7733",
     hint: {
       key: (k) => `The vents burst faster than you can cross. Hold ${k("chronoShift")} to slow them, then go through the gaps.`,
-      touch: "The vents burst faster than you can cross. Hold SLOW to slow them, then go through the gaps.",
+      touch: "The vents burst faster than you can cross. Tap SLOW to slow them, then go through the gaps.",
       pad: (b) => `The vents burst faster than you can cross. Hold ${b("chronoShift")} to slow them, then go through the gaps.`,
     },
     lines: [

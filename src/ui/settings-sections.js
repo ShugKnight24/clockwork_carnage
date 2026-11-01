@@ -56,6 +56,9 @@ export const SECTION_OF = {
   gamepadDeadzone: at("controls", "Controller"),
   gamepadRumble: at("controls", "Controller"),
   touchSensitivity: at("controls", "Touch"),
+  aimAssist: at("controls", "Touch"),
+  gyroAim: at("controls", "Touch"),
+  gyroSensitivity: at("controls", "Touch"),
   autoFire: at("controls", "Touch"),
   swipeWeapons: at("controls", "Touch"),
   haptics: at("controls", "Touch"),
@@ -69,6 +72,7 @@ export const SECTION_OF = {
   minimapSize: at("gameplay", "Interface"),
   // Accessibility & HUD
   fontScale: at("access", "Readability"),
+  readingSpeed: at("access", "Readability"),
   colorblind: at("access", "Readability"),
   hudStyle: at("access", "HUD"),
   editCustomHud: at("access", "HUD"),

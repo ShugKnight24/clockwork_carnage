@@ -33,6 +33,18 @@ export function setWallBase(px) {
   wallBase = px >= T ? T : T >> 1;
 }
 
+/**
+ * Whether Realistic walls keep their relief normals (a second mip chain per
+ * face, and a second texture array on the GPU). A phone drops them: the
+ * station's normals were ~70 MB of canvases there and as much again on the
+ * GPU, and the walls light flat without them (wall-pass.js uploads none).
+ */
+let wallNormals = true;
+export const keepsWallNormals = () => wallNormals;
+export function setWallNormals(on) {
+  wallNormals = !!on;
+}
+
 let starved = false;
 /**
  * True once a canvas has come back without a context: the page is out of

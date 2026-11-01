@@ -28,7 +28,7 @@ export const inputDevice = activeDevice;
 /** What to press for each power, for the device in use. */
 export function powerKeys(game, device = inputDevice(game)) {
   if (device === "touch") {
-    return { shift: "hold SLOW", dash: "DASH", rewind: "REWIND", lock: "LOCK", chip: { foresight: "", dash: "", rewind: "", timeLock: "" } };
+    return { shift: "tap SLOW", dash: "DASH", rewind: "REWIND", lock: "LOCK", chip: { foresight: "", dash: "", rewind: "", timeLock: "" } };
   }
   if (device === "gamepad") {
     const pad = (action) => glyph(game, action, "gamepad").text;

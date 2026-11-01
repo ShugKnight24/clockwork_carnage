@@ -13,7 +13,7 @@
  * All rectangles are `{ x, y, w, h }` in CSS pixels of the HUD layer.
  */
 
-import { touchZones, BUTTON_KEYS } from "./touch-layout.js";
+import { touchZones, BUTTON_KEYS, phoneMinimapSize, phoneVitalsLeft, PHONE_VITALS_H } from "./touch-layout.js";
 
 /** Chip lane: one unlock / achievement chip. */
 export const CHIP_W = 300;
@@ -31,7 +31,17 @@ const HEADLINE_TOP = 54;
 /** Comms: ARIA's prominent plate (460 wide) with its speaker tab above it. */
 const COMMS_W = 460;
 const COMMS_H = 96;
-const COMMS_H_COMPACT = 66;
+/** A phone's subtitle strip: its lines and the name tab on its top edge. */
+const SUBTITLE_LINE_H = 16;
+const SUBTITLE_CHROME = 24;
+
+/**
+ * Lines a phone subtitle shows at once: two, or one on a screen a browser's
+ * bars have cut short, where two would reach the reticle.
+ */
+export function subtitleLines(h) {
+  return h < 340 ? 1 : 2;
+}
 
 const GAP = 10;
 
@@ -157,9 +167,11 @@ export function hudReserved(o) {
   // Landscape phone. Touch buttons own the lower corners.
   const sa = o.safeArea;
   const barH = Math.round(60 * f);
-  const mm = Math.min(o.minimapSize, Math.round(w * 0.18));
+  const mm = phoneMinimapSize(o.minimapSize, w, h);
   const vanguard = o.hudStyle === 4 && o.modern;
-  out.push(R("topLeft", 0, 0, 200 + sa.left, 100));
+  const z = touchZones({ w, h, safeArea: sa, minimapSize: o.minimapSize });
+  // Pause in the corner, then the vitals (gauge and readout, ~160 px).
+  out.push(R("topLeft", 0, 0, Math.max(200 + sa.left, phoneVitalsLeft(z, sa.left) + 160), PHONE_VITALS_H));
   const rw = Math.max(mm + 20, 140) + sa.right;
   out.push(R("minimap", w - rw, 0, rw, Math.max(mm + 12, 70)));
   if (vanguard) {
@@ -173,9 +185,9 @@ export function hudReserved(o) {
   }
   if (boss) out.push(bossBar(w, vanguard ? 44 : 18, fs));
   out.push(R("console", 0, h - barH - 44, w, barH + 44));
-  const z = touchZones({ w, h, safeArea: sa });
   for (const key of BUTTON_KEYS) {
     const b = z[key];
+    if (!b) continue;
     out.push(R(key, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2));
   }
   return out;
@@ -282,15 +294,37 @@ export function messageLanes(o) {
     const soft = reserved.filter((q) => q.name !== "pickups");
     chips = fit(chipAt, [...soft, ...beside], { minW: chipW, dir: 1, gap });
   }
+  if (compact && (reserved.some((q) => overlaps(chips, q)) || chips.y + chips.h > h)) {
+    // No room down a phone's right edge (RELOAD tops the thumb cluster):
+    // the chip takes the headline's slot, where it already waits its turn.
+    chips = { x: Math.round(headline.x + headline.w / 2 - chipW / 2), y: headline.y, w: chipW, h: chipH };
+  }
 
   // Low comms: the old subtle anchor, raised past anything under it.
   const lw = Math.min(COMMS_W, w - 24);
-  const lh = compact ? COMMS_H_COMPACT : COMMS_H;
-  const commsLow = fit(
-    { x: cx - lw / 2, y: commsBottom(o) - lh, w: lw, h: lh },
-    [...reserved, chips],
-    { minW: compact ? 300 : Math.round(Math.min(360, Math.max(300, w * 0.38))), dir: -1, gap },
+  const lh = compact ? subtitleLines(h) * SUBTITLE_LINE_H + SUBTITLE_CHROME : COMMS_H;
+  // A phone's subtitle sits on the console, between the thumb clusters, as
+  // far under the reticle as the buttons allow.
+  const lowBottom = compact ? Math.min(commsBottom(o), reserved.find((q) => q.name === "console").y) : commsBottom(o);
+  // Vanguard's pickup captions last a moment; on a phone the subtitle may
+  // share their corner rather than climb onto the reticle.
+  const lowBlocks = compact ? reserved.filter((q) => q.name !== "pickups") : reserved;
+  let commsLow = fit(
+    { x: cx - lw / 2, y: lowBottom - lh, w: lw, h: lh },
+    [...lowBlocks, chips],
+    // A phone's subtitle keeps a thumb's width off the buttons beside it.
+    { minW: compact ? 260 : Math.round(Math.min(360, Math.max(300, w * 0.38))), dir: -1, gap: compact ? 14 : gap },
   );
+  if (compact && commsLow.y < headline.y + headline.h) {
+    // Notch insets and a small HUD scale draw the thumb clusters in: with
+    // less than minW between them the subtitle climbed every button, off the
+    // top of the screen. It stays on the console between them, narrower.
+    const y = lowBottom - lh;
+    const band = lowBlocks.filter((q) => q.name !== "console" && q.y < y + lh && q.y + q.h > y);
+    const left = Math.max(12 + sa.left, ...band.filter((q) => q.x + q.w / 2 < cx).map((q) => q.x + q.w + 8));
+    const right = Math.min(w - 12 - sa.right, ...band.filter((q) => q.x + q.w / 2 >= cx).map((q) => q.x - 8));
+    commsLow = { x: left, y, w: Math.max(0, right - left), h: lh };
+  }
 
   // Top comms: ARIA's prominent anchor (0.135 h), below the top-centre strip.
   // On a phone the top belongs to the clusters and the headline, so every
@@ -298,6 +332,12 @@ export function messageLanes(o) {
   const comms = compact
     ? commsLow
     : fit({ x: cx - lw / 2, y: Math.round(h * 0.135) - 12, w: lw, h: COMMS_H }, [...reserved, chips], { minW: 440, dir: 1, gap });
+
+  if (compact && overlaps(headline, commsLow)) {
+    // A short phone under a boss bar has no room for both: the card (it is
+    // up for seconds) covers the bar rather than the subtitle.
+    headline = fit(headlineAt, reserved.filter((q) => !["killFeed", "bossBar", "compass"].includes(q.name)), { minW: 260, dir: 1, gap });
+  }
 
   // A crowded small window (Vanguard at 800x600) can push the low comms up
   // into the headline. A card and ARIA's line are on screen together all

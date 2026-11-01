@@ -476,9 +476,9 @@ function torsoBack(R, { w = 22, waist = 16, mat = "url(#armor)", belt = "url(#gu
   return m;
 }
 
-/** Stencilled lettering across a back panel. */
-const backLettering = (y, text, color = "#e8edf5", size = 6, { spacing = 0.6, opacity = 0.92 } = {}) =>
-  `<text x="0" y="${f(y)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${size}" letter-spacing="${spacing}" fill="${color}" opacity="${opacity}">${text}</text>`;
+/** Stencilled lettering across a back panel, centred on `x` (the body's middle by default). */
+const backLettering = (y, text, color = "#e8edf5", size = 6, { spacing = 0.6, opacity = 0.92, x = 0 } = {}) =>
+  `<text x="${f(x)}" y="${f(y)}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${size}" letter-spacing="${spacing}" fill="${color}" opacity="${opacity}">${text}</text>`;
 
 /**
  * The squad's back placard, under the power pack: a black patch with the
@@ -672,7 +672,7 @@ function kaelKit() {
     // Viewport slit, rivets, the PD stencil.
     m += sh(`M${P(cx - 8, top + 8)}h16v3.6h-16Z`, "url(#glass)", 0.8);
     for (const [rx, ry] of [[-12.5, 8], [12.5, 8], [-12.5, 40], [12.5, 40], [-12.5, 72], [12.5, 72]]) m += circ(cx + rx, top + ry, 1, "url(#steel)", 0.5);
-    m += backLettering(bot - 9, "PD", "#c3ccd8", 6.4, { opacity: 0.75 });
+    m += backLettering(bot - 9, "PD", "#c3ccd8", 6.4, { opacity: 0.75, x: cx });
     m += spec(`M${P(cx - 13, top + 6)}L${P(cx - 13, bot - 9)}`, 0.5, 1.2);
     return m;
   };

@@ -17,6 +17,7 @@ import { ROOM_PAINTERS } from "./rooms/index.js";
 import {
   T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, wallMips, guardBake,
   material, beginMaterial, useMaterial, bakeMaterial, ink, sink, raise, relief, emit, grey, fissure,
+  keepsWallNormals, releaseCanvas,
 } from "./paint.js";
 
 const CORNICE = 34;
@@ -926,8 +927,11 @@ export function buildUpperBand(act, pal, span, realistic = false, style = "bulkh
   if (!mat) return wallMips(c);
   // No floor line to gather grime along: the band's foot is the art's top.
   const normals = bakeMaterial(c, mat, p, act, 0x0ba11ad + k, { floor: false });
+  releaseCanvas(mat.h.canvas);
+  releaseCanvas(mat.e.canvas);
   const mips = wallMips(c);
-  mips.normals = wallMips(normals);
+  if (keepsWallNormals()) mips.normals = wallMips(normals);
+  else releaseCanvas(normals);
   return mips;
 }
 
@@ -946,6 +950,9 @@ export function buildWallSet(act, pal, salt = 0, realistic = false) {
  * Paint the faces in `ids` that `set` lacks into it (a map's own walls,
  * added the first time it is drawn). Returns the ids it painted.
  */
+/** Realistic faces painted ahead of their bake (extendWallSet). */
+const REAL_BATCH = 6;
+
 export function extendWallSet(set, wanted, act, pal, salt = 0, realistic = false) {
   const ids = wanted.map(String).filter((id) => PAINTERS[id] && !set[id]);
   // A page out of canvas memory stops painting (guardBake): the faces done
@@ -961,23 +968,33 @@ export function extendWallSet(set, wanted, act, pal, salt = 0, realistic = false
     return done;
   }
   const p = pal || getEnvPalette(act);
-  // Paint every face before reading any back, so the GPU rasterises the
-  // earlier faces while later ones are still being recorded.
-  const faces = guardBake(() => ids.map((id) => {
-    const mat = beginMaterial(p);
-    return { id, mat, canvas: paintWall(+id, act, p, salt, mat) };
-  }), []);
-  for (const { id, mat, canvas } of faces) {
-    const mips = guardBake(() => {
-      const normals = bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
-      const m = wallMips(canvas);
-      // Relief normals for the GPU wall pass's dynamic lights (WallPass).
-      m.normals = wallMips(normals);
-      return m;
-    }, null);
-    if (!mips) break;
-    set[id] = mips;
-    done.push(id);
+  // Paint a batch of faces before reading any back, so the GPU rasterises
+  // the earlier faces while later ones are still being recorded. A batch,
+  // not the lot: each face holds four full-size canvases until it is baked,
+  // and the whole station at once (~650 MB) ended the page on an iPhone.
+  for (let at = 0; at < ids.length; at += REAL_BATCH) {
+    const faces = guardBake(() => ids.slice(at, at + REAL_BATCH).map((id) => {
+      const mat = beginMaterial(p);
+      return { id, mat, canvas: paintWall(+id, act, p, salt, mat) };
+    }), []);
+    for (const { id, mat, canvas } of faces) {
+      const mips = guardBake(() => {
+        const normals = bakeMaterial(canvas, mat, p, act, +id * 7919 + act * 104729 + salt * 15485863);
+        const m = wallMips(canvas);
+        // Relief normals for the GPU wall pass's dynamic lights (WallPass).
+        // Dropped (a phone), the full-size relief canvas is released now.
+        if (keepsWallNormals()) m.normals = wallMips(normals);
+        else releaseCanvas(normals);
+        return m;
+      }, null);
+      // The height and emission targets are spent once the face is baked.
+      releaseCanvas(mat.h.canvas);
+      releaseCanvas(mat.e.canvas);
+      if (!mips) return done;
+      set[id] = mips;
+      done.push(id);
+    }
+    if (faces.length < Math.min(REAL_BATCH, ids.length - at)) break;
   }
   return done;
 }

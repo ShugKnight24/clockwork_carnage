@@ -358,10 +358,12 @@ export class AriaCommsSystem {
       const place = i < 0 ? "hold" : (this.game?.messages?.commsPlacement(this.queue[i]) ?? "top");
       if (place !== "hold") {
         const [msg] = this.queue.splice(i, 1);
-        this.message = { ...msg, life: 0, place };
+        // Up for at least as long as it takes to read.
+        const read = readingTime(msg.text, Number(this.game?.settings?.readingSpeed ?? 1));
+        this.message = { ...msg, life: 0, place, duration: Math.max(msg.duration ?? 0, read) };
         this.idleTimer = 0;
         this.messageLog.push(msg.text);
-        this._voice(msg);
+        this._voice(this.message);
       }
     }
     if (this.message) {
@@ -443,6 +445,12 @@ export class AriaCommsSystem {
     const dur = msg.duration;
     const agentName = characterName || "Agent";
     const a = this._anchor(msg, minTop);
+    // A landscape phone has no room for a plate, a bust or a hologram: every
+    // line is a subtitle under the reticle, whatever the art style.
+    if (isTouchDevice && isCompactPhone(h)) {
+      this._renderSubtitle(ctx, w, h, msg, t, dur, agentName, a);
+      return;
+    }
     // Projected beside a teach card: her figure stands clear of the card.
     const projTop = msg.place === "low" && a?.headline ? a.headline.y + a.headline.h + 8 : minTop;
 
@@ -723,15 +731,20 @@ export class AriaCommsSystem {
     return msg._wrap;
   }
 
-  /** Typewriter text: lines revealed at TYPE_RATE chars/s with an ink caret. */
-  _drawTyped(ctx, msg, lines, x, y, lineH, t, color, caretColor) {
+  /**
+   * Typewriter text: lines revealed at TYPE_RATE chars/s with an ink caret.
+   * `from` and `count` draw a window of the lines at y (the subtitle scrolls).
+   */
+  _drawTyped(ctx, msg, lines, x, y, lineH, t, color, caretColor, from = 0, count = lines.length) {
     const shown = Math.max(0, Math.floor((t - 0.12) * TYPE_RATE));
     let left = shown;
+    for (let i = 0; i < from; i++) left -= lines[i].length;
+    left = Math.max(0, left);
     ctx.fillStyle = color;
     ctx.textAlign = "left";
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = from; i < Math.min(lines.length, from + count); i++) {
       const line = lines[i];
-      const ly = y + i * lineH;
+      const ly = y + (i - from) * lineH;
       if (left >= line.length) {
         ctx.fillText(line, x, ly);
         left -= line.length;
@@ -747,6 +760,57 @@ export class AriaCommsSystem {
       }
       return;
     }
+  }
+
+  /**
+   * Phone subtitle: the speaker's bust, name and the whole line at once on a
+   * translucent strip in the low comms lane, grown upward from its foot. No
+   * typewriter and no pages: on a phone the line paging a row at a time read
+   * as the story stalling.
+   */
+  _renderSubtitle(ctx, w, h, msg, t, dur, agentName, a = null) {
+    let alpha = 1;
+    if (t < 0.2) alpha = t / 0.2;
+    else if (t > dur - 0.4) alpha = Math.max(0, 1 - (t - (dur - 0.4)) / 0.4);
+
+    const speaker = msg.speaker || "ARIA";
+    const color = speakerTone(speaker);
+    const boxW = Math.round(Math.min(a?.maxW ?? w - 32, w - 32));
+    const port = SUBTITLE_PORTRAIT;
+    const tx = 8 + port + 10;
+    const font = uiFont(13, 600);
+    const lineH = 16;
+    const lines = this._modernLines(ctx, msg, agentName, font, boxW - tx - 10);
+    const boxH = Math.max(port + 10, lines.length * lineH + 10);
+    const x = Math.round((a ? a.cx : w / 2) - boxW / 2);
+    const y = Math.round((a?.bottom ?? this._modernSubtleBottom(h, true)) - boxH);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, boxW, boxH, 6);
+    ctx.fill();
+    this._portrait(ctx, msg, x + 8, y + Math.round((boxH - port) / 2), port, t, isRealisticArt() ? "real" : "comic", color);
+
+    // Name tab on the strip's top edge, voice bars beside it.
+    ctx.font = uiFont(10, 700);
+    const label = speaker.toUpperCase();
+    const lw = Math.ceil(ctx.measureText(label).width) + 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.beginPath();
+    ctx.roundRect(x + tx - 6, y - 13, lw, 14, [4, 4, 0, 0]);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.textAlign = "left";
+    ctx.fillText(label, x + tx, y - 3);
+    drawVoiceBars(ctx, x + tx - 6 + lw + 8, y - 6, t, color, this._speaking(msg, t) ? 0.8 : 0.15);
+
+    ctx.font = font;
+    ctx.fillStyle = "#f2f4f8";
+    const top = y + Math.round((boxH - lines.length * lineH) / 2 + lineH * 0.74);
+    lines.forEach((line, i) => ctx.fillText(line, x + tx, top + i * lineH));
+    ctx.restore();
   }
 
   _speaking(msg, t) {
@@ -1149,6 +1213,19 @@ export class AriaCommsSystem {
 // ─── Modern comms art (cached sprites; per frame only blits + text) ─────────
 
 const TYPE_RATE = 60; // typewriter chars per second
+
+/** Bust size on a phone subtitle. */
+const SUBTITLE_PORTRAIT = 30;
+
+/**
+ * Seconds a line of `text` stays up at least, for Reading Speed `speed`:
+ * Slow (0) holds it at 10 characters a second; Normal and Fast keep each
+ * line's own time. The story waits on every line, so a floor for everyone
+ * slowed the whole campaign.
+ */
+export function readingTime(text, speed = 1) {
+  return speed === 0 ? String(text ?? "").length / 10 + 1 : 0;
+}
 const CARD_PAD = 6;
 
 /** Speaker tab colour: ARIA cyan, squad members per SQUAD_TAB_COLORS. */

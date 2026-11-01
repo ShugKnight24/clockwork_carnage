@@ -85,12 +85,15 @@ const css = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
  */
 function wrapped(w, draw) {
   const M = 256;
+  // Both stay on the CPU: city-view reads the band's alpha back
+  // (solidity), and reading a GPU canvas waits on the GPU, ~100 ms on the
+  // station's first frame.
   const wide = makeCanvas(w + M * 2, TS);
-  const g = wide.getContext("2d");
+  const g = wide.getContext("2d", { willReadFrequently: true });
   g.translate(M, 0);
   draw(g, w, TS);
   const out = makeCanvas(w, TS);
-  const o = out.getContext("2d");
+  const o = out.getContext("2d", { willReadFrequently: true });
   o.drawImage(wide, M, 0, w, TS, 0, 0, w, TS);
   o.drawImage(wide, 0, 0, M, TS, w - M, 0, M, TS);
   o.drawImage(wide, M + w, 0, M, TS, 0, 0, M, TS);

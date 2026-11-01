@@ -3,6 +3,7 @@ import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle
 // Reused light sample for the Realistic viewmodel; no per-frame allocation.
 const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
 import { releaseRasterCache, setRasterBudget, PHONE_RASTER_BUDGET } from "../src/rendering/svg-art/raster.js";
+import { setSpriteBitmapCap, PHONE_SPRITE_PX } from "../src/rendering/svg-art/sprites/enemies.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
@@ -153,7 +154,7 @@ import { LevelBeats } from "../src/systems/level-beats.js";
 import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
-import { setWallBase, T } from "../src/rendering/env/paint.js";
+import { setWallBase, setWallNormals, T } from "../src/rendering/env/paint.js";
 import { installInputTracking, padActive, padFor, trackGamepad, drawGlyph, glyphWidth, padGlyph, padFamily } from "../src/ui/input-glyphs.js";
 import { pauseMenuEntries } from "../src/ui/pause-menu-entries.js";
 import { StateManager } from "./state-manager.js";
@@ -267,7 +268,9 @@ export class Game {
     // ran it out.
     if (isPrimaryTouchDevice()) {
       setWallBase(T / 2);
+      setWallNormals(false);
       setRasterBudget(PHONE_RASTER_BUDGET);
+      setSpriteBitmapCap(PHONE_SPRITE_PX);
     }
     this.renderer = new Renderer(canvas, 0); // renderMode applied after settings load
     this.audio = new AudioManager();
@@ -1667,6 +1670,7 @@ export class Game {
         tutorialStepTime: this.tutorialStepTime,
         tutorialStep: this.tutorialStep,
         progress: this.tutorial.progressText(),
+        brief: this.tutorial.progressBrief(),
       },
       // A narrowed lane (a small window) takes the compact card, so it stays within the lane's height.
       lane ? { top: lane.y + 6, maxW: lane.w, cx: lane.x + lane.w / 2, compact: d.lanes.kind === "compact" || lane.w < 520 } : {},
@@ -2041,10 +2045,15 @@ export class Game {
   }
 
   updateCutscene() {
+    // Between a scene and the level it opens onto: the level's own bake.
+    if (this.cutsceneHold) {
+      this.cutsceneHold();
+      return;
+    }
     this.cutsceneEngine?.update();
     // If cutscene ended during update (skip/complete), state was already
     // changed by the onComplete callback or we need to handle it here
-    if (!this.cutsceneEngine?.isActive && this.state === GameState.CUTSCENE) {
+    if (!this.cutsceneEngine?.isActive && this.state === GameState.CUTSCENE && !this.cutsceneHold) {
       // Cutscene ended without a callback setting state — shouldn't normally
       // happen, but guard against it
       this.state = GameState.TITLE;
@@ -2206,6 +2215,11 @@ export class Game {
     // Visual-only code (Math.sin animations) can use this.wallTime instead.
     this.time = (this.time || 0) + this.deltaTime * 1000;
     this.wallTime = timestamp;
+    // The touch controls card is up: nothing moves or speaks until it is read.
+    if (this.state === GameState.PLAYING && this.touchControls?.holdsPlay()) {
+      this.time -= this.deltaTime * 1000;
+      return;
+    }
 
     // Before the pad reads it: switches made by key events since last frame count.
     this.player?.trackWeapon();
@@ -3044,6 +3058,7 @@ export class Game {
         world: this.world,
         audio: this.audio,
         voiceProfile: this.getVoiceProfile(),
+        moveAxis: this.touchControls?.moveAxis?.() ?? null,
         noclip: !!this._noclip,
         time: this.time,
         // The people the pulse stopped are solid: the player goes round them.
@@ -3833,6 +3848,7 @@ export class Game {
     // The camera is the aim in a voxel level; the reticle sits dead centre.
     this.player.aimOffsetX = 0;
     this.player.aimOffsetY = 0;
+    this.player.lookShiftY = 0;
     this.player.health = 100;
     this.player.maxHealth = 100;
     this.player.reserves = {};

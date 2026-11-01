@@ -39,6 +39,7 @@ import { reticlePoint } from "../systems/aim.js";
 import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { ammoTint } from "./reload-hud.js";
+import { phoneMinimapSize, phoneVitalsLeft } from "./touch-layout.js";
 
 const TAU = Math.PI * 2;
 const A0 = Math.PI * 0.75; // gauge opens at the bottom: 135° → 405°
@@ -129,6 +130,38 @@ function paintGaugeBack(g, S, R, tw) {
   g.strokeStyle = "rgba(185,210,232,0.4)";
   g.beginPath();
   g.arc(c, c, R + 14, Math.PI * 1.02, Math.PI * 1.42);
+  g.stroke();
+}
+
+/**
+ * A phone's gauge back: no dial around it (the space goes to a bigger ring
+ * and portrait), only a smoked band under the health tube so it reads over
+ * any wall, and the shield groove when there is a shield.
+ */
+function paintGaugeBackCompact(g, S, R, tw, shield) {
+  const c = S / 2;
+  const r0 = R - tw / 2 - 5;
+  g.beginPath();
+  g.arc(c, c, R + tw / 2 + (shield ? 8 : 3), 0, TAU);
+  g.arc(c, c, r0, 0, TAU, true);
+  g.fillStyle = "rgba(5,9,15,0.55)";
+  g.fill("evenodd");
+  g.lineCap = "butt";
+  const grooves = shield ? [[R, tw], [R + tw / 2 + 5, 3]] : [[R, tw]];
+  for (const [r, w] of grooves) {
+    g.beginPath();
+    g.arc(c, c, r, A0, A0 + SPAN);
+    g.lineWidth = w + 3;
+    g.strokeStyle = UI.ink;
+    g.stroke();
+    g.lineWidth = w;
+    g.strokeStyle = "rgba(24,34,46,0.95)";
+    g.stroke();
+  }
+  g.lineWidth = 3;
+  g.strokeStyle = UI.ink;
+  g.beginPath();
+  g.arc(c, c, r0, 0, TAU);
   g.stroke();
 }
 
@@ -278,7 +311,10 @@ function drawGauge(game, ctx, cx, cy, R, tw, portraitState, compact) {
 
   const real = HT.realistic;
   const aw = real ? Math.max(3, Math.round(tw * 0.5)) : tw;
-  if (real) blitSprite(ctx, cachedSprite(ctx, `vgr-back:${R}:${tw}`, S, S, 0, (g) => paintGaugeBackReal(g, S, R, tw, aw)), bx + jolt, by, S, S);
+  if (compact) {
+    const sh = p.maxShield > 0;
+    blitSprite(ctx, cachedSprite(ctx, `vgc-back:${R}:${tw}:${sh}`, S, S, 0, (g) => paintGaugeBackCompact(g, S, R, tw, sh)), bx + jolt, by, S, S);
+  } else if (real) blitSprite(ctx, cachedSprite(ctx, `vgr-back:${R}:${tw}`, S, S, 0, (g) => paintGaugeBackReal(g, S, R, tw, aw)), bx + jolt, by, S, S);
   else blitSprite(ctx, cachedSprite(ctx, `vg-back:${R}:${tw}`, S, S, 0, (g) => paintGaugeBack(g, S, R, tw)), bx + jolt, by, S, S);
 
   // Medallion.
@@ -358,7 +394,21 @@ function drawGauge(game, ctx, cx, cy, R, tw, portraitState, compact) {
     }
   }
 
-  if (p.chronoActive) {
+  if (p.chronoActive && compact) {
+    // A phone's corner has no room for a ring around the gauge: time slows
+    // inside it instead, a violet wash on the face and a hand sweeping the
+    // health track (the gaps below cut it into the ring's segments).
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r0 - 1, 0, TAU);
+    ctx.clip();
+    ctx.fillStyle = UI.chronoRing;
+    ctx.fillRect(cx - r0, cy - r0, r0 * 2, r0 * 2);
+    ctx.restore();
+    const hand = A0 + ((now * 0.0006) % 1) * SPAN;
+    arc(ctx, cx, cy, R, Math.max(A0, hand - 0.5), hand, aw, UI.chronoTail);
+    arc(ctx, cx, cy, R, hand, Math.min(A0 + SPAN, hand + 0.22), aw + 2, UI.chrono);
+  } else if (p.chronoActive) {
     const a = (now * 0.0035) % TAU;
     arc(ctx, cx, cy, R + 15, 0, TAU, real ? 1 : 2, UI.chronoRing);
     arc(ctx, cx, cy, R + 15, a, a + 1.1, real ? 1.5 : 3.5, UI.chrono);
@@ -853,15 +903,24 @@ function drawCompass(game, ctx, cx, y, W, compact) {
 // ─── Threat ring ────────────────────────────────────────────────────────────
 
 /** Arcs around the reticle toward close hostiles that are off to the side. */
-export function drawVanguardThreatRing(game, ctx, w, h, barH = 0) {
+export function drawVanguardThreatRing(game, ctx, w, h, barH = 0, compact = false) {
   const p = game.player;
   const { x: cx, y: cy } = reticlePoint(w, h, barH, p);
   const r = Math.min(w, h - barH) * 0.16;
   const ink = HT.outline;
   ctx.lineCap = "butt";
 
-  // Chrono shift: a faint violet ring with a sweeping hand.
-  if (p.chronoActive) {
+  // Chrono shift: a faint violet ring with a sweeping hand. On a phone a ring
+  // round the reticle crowds the aim on a small screen: the view's edges go
+  // violet instead, breathing slowly.
+  if (p.chronoActive && compact) {
+    const breathe = 0.75 + 0.25 * Math.sin(M.now * 0.003);
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.hypot(w, h) / 2);
+    g.addColorStop(0, "rgba(155,92,255,0)");
+    g.addColorStop(1, `rgba(155,92,255,${(0.32 * breathe).toFixed(3)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  } else if (p.chronoActive) {
     const a = (M.now * 0.004) % TAU;
     ctx.globalAlpha = 0.18;
     arc(ctx, cx, cy, r, 0, TAU, ink ? 1.5 : 1, UI.violet);
@@ -1012,6 +1071,24 @@ export function vanguardScale(w, h) {
   return Math.max(1, Math.min(1.6, Math.min(w / 1280, h / 720)));
 }
 
+/** Where desktop / tablet Vanguard puts its minimap, in its own (unscaled 1280-wide) space. */
+function vanguardMinimapAt(game, w) {
+  const m = Math.round(22 * Math.min(1, w / 1280) + 6);
+  let s = Math.round(game.settings.minimapSize * 0.8);
+  if (game.isTouchDevice && w < 700) s = Math.min(s, Math.round(w * 0.24));
+  return { x: w - m - s, y: m + 30, s };
+}
+
+/** Vanguard's minimap alone, where its panels put it (the prologue before the suit). */
+export function renderVanguardMinimap(game, ctx, w, h, minimapState) {
+  const k = vanguardScale(w, h);
+  const at = vanguardMinimapAt(game, w / k);
+  ctx.save();
+  ctx.scale(k, k);
+  drawVanguardMinimap(ctx, at.x, at.y, at.s, minimapState);
+  ctx.restore();
+}
+
 /** Desktop / tablet Vanguard. Draws its own minimap. */
 export function renderVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
   const k = vanguardScale(w, h);
@@ -1069,9 +1146,7 @@ function layoutVanguardPanels(game, ctx, w, h, f, portraitState, minimapState) {
     const pop = since(M.killAt, 320);
     chip(ctx, chipsRight, m - 8, "KILLS", `${game.killedEnemies}/${game.totalEnemies}`, UI.crimson, fs, pop >= 0 ? 1 - pop : 0);
   }
-  let mm = Math.round(game.settings.minimapSize * 0.8);
-  if (game.isTouchDevice && w < 700) mm = Math.min(mm, Math.round(w * 0.24));
-  const mmY = m + 30;
+  const { s: mm, y: mmY } = vanguardMinimapAt(game, w);
   drawVanguardMinimap(ctx, right - mm, mmY, mm, minimapState);
   drawKillFeed(ctx, right, mmY + mm + 12, fs);
 
@@ -1106,17 +1181,21 @@ function safeInsets(w, h) {
 /**
  * Landscape phone Vanguard. Touch controls own the lower corners, so vitals
  * move to the top-left and the weapon block to the bottom centre. The minimap
- * and pause buttons (top-right) are drawn by hud.js / touch.js.
+ * (top-right) and pause button (top-left, before the vitals) are drawn by hud.js / touch.js.
  */
 export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   const fs = (game.settings.fontScale || 100) / 100;
   const sa = safeInsets(w, h);
-  const left = 10 + sa.left;
+  // Right of the pause button in the corner.
+  const left = phoneVitalsLeft(game.touchControls?.zones, sa.left);
 
-  const R = Math.round(27 * f);
-  const tw = Math.max(4, Math.round(6 * f));
-  const gcx = left + R + tw + 10;
-  const gcy = 10 + R + tw + 8;
+  // No dial round it on a phone (paintGaugeBackCompact): the ring and the
+  // portrait take that room instead.
+  const R = Math.round(35 * f);
+  const tw = Math.max(5, Math.round(8 * f));
+  const pad = tw / 2 + 8;
+  const gcx = left + R + pad;
+  const gcy = 6 + R + pad;
   const g = drawGauge(game, ctx, gcx, gcy, R, tw, portraitState, true);
   const by = drawVitalsReadout(game, ctx, g.right, gcy + 2, f, fs, g.low, true);
   const diff = ["EASY", "NORM", "HARD", "NITE"][game.settings.difficulty] || "NORM";
@@ -1132,7 +1211,7 @@ export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   drawBossBar(game, ctx, w, fs, 44);
 
   // Kills / score left of the minimap.
-  let mm = Math.min(game.settings.minimapSize, Math.round(w * 0.18));
+  let mm = phoneMinimapSize(game.settings.minimapSize, w, h);
   let chipsRight = w - mm - 22 - sa.right;
   if (game.settings.showKills) {
     const pop = since(M.killAt, 320);
