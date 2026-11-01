@@ -107,8 +107,17 @@ const KIT_AT = [
 /** The cadet's locker: the left of the pair in the south wall's cell (14, 47), and where to face it from. */
 const MY_LOCKER = { x: 14.3, y: 46.9 };
 const MY_LOCKER_CELL = { x: 14, y: 47 };
-/** Out of the locker room's door and up the main corridor, toward the Engine level. */
-const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5], [26.5, 41.5], [29.5, 41.5], [29.5, 30.5]];
+/** Out of the locker room's door and up the main corridor to the sim hall's door, on the way to Lift B. */
+const OUT_OF_LOCKERS = (x, y) => [[x, y], [x, 43.5], [23.0, 43.5], [23.5, 41.5], [26.5, 41.5], [29.5, 41.5], [29.5, 30.5], [29.5, 12.8]];
+/** Through the sim hall's door toward Lift B: the squad goes down to the Engine level in it. */
+const INTO_SIM_HALL = [[29.5, 12.8], [29.5, 8.0]];
+/** Where the squad stands in Lift B's car, facing out: three to a trip, a body's width apart. */
+const CAR_SPOTS = [[29.4, 2.5], [30.6, 2.5], [30.0, 2.85]];
+/** Where the rest wait in the sim hall for the car to come back up. */
+const LIFT_QUEUE = [[27.6, 4.8], [26.6, 4.8], [32.4, 4.8], [33.4, 4.8]];
+/** Seconds the full car stands open before its doors shut, and a trip down and back. */
+const CAR_DWELL = 1.2;
+const CAR_TRIP = 5;
 /** The Supervisor's marks, step by step: where he walks to and waits. */
 const SUP_ROUTES = {
   // In at the door and round the benches, to where the cadet can see him.
@@ -823,7 +832,7 @@ const LOGIC = {
         c.phase = "leave";
         t.squad.forEach((o, i) => {
           o.faceTo(null);
-          setTimeoutGame(t, i * 0.6, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { leave: true, speed: 2.2 }));
+          setTimeoutGame(t, i * 0.6, () => o.walk(OUT_OF_LOCKERS(o.x, o.y), { speed: 2.2, then: (n) => t.squadToLift(g, n) }));
         });
         t.say([
           ["SUPERVISOR", "Not you, Cadet. You're staying with me.", "calm"],
@@ -2117,6 +2126,11 @@ export class TutorialSystem {
     this.liftOpen = false;
     /** The Supervisor is in Lift B, going down: gone when its doors shut. */
     this.supDown = false;
+    /**
+     * The squad on its way down in Lift B (squadToLift): who is in the car,
+     * who waits for it, and where its trips are. False before and after.
+     */
+    this.squadOut = false;
     this._timers = [];
     // Set pieces.
     this.alert = false;
@@ -2492,6 +2506,7 @@ export class TutorialSystem {
     this._updateAlert(g);
     this._syncRoomLights(g);
     this._updateLift(g);
+    this._updateSquadOut(g);
     this._updateNotices(g);
     this._updateGap(g);
     this._updateBars(g);
@@ -3634,6 +3649,88 @@ export class TutorialSystem {
     else this.gone(g, "orr");
     // Gone down the shaft, whatever the alarm got to show.
     if (this.step > PROLOGUE_STEPS.findIndex((d) => d.id === "alarm") && this.sup?.active && this.sup.x < 36 && this.sup.y < 12) this.sup.active = false;
+  }
+
+  /**
+   * One of the squad at the sim hall's door, on the way down. The door
+   * (still locked to the cadet this early) opens for them and Lift B opens;
+   * four at a time step into the car and stand facing out until its doors
+   * shut on them, and the rest wait in the hall for it to come back up.
+   */
+  squadToLift(g, n) {
+    if (!this.squadOut) {
+      this.squadOut = { riders: [], queue: [], phase: "boarding", t: 0 };
+      this.openDoors(g, "door5");
+      this.lift(g, true);
+      g.audio.doorOpen?.();
+    }
+    const run = this.squadOut;
+    if (run.phase === "boarding" && run.riders.length < CAR_SPOTS.length) this._board(n, INTO_SIM_HALL);
+    else {
+      const [x, y] = LIFT_QUEUE[run.queue.length % LIFT_QUEUE.length];
+      run.queue.push(n);
+      n.walk([...INTO_SIM_HALL, [x, y]], { speed: 2.2, then: (o) => o.faceTo(LIFT_CAR) });
+    }
+  }
+
+  /** Into the next free spot in Lift B's car, by way of `via`, and turn to face out. */
+  _board(n, via) {
+    const run = this.squadOut;
+    const [x, y] = CAR_SPOTS[run.riders.length];
+    n._carSpot = [x, y];
+    run.riders.push(n);
+    n.walk([...via, [30.0, 4.2], [x, y]], { speed: 2.2, then: (o) => o.faceTo({ x: o.x, y: o.y + 4 }) });
+  }
+
+  /**
+   * Lift B's trips with the squad: a full car (or the last of them) stands
+   * a moment, shuts and goes down with them; it comes back up for whoever
+   * is waiting. With them all gone the sim hall locks again behind them,
+   * once the cadet is back on the corridor's side (never on them), unless
+   * the floor has opened up since.
+   */
+  _updateSquadOut(g) {
+    const run = this.squadOut;
+    if (!run) return;
+    const dt = g.deltaTime || 0;
+    if (run.phase === "boarding") {
+      const coming = this.squad.filter((o) => o.active && !run.riders.includes(o) && !run.queue.includes(o));
+      const full = run.riders.length === CAR_SPOTS.length || (!coming.length && !run.queue.length);
+      // Aboard once stopped, or close: a spot a body can't quite reach still counts.
+      const aboard = (o) => !o.walking || Math.hypot(o.x - o._carSpot[0], o.y - o._carSpot[1]) < 0.3;
+      if (run.riders.length && full && run.riders.every(aboard)) [run.phase, run.t] = ["closing", CAR_DWELL];
+    } else if (run.phase === "closing") {
+      run.t -= dt;
+      if (run.t > 0) return;
+      this.lift(g, false);
+      if (this.liftOpen) return;
+      for (const o of run.riders) o.active = false;
+      run.riders = [];
+      [run.phase, run.t] = ["down", CAR_TRIP];
+    } else if (run.phase === "down") {
+      if (run.queue.length) {
+        run.t -= dt;
+        if (run.t > 0) return;
+        this.lift(g, true);
+        run.phase = "boarding";
+        for (const o of run.queue.splice(0, CAR_SPOTS.length)) this._board(o, []);
+        // Whoever is left moves up the line.
+        run.queue.forEach((o, i) => o.walk([LIFT_QUEUE[i]], { speed: 1.4, then: (n) => n.faceTo(LIFT_CAR) }));
+        return;
+      }
+      if (this.squad.some((o) => o.active)) {
+        // Someone still on the way: the car comes back up for them.
+        run.t -= dt;
+        if (run.t > 0) return;
+        this.lift(g, true);
+        run.phase = "boarding";
+        return;
+      }
+      if (g.player.y < 12.2) return;
+      this.squadOut = false;
+      if (this.step >= PROLOGUE_STEPS.findIndex((d) => d.id === "certify")) return;
+      for (const d of TUTORIAL_MAP.doors.door5) g.map.grid[d.y][d.x] = TUTORIAL_MAP.grid[d.y][d.x];
+    }
   }
 
   /** Lift B's doors: open now, or shut as soon as nobody stands in them. */
