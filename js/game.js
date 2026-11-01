@@ -3,6 +3,7 @@ import { setArtStyle, onArtStyleChange, isModernArt, isRealisticArt, getArtStyle
 // Reused light sample for the Realistic viewmodel; no per-frame allocation.
 const VIEWMODEL_LIGHT = { r: 1, g: 1, b: 1 };
 import { releaseRasterCache, setRasterBudget, PHONE_RASTER_BUDGET } from "../src/rendering/svg-art/raster.js";
+import { setSpriteBitmapCap, PHONE_SPRITE_PX } from "../src/rendering/svg-art/sprites/enemies.js";
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
@@ -269,6 +270,7 @@ export class Game {
       setWallBase(T / 2);
       setWallNormals(false);
       setRasterBudget(PHONE_RASTER_BUDGET);
+      setSpriteBitmapCap(PHONE_SPRITE_PX);
     }
     this.renderer = new Renderer(canvas, 0); // renderMode applied after settings load
     this.audio = new AudioManager();

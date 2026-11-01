@@ -376,7 +376,11 @@ export class Renderer {
     );
     if (env) averageUncapped(env);
     const wp = env && this.glRenderer.wallPass();
-    return !wp || wp.prepareEnv(env, count);
+    const done = !wp || wp.prepareEnv(env, count);
+    // Its floor and ceiling too, once the walls are in: left to the first
+    // frame, the deck's upload and mipmaps were ~350 ms on an iPhone.
+    if (done && env) this.glRenderer.uploadModernDeck(env.deck.floor, env.deck.ceil);
+    return done;
   }
 
   /**

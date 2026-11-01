@@ -927,9 +927,14 @@ export class GLRenderer {
     return true;
   }
 
-  /** Upload the Modern 512px deck/ceiling canvases as trilinear+anisotropic mipmapped textures. */
+  /**
+   * Upload the Modern 512px deck/ceiling canvases as trilinear+anisotropic
+   * mipmapped textures. The same pair again is a no-op, so a prewarm can
+   * upload a level's deck ahead of its first frame (renderer prewarmWallPass).
+   */
   uploadModernDeck(floorCanvas, ceilCanvas) {
     if (!this._ensureModernFloor()) return;
+    if (this.modernFloorTex && floorCanvas === this._deckFloorSrc && ceilCanvas === this._deckCeilSrc) return;
     const gl = this.gl;
     const make = (src) => {
       const tex = gl.createTexture();
@@ -951,6 +956,8 @@ export class GLRenderer {
     if (this.modernCeilTex) gl.deleteTexture(this.modernCeilTex);
     this.modernFloorTex = make(floorCanvas);
     this.modernCeilTex = make(ceilCanvas);
+    this._deckFloorSrc = floorCanvas;
+    this._deckCeilSrc = ceilCanvas;
   }
 
   /** Upload the per-cell AO/glow bytes (see src/rendering/env/env-map.js). */

@@ -118,6 +118,8 @@ const LIFT_QUEUE = [[27.6, 4.8], [26.6, 4.8], [32.4, 4.8], [33.4, 4.8]];
 /** Seconds the full car stands open before its doors shut, and a trip down and back. */
 const CAR_DWELL = 1.2;
 const CAR_TRIP = 5;
+/** On an iPhone browser, the gap between the station's people decoding a layer each (_prewarmStation). */
+const PEOPLE_PACE_MS = 300;
 /** The Supervisor's marks, step by step: where he walks to and waits. */
 const SUP_ROUTES = {
   // In at the door and round the benches, to where the cadet can see him.
@@ -2223,7 +2225,6 @@ export class TutorialSystem {
     let uploaded = false;
     const cityGlass = TUTORIAL_MAP.ownWalls.some((id) => CITY_GLASS[id] === 1);
     let city = false;
-    const until = performance.now() + 20000;
     const total = 3 + walls.length;
     // An iPhone browser paints canvases later, in its GPU process: a bake
     // costs next to nothing here and lands on whatever next waits for the GPU
@@ -2231,6 +2232,14 @@ export class TutorialSystem {
     // waited on every 3D blit). Reading one pixel back makes each bake pay
     // its own cost inside the slice that queued it.
     const queued = typeof requestIdleCallback !== "function";
+    // There a person's layer costs 100-200 ms of GPU, ~180 of them, however
+    // they are spread (paced through play, every frame hitched). So they go
+    // under the comic, only at the near size (the far one is a cheap GPU
+    // downscale of it, raster.js deriveSmaller), and what the comic leaves
+    // goes on in play, a layer every PEOPLE_PACE_MS.
+    const peopleHeights = queued ? halfHeights.slice(0, 1) : halfHeights;
+    let peopleAt = 0;
+    const until = performance.now() + (queued ? 120000 : 20000);
     const settle = () => {
       if (!queued) return;
       try {
@@ -2272,8 +2281,11 @@ export class TutorialSystem {
         uploaded = r.prewarmWallPass(act, level, 8);
         if (uploaded) warmPropSet(viewH / 2);
         settle();
-      } else if (prefetchEnemyModel(ctx, people[0], halfHeights, undefined, 2)) {
-        people.shift();
+      } else if (queued && g.state === GameState.PLAYING && performance.now() < peopleAt) {
+        return true;
+      } else {
+        peopleAt = performance.now() + PEOPLE_PACE_MS;
+        if (prefetchEnemyModel(ctx, people[0], peopleHeights, undefined, queued ? 1 : 2)) people.shift();
       }
       return people.length > 0;
     };
@@ -2282,7 +2294,9 @@ export class TutorialSystem {
     const slice = (deadline) => {
       // The level adopts the env once it starts: painting into it then
       // would re-upload the wall pass for every wall.
-      if (finishing || g.mode !== "tutorial" || g.state === GameState.PLAYING || performance.now() > until) return;
+      if (finishing || g.mode !== "tutorial" || performance.now() > until) return;
+      // Once playing, only the people go on (and only where they wait for play).
+      if (g.state === GameState.PLAYING && !(queued && stationReady())) return;
       if (work(deadline)) idle(slice);
     };
     idle(slice);
@@ -2328,6 +2342,9 @@ export class TutorialSystem {
           while (!stationReady() && performance.now() < end) work(deadline);
           if (stationReady()) {
             g.cutsceneHold = null;
+            // The people go on at their pace in play (see peopleHeights).
+            finishing = false;
+            if (queued) idle(slice);
             onDone();
           } else hold();
         };
