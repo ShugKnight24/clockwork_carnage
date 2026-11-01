@@ -53,7 +53,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   gyroSensitivity: 2.0, // view degrees per degree the phone turns
   haptics: true,
   autoFire: false,
-  swipeWeapons: true,
+  swipeWeapons: false,
   graphicsPreset: 0,
   frameTarget: 0,
   batterySaver: false,

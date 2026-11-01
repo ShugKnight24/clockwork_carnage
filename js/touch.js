@@ -15,10 +15,12 @@ import { isModernArt } from "../src/rendering/art-style.js";
 import { COMPACT_PHONE_HEIGHT } from "./settings-registry.js";
 import {
   pauseLayout,
+  hitRect,
   upgradeLayout,
   tutorialMenuLayout,
 } from "./layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
+import { setCentredAim } from "../src/systems/aim.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
 import { isReloading } from "../src/systems/reload.js";
@@ -31,7 +33,24 @@ const TAP_LATCH_MS = 250;
 /** The stick runs past this fraction of its radius, and walks again inside the second. */
 const SPRINT_OUT = 1.2;
 const SPRINT_IN = 0.7;
+/** How far (CSS px) a thumb on FIRE or AIM moves before it steers: the press's own roll turns nothing. */
+const PAD_SLOP = 8;
+
+/**
+ * Look response to a drag's speed (CSS px in one move event): a slow, careful
+ * drag turns at about half speed, for fine aim; a fast swipe at full speed or
+ * a little over, to turn round.
+ */
+export function lookCurve(d) {
+  return Math.min(1.3, 0.5 + 0.06 * d);
+}
+
+/** The stick's dead zone, as a share of its radius. */
+const STICK_DEADZONE = 0.2;
+/** How near straight (radians either side) a stick direction snaps to it: ~14°. */
+const STICK_SNAP = 0.25;
 import { directorInput } from "../src/cinematic/director.js";
+import { toggleCard } from "../src/ui/tutorial-ui.js";
 
 export class TouchControls {
   static init(game) {
@@ -40,6 +59,8 @@ export class TouchControls {
 
     const tc = new TouchControls(game);
     tc.setup();
+    // The reticle stays centred and a drag turns the view (src/systems/aim.js).
+    setCentredAim(true);
     return tc;
   }
 
@@ -415,6 +436,8 @@ export class TouchControls {
       const x = touch.clientX;
       const y = touch.clientY;
       const zone = this.hitTest(x, y);
+      // A tap on a folded quest card opens it to reread, rather than look.
+      if (zone !== "joy" && this.game.state === "playing" && toggleCard(x, y)) continue;
 
       if (zone === "joy" && this.joyTouch === null) {
         // Floating joystick: origin spawns at touch point, not fixed position
@@ -445,13 +468,13 @@ export class TouchControls {
         this.lookTapTime = performance.now();
       } else if (zone === "fire" && this.fireTouch === null) {
         this.fireTouch = touch.identifier;
-        this.fireLast = { x, y };
+        this.fireLast = { x, y, slop: true, x0: x, y0: y };
         g.player.isFiring = true;
         this.activeButtons.add("fire");
         if (g.settings.haptics && navigator.vibrate) navigator.vibrate(15);
       } else if (zone === "aim" && this.aimTouch === null) {
         this.aimTouch = touch.identifier;
-        this.aimLast = { x, y };
+        this.aimLast = { x, y, slop: true, x0: x, y0: y };
         this.aimDownAt = performance.now();
         // A tap on a latched AIM lets go; anything else aims while it lasts.
         if (this.aimLatched) {
@@ -523,13 +546,9 @@ export class TouchControls {
         this.joyPos.y = touch.clientY;
         this.updateJoystickKeys();
       } else if (touch.identifier === this.fireTouch) {
-        this.look(touch.clientX - this.fireLast.x, touch.clientY - this.fireLast.y);
-        this.fireLast.x = touch.clientX;
-        this.fireLast.y = touch.clientY;
+        this.padLook(this.fireLast, touch.clientX, touch.clientY);
       } else if (touch.identifier === this.aimTouch) {
-        this.look(touch.clientX - this.aimLast.x, touch.clientY - this.aimLast.y);
-        this.aimLast.x = touch.clientX;
-        this.aimLast.y = touch.clientY;
+        this.padLook(this.aimLast, touch.clientX, touch.clientY);
       } else if (touch.identifier === this.lookTouch) {
         this.look(touch.clientX - this.lookLast.x, touch.clientY - this.lookLast.y);
 
@@ -566,6 +585,7 @@ export class TouchControls {
   onTouchEnd(e) {
     e.preventDefault();
     this.ensureGyro();
+    if (this.game.state === "paused" && !this.game.showAriaLog && e.changedTouches[0] && this.pauseScreenTap(e.changedTouches[0])) return;
 
     if (this.game.state === "cinematic") {
       if (e.touches.length === 0) {
@@ -744,6 +764,24 @@ export class TouchControls {
     }
   }
 
+  /**
+   * A drag on FIRE or AIM, which double as look pads. The thumb rolls as it
+   * presses and lifts: until it has gone PAD_SLOP from where it landed, that
+   * roll turns nothing, so a tap fires where the reticle was.
+   */
+  padLook(last, x, y) {
+    if (last.slop) {
+      const d = Math.hypot(x - last.x0, y - last.y0);
+      if (d < PAD_SLOP) return;
+      // A quick swipe can cross the slop in one move: what is past it steers.
+      const past = (d - PAD_SLOP) / d;
+      this.look((x - last.x0) * past, (y - last.y0) * past);
+    } else this.look(x - last.x, y - last.y);
+    last.slop = false;
+    last.x = x;
+    last.y = y;
+  }
+
   /** Turn the view by a touch drag of (dx, dy) CSS px. */
   look(dx, dy) {
     // Touch look uses the same reticle path as mouse so visual crosshair
@@ -752,8 +790,9 @@ export class TouchControls {
     if (!Number.isFinite(rawSens)) rawSens = 1.5;
     const touchSens = Math.min(3.0, Math.max(0.5, rawSens));
     const slow = assistFriction(this.assistTarget, Number(this.game.settings.aimAssist) || 0);
-    this.game.mouse.dx += dx * touchSens * slow;
-    this.game.mouse.dy += dy * touchSens * slow;
+    const curve = lookCurve(Math.hypot(dx, dy));
+    this.game.mouse.dx += dx * touchSens * slow * curve;
+    this.game.mouse.dy += dy * touchSens * slow * curve;
     if (dx || dy) this.lookedThisFrame = true;
   }
 
@@ -766,21 +805,45 @@ export class TouchControls {
     const level = Number(g.settings.aimAssist) || 0;
     this.assistTarget = level ? findAssistTarget(g) : null;
     const p = g.player;
-    const input = this.lookedThisFrame ? 1 : p?.isFiring ? 0.6 : this.joyActive ? 0.4 : 0;
+    // The pull follows the aim you give it: a drag, or the trigger. Walking alone leans nothing.
+    const input = this.lookedThisFrame ? 1 : p?.isFiring ? 0.4 : 0;
     applyAssistPull(g, this.assistTarget, level, dt, input);
     this.lookedThisFrame = false;
+  }
+
+  /**
+   * The stick as an analog direction: `x` right, `y` forward, length 0..1,
+   * or null when it is idle or inside its dead zone. Within STICK_SNAP of
+   * straight ahead, back or to a side it snaps to it, so a run (or a dash)
+   * meant straight goes straight. Movement and the dash both steer by it.
+   */
+  moveAxis() {
+    if (!this.joyActive) return null;
+    const dx = this.joyPos.x - this.joyOrigin.x;
+    const dy = this.joyPos.y - this.joyOrigin.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < this.joyRadius * STICK_DEADZONE) return null;
+    let a = Math.atan2(-dy, dx);
+    const quarter = Math.PI / 2;
+    const nearest = Math.round(a / quarter) * quarter;
+    if (Math.abs(a - nearest) < STICK_SNAP) a = nearest;
+    const m = Math.min(1, (dist / this.joyRadius - STICK_DEADZONE) / (1 - STICK_DEADZONE));
+    return { x: Math.cos(a) * m, y: Math.sin(a) * m };
   }
 
   updateJoystickKeys() {
     const dx = this.joyPos.x - this.joyOrigin.x;
     const dy = this.joyPos.y - this.joyOrigin.y;
-    const deadzone = 15;
     const kb = this.game.keybinds;
 
-    this.game.keys[kb.moveForward] = dy < -deadzone;
-    this.game.keys[kb.moveBack] = dy > deadzone;
-    this.game.keys[kb.moveLeft] = dx < -deadzone;
-    this.game.keys[kb.moveRight] = dx > deadzone;
+    // The keys still say which way the stick leans (eight ways, for what
+    // reads them as keys); the motion itself comes from moveAxis().
+    const axis = this.moveAxis();
+    const lean = Math.sin(Math.PI / 8);
+    this.game.keys[kb.moveForward] = !!axis && axis.y > lean * Math.hypot(axis.x, axis.y);
+    this.game.keys[kb.moveBack] = !!axis && axis.y < -lean * Math.hypot(axis.x, axis.y);
+    this.game.keys[kb.moveLeft] = !!axis && axis.x < -lean * Math.hypot(axis.x, axis.y);
+    this.game.keys[kb.moveRight] = !!axis && axis.x > lean * Math.hypot(axis.x, axis.y);
 
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > this.joyRadius * SPRINT_OUT) this.sprinting = true;
@@ -809,7 +872,9 @@ export class TouchControls {
     const h = this.zones.h;
     const x = touch.clientX;
     const y = touch.clientY;
-    const layout = pauseLayout(w, h, this.game.mode);
+    const layout = pauseLayout(w, h, this.game.mode, this.screenButtonOpts());
+    // Full screen acts on the tap's end (onTouchEnd): iOS refuses it from touchstart.
+    if (hitRect(layout.screenBtn, x, y)) return;
 
     for (const btn of layout.buttons) {
       if (
@@ -862,6 +927,15 @@ export class TouchControls {
   }
 
   triggerDirectionalDash(g, defaultForward = false) {
+    // The way the stick points, not the eight ways its keys can: a thumb a
+    // little off straight dashes a little off straight, not at 45°.
+    const axis = this.moveAxis();
+    if (axis) {
+      const cos = Math.cos(g.player.angle);
+      const sin = Math.sin(g.player.angle);
+      g.triggerDash(null, cos * axis.y - sin * axis.x, sin * axis.y + cos * axis.x);
+      return;
+    }
     const kb = g.keybinds;
     const fwd = g.keys[kb.moveForward];
     const back = g.keys[kb.moveBack];
@@ -965,9 +1039,10 @@ export class TouchControls {
     // The settings deck draws its own controls.
     if (gs === "settings") return;
 
-    // Character creator: draw save/cancel buttons + nav arrows
+    // Character creator: draw save/cancel buttons + nav arrows. Modern's
+    // <agent-showroom> has its own; these showed through as it faded in.
     if (gs === "characterCreate") {
-      this.renderCreatorOverlay(ctx);
+      if (!isModernArt()) this.renderCreatorOverlay(ctx);
       return;
     }
 
@@ -1354,8 +1429,12 @@ export class TouchControls {
       }
       return;
     }
-    const layout = pauseLayout(w, h, this.game.mode);
+    const layout = pauseLayout(w, h, this.game.mode, this.screenButtonOpts());
     if (isModernArt()) {
+      if (layout.screenBtn) {
+        const b = layout.screenBtn;
+        drawButton(ctx, b.x, b.y, b.w, b.h, b.label, "idle", UI.cyan, { idleColor: UI.text, size: layout.compact ? 11 : 13 });
+      }
       for (const btn of layout.buttons) {
         const accent = btn.index === 0 ? UI.cyan : btn.index === 3 ? UI.crimson : UI.steelHi;
         drawButton(ctx, btn.x, btn.y, btn.w, btn.h, btn.label, btn.index === 0 ? "focus" : "idle", accent, {
@@ -1401,7 +1480,44 @@ export class TouchControls {
       ctx.fillStyle = "#fff";
       ctx.fillText("SAVE", s.x + s.w / 2, s.y + s.h / 2);
     }
+    if (layout.screenBtn) {
+      const b = layout.screenBtn;
+      ctx.fillStyle = "#335577";
+      ctx.beginPath();
+      ctx.roundRect(b.x, b.y, b.w, b.h, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  /** The pause menu's full-screen button: its label, or none where it cannot help. */
+  screenButtonOpts() {
+    const right = this.safeArea?.right || 0;
+    if (this.isStandalone) return { right };
+    if (this.canFullscreen && (document.fullscreenEnabled ?? document.webkitFullscreenEnabled ?? true)) {
+      const on = document.fullscreenElement || document.webkitFullscreenElement;
+      return { screen: on ? "EXIT FULL SCREEN" : "FULL SCREEN", right };
+    }
+    // An iPhone gives pages no element full screen (only iPad does): the button explains Safari's own ways.
+    if (/iP(hone|od)/.test(navigator.userAgent)) return { screen: "FULL SCREEN", right };
+    return { right };
+  }
+
+  /** A tap that ends on the pause menu's full-screen button. */
+  pauseScreenTap(touch) {
+    const layout = pauseLayout(this.zones.w, this.zones.h, this.game.mode, this.screenButtonOpts());
+    if (!hitRect(layout.screenBtn, touch.clientX, touch.clientY)) return false;
+    if (!this.canFullscreen) {
+      alert(
+        "iPhone browsers don't let a web page go full screen.\n\n" +
+          "More room in Safari: open the page menu beside the address and choose \"Hide Toolbar\".\n\n" +
+          "No bars at all: tap Share (↑), choose \"Add to Home Screen\", and play from that icon.",
+      );
+    } else this.toggleFullscreen();
+    return true;
   }
 
   toggleFullscreen() {

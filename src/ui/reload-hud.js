@@ -9,7 +9,7 @@
  */
 import { HT, uiFont, inkText, track } from "./hud-skin.js";
 import { isModernArt } from "../rendering/art-style.js";
-import { getAimBlend, currentBarH } from "../systems/aim.js";
+import { getAimBlend, hudBarH } from "../systems/aim.js";
 import { reloadProgress, reloadCompletion, BOOST } from "../systems/active-reload.js";
 import { SKILLS } from "../systems/conditioning.js";
 import { drawPrompt } from "./input-glyphs.js";
@@ -72,7 +72,7 @@ export function drawReloadHud(ctx, game, cx, cy) {
   // black beside it, where there is room.
   if (wep.scope && blend > 0.6) {
     const w = game.hudW || ctx.canvas.width;
-    const r = Math.min(w, (game.hudH || ctx.canvas.height) - currentBarH(game)) * SCOPE_R;
+    const r = Math.min(w, (game.hudH || ctx.canvas.height) - hudBarH(game)) * SCOPE_R;
     if (w / 2 - r >= m.w + 48) {
       mid = cx + r + 24 + m.w / 2;
       y = Math.round(cy - m.h / 2);

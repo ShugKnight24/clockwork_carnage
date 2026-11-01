@@ -56,7 +56,9 @@ describe("touch aim assist", () => {
     applyAssistPull(g, t, ASSIST_STANDARD, 1 / 60, 0);
     expect(g.player.angle).toBe(0);
     for (let i = 0; i < 30; i++) applyAssistPull(g, findAssistTarget(g), ASSIST_STANDARD, 1 / 60, 1);
+    // Gentle: half a second of steering closes most of the gap, not all of it.
     const after = findAssistTarget(g);
-    expect(Math.abs(after.dYaw)).toBeLessThan(Math.abs(t.dYaw) * 0.25);
+    expect(Math.abs(after.dYaw)).toBeLessThan(Math.abs(t.dYaw) * 0.35);
+    expect(Math.abs(after.dYaw)).toBeGreaterThan(Math.abs(t.dYaw) * 0.15);
   });
 });

@@ -27,6 +27,7 @@ import {
   PLAYER_AIM_SENSITIVITY,
   PLAYER_ADS_ZOOM,
   PLAYER_ADS_SENS,
+  COMPACT_PHONE_HEIGHT,
 } from "../constants.js";
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -204,7 +205,44 @@ export function sceneShiftPx(player, h) {
   const punch = (player?.cameraPunch || 0) * -h * 0.12;
   // Pitching forward into a slide lifts the horizon a little.
   const lean = (player?.slideBlend || 0) * -h * SLIDE_PITCH;
-  return punch + lean;
+  // Centred aim's look up and down (centredLook): the world moves, not the reticle.
+  const look = (player?.lookShiftY || 0) * -h;
+  return punch + lean + look;
+}
+
+/**
+ * Centred aim, for touch: the reticle stays in the middle of the view and a
+ * drag turns the view instead, sideways by turning and up or down by
+ * shifting the world under the reticle (player.lookShiftY, a share of the
+ * canvas height, which sceneShiftPx draws and aims with). A thumb on glass
+ * loses track of a free-aim reticle that wanders inside a box, stops at its
+ * edge and then turns the view at another speed.
+ */
+let _centredAim = false;
+export function setCentredAim(on) {
+  _centredAim = !!on;
+}
+export const centredAim = () => _centredAim;
+
+/** Centred aim's look speed: radians per input unit, before the sensitivity settings. */
+const CENTRED_LOOK_RATE = 0.0033;
+/** How far centred aim looks up: tan of the angle, ~23°. */
+export const CENTRED_LOOK_LIMIT = 0.42;
+/**
+ * How far it looks down: tan of the angle, ~39°. A landscape phone's view is
+ * short, about 26° either side of the horizon, so 23° down still left the
+ * floor at your feet, and anything standing on it, below the screen.
+ */
+export const CENTRED_LOOK_DOWN = 0.8;
+
+/** Turn and tilt the view by a look delta under centred aim (input units, as applyAimDelta). */
+export function centredLook(player, dx, dy, settings = {}) {
+  const rate = CENTRED_LOOK_RATE * (settings.sensitivity || 1) * aimSensitivityScale();
+  player.angle += (dx * rate * (settings.invertX ? -1 : 1)) / aimZoom();
+  const y = (player.lookShiftY || 0) + dy * rate * (settings.invertY ? -1 : 1);
+  player.lookShiftY = clamp(y, -CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN);
+  player.aimOffsetX = 0;
+  player.aimOffsetY = 0;
 }
 
 // How fast aiming in pulls a free-aim reticle back to centre (per second).
@@ -305,17 +343,29 @@ export function resetAdsFov() {
 }
 
 /**
- * Compute current HUD bar height in canvas pixels. Mirrors the math in
- * `src/ui/hud.js` so combat code can pass the correct `barH` to aimAngles
- * without circular imports.
+ * The HUD bar's height in HUD (CSS) pixels, as `src/ui/hud.js` draws it and
+ * places the reticle above it. Inline, so combat code needs no import cycle.
+ */
+export function hudBarH(game) {
+  const hudH = game.hudH || game.canvas?.height || 0;
+  const hudFactor = (game.settings?.hudScale || 100) / 100;
+  // isCompactPhone (js/layout.js), on the HUD's height, as hud.js tests it.
+  const compact = game.isTouchDevice && hudH > 0 && hudH < COMPACT_PHONE_HEIGHT;
+  if (compact) return Math.round(60 * hudFactor);
+  return game.settings?.hudStyle === 1 ? Math.round(160 * hudFactor) : 0;
+}
+
+/**
+ * The HUD bar's height in scene-canvas pixels, for aimAngles and the
+ * renderer. A phone draws the scene at its pixel ratio while the HUD stays
+ * in CSS pixels: measured on the scene canvas, a 276 px phone looked 552 px
+ * tall, lost its bar, and every shot went 22 px off the reticle.
  */
 export function currentBarH(game) {
   const h = game.canvas?.height || 0;
-  const hudFactor = (game.settings?.hudScale || 100) / 100;
-  // Inline isCompactPhone test (avoids cycle): viewport <= 420 on touch.
-  const compact = game.isTouchDevice && h > 0 && h <= 420;
-  if (compact) return Math.round(60 * hudFactor);
-  return game.settings?.hudStyle === 1 ? Math.round(160 * hudFactor) : 0;
+  const hudH = game.hudH || h;
+  const bar = hudBarH(game);
+  return hudH > 0 && h > 0 ? (bar * h) / hudH : bar;
 }
 
 /** Convenience wrapper for fire path: bind game-derived dims and FOV. */

@@ -3058,6 +3058,7 @@ export class Game {
         world: this.world,
         audio: this.audio,
         voiceProfile: this.getVoiceProfile(),
+        moveAxis: this.touchControls?.moveAxis?.() ?? null,
         noclip: !!this._noclip,
         time: this.time,
         // The people the pulse stopped are solid: the player goes round them.
@@ -3847,6 +3848,7 @@ export class Game {
     // The camera is the aim in a voxel level; the reticle sits dead centre.
     this.player.aimOffsetX = 0;
     this.player.aimOffsetY = 0;
+    this.player.lookShiftY = 0;
     this.player.health = 100;
     this.player.maxHealth = 100;
     this.player.reserves = {};

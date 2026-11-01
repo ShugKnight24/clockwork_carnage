@@ -34,6 +34,8 @@ export class Player {
     this.angle = angle;
     this.aimOffsetX = 0;
     this.aimOffsetY = 0;
+    /** Centred aim's look up/down (src/systems/aim.js centredLook). */
+    this.lookShiftY = 0;
     this.health = PLAYER_MAX_HP;
     this.maxHealth = PLAYER_MAX_HP;
     this.armor = 0;

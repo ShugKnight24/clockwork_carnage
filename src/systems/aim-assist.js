@@ -10,7 +10,7 @@
  * player it nudges; js/touch.js calls it.
  */
 
-import { aimAnglesForGame, currentBarH } from "./aim.js";
+import { aimAnglesForGame, currentBarH, centredAim, CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN } from "./aim.js";
 import { zoneAimHeight, enemyHitRadius } from "./combat.js";
 import { hasLineOfSight, eyeOffsetZ } from "./physics.js";
 import { PLAYER_AIM_LIMIT_Y } from "../constants.js";
@@ -28,8 +28,11 @@ const CONE_MIN = 0.045;
 const CONE_WIDTHS = 2.6;
 /** Look speed left inside the cone, at full strength. */
 const FRICTION = 0.45;
-/** How fast the pull closes the gap (1/s) at full strength and full input. */
-const PULL_RATE = 5.5;
+/**
+ * How fast the pull closes the gap (1/s) at full strength and full input:
+ * gentle, so it reads as the aim settling, not being taken.
+ */
+const PULL_RATE = 2.5;
 
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -83,6 +86,13 @@ export function applyAssistPull(game, target, level, dt, input) {
   const strength = (level === ASSIST_LOW ? 0.45 : 1) * (p.isAiming ? 1.25 : 1) * Math.min(1, input);
   const k = 1 - Math.exp(-PULL_RATE * strength * Math.min(dt, 0.05));
   p.angle += target.dYaw * k;
+  // Under centred aim, pitch is the world's shift (aim.js sceneShiftPx):
+  // tan(pitch) falls one for one as lookShiftY rises.
+  if (centredAim()) {
+    const y = (p.lookShiftY || 0) - target.dTan * k;
+    p.lookShiftY = Math.max(-CENTRED_LOOK_LIMIT, Math.min(CENTRED_LOOK_DOWN, y));
+    return;
+  }
   // Pitch lives in the reticle's vertical offset (aimAngles: tan(pitch)
   // falls as offY rises, scaled by the view's share of the canvas).
   const h = game.canvas?.height || 1;

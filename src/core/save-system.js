@@ -104,6 +104,11 @@ export function applyDefaultsMigration(isTouchDevice, settings, saveFn) {
       if (settings.voices) { settings.voices = false; saveFn(); }
       localStorage.setItem("cc_voices_off_v1", "1");
     }
+    // A look swipe kept swapping weapons mid-fight: off for everyone once.
+    if (!localStorage.getItem("cc_swipe_weapons_off_v1")) {
+      if (settings.swipeWeapons) { settings.swipeWeapons = false; saveFn(); }
+      localStorage.setItem("cc_swipe_weapons_off_v1", "1");
+    }
   } catch (_) {}
 }
 
