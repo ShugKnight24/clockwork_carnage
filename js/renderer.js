@@ -1816,7 +1816,9 @@ export class Renderer {
     }
 
     // Render sprites
+    this._spriteShift = spriteShift;
     this.renderSprites(player, entities, time, planeMul, camX, camY, player._drawDistance);
+    this._spriteShift = 0;
 
     // Render particles
     if (player.particles) {
@@ -2018,8 +2020,12 @@ export class Renderer {
       // measured in that lifted space (_clipBias).
       const eyeLift = (this._eyeDrop * h) / transformY;
       this._clipBias = eyeLift;
-      const drawStartY = Math.max(eyeLift | 0, (-spriteHeight / 2 + h / 2) | 0);
-      const drawEndY = Math.min((h - 1 + eyeLift) | 0, (spriteHeight / 2 + h / 2) | 0);
+      // The screen's edges, in the same space: renderScene draws this pass
+      // moved by the view's shift (_spriteShift), so looking down by N px
+      // must not cut every prop N px above the bottom of the screen.
+      const edgeLift = eyeLift - (this._spriteShift || 0);
+      const drawStartY = Math.max(edgeLift | 0, (-spriteHeight / 2 + h / 2) | 0);
+      const drawEndY = Math.min((h - 1 + edgeLift) | 0, (spriteHeight / 2 + h / 2) | 0);
       const drawStartX = Math.max(
         0,
         (-spriteWidth / 2 + spriteScreenX) | 0,
