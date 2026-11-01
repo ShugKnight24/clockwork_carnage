@@ -24,7 +24,7 @@ import {
   renderModernCustomPanels,
   hudAnchors,
 } from "./hud-modern.js";
-import { renderVanguardPanels, renderVanguardCompact, drawVanguardThreatRing } from "./hud-vanguard.js";
+import { renderVanguardPanels, renderVanguardCompact, renderVanguardMinimap, drawVanguardThreatRing } from "./hud-vanguard.js";
 import { updateHudMotion } from "./hud-motion.js";
 import { drawCombatCues } from "./combat-cues.js";
 import { coverCone, blindFireNow } from "../systems/cover-play.js";
@@ -472,6 +472,16 @@ function _paintMapFrame(g, S) {
   g.fillRect(S - 1, S - t, 1, t);
 }
 
+/** A compact phone's minimap (smaller), where the touch layout put it, so pause sits against its left edge. */
+function _drawPhoneMinimap(game, ctx, w, h) {
+  const mr = game.touchControls?.zones?.minimap;
+  if (mr) _drawHudMinimap(ctx, mr.x, mr.y, mr.s, _minimapState(game));
+  else {
+    const mmSize = phoneMinimapSize(game.settings.minimapSize, w, h);
+    _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
+  }
+}
+
 /** Build minimap state from game instance */
 function _minimapState(game) {
   return {
@@ -530,9 +540,12 @@ if (game.state !== "playing" && game.state !== "paused" && !hudBehindDeck(game))
 _checkDirty(game);
 hudAnchors.stackBottom = 0;
 
-// The prologue's opening, before the suit goes on: no HUD yet, only what
-// people say.
+// The prologue's opening, before the suit goes on: no HUD yet, only the
+// station map (where am I, where's my locker) and what people say.
 if (game.mode === "tutorial" && game.tutorial?.preSuit) {
+  if (game.isTouchDevice && isCompactPhone(h)) _drawPhoneMinimap(game, ctx, w, h);
+  else if (game.settings.hudStyle === 4 && isModernArt()) renderVanguardMinimap(game, ctx, w, h, _minimapState(game));
+  else _drawHudMinimap(ctx, w - game.settings.minimapSize - 10, 10, game.settings.minimapSize, _minimapState(game));
   game.renderAriaComms(ctx, w, h);
   return;
 }
@@ -587,17 +600,10 @@ if (isCompactMobile) {
   if (vanguard) renderVanguardCompact(game, ctx, w, h, barH, hudFactor, _portraitState(game));
   else _renderCompactMobileHUD(game, ctx, w, h, barH, hudFactor);
 
-  // Minimap (smaller on compact mobile)
-  // Where the touch layout put it, so pause sits against its left edge.
-  const mr = game.touchControls?.zones?.minimap;
-  if (mr) _drawHudMinimap(ctx, mr.x, mr.y, mr.s, _minimapState(game));
-  else {
-    const mmSize = phoneMinimapSize(game.settings.minimapSize, w, h);
-    _drawHudMinimap(ctx, w - mmSize - 10, 10, mmSize, _minimapState(game));
-  }
+  _drawPhoneMinimap(game, ctx, w, h);
 
   drawCombatCues(game, ctx, w, h, barH);
-  if (vanguard) drawVanguardThreatRing(game, ctx, w, h, barH);
+  if (vanguard) drawVanguardThreatRing(game, ctx, w, h, barH, true);
 
   // Crosshair
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);

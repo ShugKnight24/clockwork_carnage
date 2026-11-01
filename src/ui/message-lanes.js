@@ -309,12 +309,22 @@ export function messageLanes(o) {
   // Vanguard's pickup captions last a moment; on a phone the subtitle may
   // share their corner rather than climb onto the reticle.
   const lowBlocks = compact ? reserved.filter((q) => q.name !== "pickups") : reserved;
-  const commsLow = fit(
+  let commsLow = fit(
     { x: cx - lw / 2, y: lowBottom - lh, w: lw, h: lh },
     [...lowBlocks, chips],
     // A phone's subtitle keeps a thumb's width off the buttons beside it.
     { minW: compact ? 260 : Math.round(Math.min(360, Math.max(300, w * 0.38))), dir: -1, gap: compact ? 14 : gap },
   );
+  if (compact && commsLow.y < headline.y + headline.h) {
+    // Notch insets and a small HUD scale draw the thumb clusters in: with
+    // less than minW between them the subtitle climbed every button, off the
+    // top of the screen. It stays on the console between them, narrower.
+    const y = lowBottom - lh;
+    const band = lowBlocks.filter((q) => q.name !== "console" && q.y < y + lh && q.y + q.h > y);
+    const left = Math.max(12 + sa.left, ...band.filter((q) => q.x + q.w / 2 < cx).map((q) => q.x + q.w + 8));
+    const right = Math.min(w - 12 - sa.right, ...band.filter((q) => q.x + q.w / 2 >= cx).map((q) => q.x - 8));
+    commsLow = { x: left, y, w: Math.max(0, right - left), h: lh };
+  }
 
   // Top comms: ARIA's prominent anchor (0.135 h), below the top-centre strip.
   // On a phone the top belongs to the clusters and the headline, so every

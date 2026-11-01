@@ -1670,6 +1670,7 @@ export class Game {
         tutorialStepTime: this.tutorialStepTime,
         tutorialStep: this.tutorialStep,
         progress: this.tutorial.progressText(),
+        brief: this.tutorial.progressBrief(),
       },
       // A narrowed lane (a small window) takes the compact card, so it stays within the lane's height.
       lane ? { top: lane.y + 6, maxW: lane.w, cx: lane.x + lane.w / 2, compact: d.lanes.kind === "compact" || lane.w < 520 } : {},

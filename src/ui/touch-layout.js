@@ -86,9 +86,11 @@ export function touchZones({ w, h, safeArea, minimapSize = 200 }) {
   // A short phone keeps them under the vitals block rather than on it.
   const chronoR = floorRadius(btnSize * 0.6);
   const chronoY = Math.max(h - (isCompactPhone ? 240 : 350) - sa.bottom, isCompactPhone ? PHONE_VITALS_H + sa.top + chronoR + 6 : 0);
-  const useY = Math.max(h - (isCompactPhone ? 200 : 290) - sa.bottom, chronoY + MIN_BUTTON_RADIUS * 1.6);
-  const useX = leftX + Math.max(btnSize * 0.9, MIN_BUTTON_RADIUS * 1.9);
   const powerStep = Math.max(MIN_BUTTON_RADIUS * 2.1, btnSize * 1.1);
+  // A short phone puts USE on SLOW's row: a step down and right of it, it
+  // sat where the left thumb lands for the stick.
+  const useY = isCompactPhone ? chronoY : Math.max(h - 290 - sa.bottom, chronoY + MIN_BUTTON_RADIUS * 1.6);
+  const useX = leftX + (isCompactPhone ? powerStep : Math.max(btnSize * 0.9, MIN_BUTTON_RADIUS * 1.9));
   const mm = phoneMinimapSize(minimapSize, w, h);
   const pauseR = floorRadius(isCompactPhone ? 22 : 26);
   const pauseX = isCompactPhone ? sa.left + 8 + pauseR : w - 50 - sa.right;
@@ -101,7 +103,7 @@ export function touchZones({ w, h, safeArea, minimapSize = 200 }) {
     // Hint position for the joystick, shown when no thumb is on the left zone.
     joyCenter: {
       x: Math.max(80, 60 + sa.left),
-      y: isCompactPhone ? h - 90 - sa.bottom : h - 140 - sa.bottom,
+      y: isCompactPhone ? h - 70 - sa.bottom : h - 140 - sa.bottom,
     },
     // Right side — fire is large and central to the thumb, the rest ring it.
     fireBtn: {

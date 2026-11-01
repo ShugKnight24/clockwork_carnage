@@ -1129,6 +1129,12 @@ const LOGIC = {
       return false;
     },
     progress: (t, g) => t.sheetText() + (t.cert.linBriefed && !t.cert.done.combat && inArea(g.player, "arena") ? "\nLIN · READY WHEN YOU ARE" : ""),
+    // A phone's folded card: the sheet in one line (a tap opens it again).
+    brief: (t, g) => {
+      const done = PROLOGUE_TRIALS.filter((tr) => t.cert.done[tr.id]).length;
+      const lin = t.cert.linBriefed && !t.cert.done.combat && inArea(g.player, "arena") ? " · LIN READY" : "";
+      return `TRIALS ${done} / ${PROLOGUE_TRIALS.length}${lin}`;
+    },
   },
 
   // ── Trial: weapons (the range) ─────────────────────────────────
@@ -2922,6 +2928,15 @@ export class TutorialSystem {
   progressText() {
     try {
       return this.logic?.progress?.(this, this.game) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The counter a folded phone card shows, where the step has a shorter one than progressText. */
+  progressBrief() {
+    try {
+      return this.logic?.brief?.(this, this.game) ?? null;
     } catch {
       return null;
     }

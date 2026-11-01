@@ -121,6 +121,15 @@ describe("message lanes", () => {
     }
   });
 
+  it("keeps a phone's subtitle on screen when notch insets draw the thumb clusters in", () => {
+    // An iPhone in Safari: 276 px under the bars, 59 px insets, a 75% HUD.
+    const L = messageLanes({ w: 852, h: 276, hudStyle: 4, modern: true, compact: true, hudScale: 75, safeArea: { top: 0, right: 59, bottom: 20, left: 59 } });
+    expect(L.commsLow.y).toBeGreaterThanOrEqual(L.headline.y + L.headline.h);
+    expect(L.commsLow.y + L.commsLow.h).toBeLessThanOrEqual(276);
+    expect(L.commsLow.w).toBeGreaterThan(200);
+    expect(hits(L.commsLow, L.reserved.filter((r) => r.name !== "console" && r.name !== "pickups"))).toEqual([]);
+  });
+
   it("gives every comms plate the low slot on a phone", () => {
     const L = messageLanes({ w: 844, h: 390, hudStyle: 4, modern: true, compact: true });
     expect(L.comms).toEqual(L.commsLow);
