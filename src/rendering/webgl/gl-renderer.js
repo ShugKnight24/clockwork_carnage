@@ -671,7 +671,10 @@ export class GLRenderer {
       depth: false,
       stencil: false,
       premultipliedAlpha: false,
-      preserveDrawingBuffer: true, // needed for drawImage compositing
+      // blitTo copies each frame out in the task that drew it, so the buffer
+      // need not survive compositing; keeping it costs a tile-based (phone)
+      // GPU a full store of the buffer every frame.
+      preserveDrawingBuffer: false,
     });
     if (!gl) return null;
 

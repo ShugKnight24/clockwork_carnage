@@ -55,7 +55,6 @@ import { LAYER } from "../src/data/levels/map-helpers.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 import { warmPropSet } from "../src/rendering/props.js";
-import { CITY_GLASS, warmCityView } from "../src/rendering/env/city-view.js";
 import { notePrologueStep } from "../src/systems/playtest-log.js";
 import * as Save from "../src/core/save-system.js";
 
@@ -2241,7 +2240,6 @@ export class TutorialSystem {
     const people = ["officer", "supervisor", "officerKit", "rasczakKit", "kaelKit", "staff", "clerk"];
     let built = false;
     let uploaded = false;
-    const cityGlass = TUTORIAL_MAP.ownWalls.some((id) => CITY_GLASS[id] === 1);
     let city = false;
     const total = 3 + walls.length;
     // An iPhone browser paints canvases later, in its GPU process: a bake
@@ -2292,12 +2290,18 @@ export class TutorialSystem {
       } else if (!city) {
         // The city through the windows, a piece a slice: left to play, its
         // pixel reads held the first second in the station (~300 ms each).
-        city = !cityGlass || warmCityView();
+        // Glazed into the env before the upload, or play adds its tiles and
+        // sends the whole station up again (~330 ms on an iPhone).
+        city = r.prewarmCityView(act, level, TUTORIAL_MAP.ownWalls);
         settle();
       } else if (!uploaded) {
         // Then onto the GPU, a few faces a slice.
         uploaded = r.prewarmWallPass(act, level, 8);
-        if (uploaded) warmPropSet(viewH / 2);
+        if (uploaded) {
+          warmPropSet(viewH / 2);
+          // Realistic's lamp field: a pixel read in the first lit frame otherwise.
+          r.prewarmLampField(act, level);
+        }
         settle();
       } else if (queued && g.state === GameState.PLAYING && performance.now() < peopleAt) {
         return true;

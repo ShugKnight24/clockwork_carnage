@@ -90,6 +90,22 @@ export function collapseStepAt(h, x, y) {
   return h.steps.findIndex((s) => s.some(([sc, sr]) => sc === c && sr === r));
 }
 
+/** The step with a cell nearest (x, y): where along the path a body off it stands. */
+export function collapseNearestStep(h, x, y) {
+  let best = -1;
+  let bd = Infinity;
+  h.steps.forEach((s, i) => {
+    for (const [c, r] of s) {
+      const d = (c + 0.5 - x) ** 2 + (r + 0.5 - y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+  });
+  return best;
+}
+
 /** The last landing at or behind step `at` (the first landing if none). */
 export function collapseLanding(h, at) {
   const lands = h.landings?.length ? h.landings : [0];
@@ -347,7 +363,10 @@ export class ChronoHazards {
     if (!piece) return;
     this.piece = piece;
     const ngPlus = game.campaign?.ngPlusCycle ?? 0;
-    this.hazards = (piece.hazards ?? []).map((h) => ngPlusHazard(h, ngPlus));
+    // Copies: a teach's stopOnDone marks its hazard stopped, and on an
+    // unturned level outside NG+ the hazard would be the authored spec, so a
+    // retry would load the Foundry's sentry already silent.
+    this.hazards = (piece.hazards ?? []).map((h) => ({ ...ngPlusHazard(h, ngPlus) }));
     const grid = game.map.grid;
     for (const [c, r] of piece.seals ?? []) if (grid[r]?.[c] === 0) grid[r][c] = SEAL_TILE;
     for (const [c, r] of piece.open ?? []) if (grid[r]?.[c] != null) grid[r][c] = 0;
@@ -606,14 +625,20 @@ export class ChronoHazards {
       }
     }
     if (at >= 0) this._reached[h.id] = Math.max(this._reached[h.id] ?? 0, at);
-    if (at < 0 && !this._cleared.has(h.id)) {
+    if (at < 0) {
       // Out of its path: through the far end (it may come down now), or
-      // back out of the start, or in a side room off it (it waits).
-      if ((this._reached[h.id] ?? 0) >= h.steps.length - 2) this._cleared.add(h.id);
-      else if (collapseFront(h, this.clock, this.triggers[h.id]) < 0) {
-        this._rearmCollapse(game, h);
-        return;
-      } else return;
+      // back out of the start, or in a side room off it (it waits). A side
+      // room is told by where you stand now, not how far you once got: back
+      // from the far end into an alcove off the path, the rubble would wall
+      // you in (IV-1's lobby).
+      const sideRoom = collapseNearestStep(h, p.x, p.y) < h.steps.length - 2;
+      if (!this._cleared.has(h.id)) {
+        if ((this._reached[h.id] ?? 0) >= h.steps.length - 2 && !sideRoom) this._cleared.add(h.id);
+        else if (collapseFront(h, this.clock, this.triggers[h.id]) < 0) {
+          this._rearmCollapse(game, h);
+          return;
+        } else return;
+      } else if (sideRoom) return;
     }
     const front = collapseFront(h, this.clock, this.triggers[h.id]);
     if (front < 0) return;

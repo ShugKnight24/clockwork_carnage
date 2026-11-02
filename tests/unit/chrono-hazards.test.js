@@ -325,6 +325,19 @@ describe("ChronoHazards runtime", () => {
     expect(game.projectiles.length).toBe(n);
   });
 
+  it("fires the Foundry's sentry again on a retry after a teach silenced it", () => {
+    const powers = { caughtTotal: 5, isInvulnerable: () => false };
+    const first = levelGame(2, 6, { chronoPowers: powers });
+    first.hz.update(first.game, 0.016);
+    expect(first.hz.teach.done).toBe(true);
+    // Retry Level: the same entry loaded again, nothing caught yet.
+    powers.caughtTotal = 0;
+    const { game, hz } = levelGame(2, 6, { chronoPowers: powers });
+    hz.update(game, 1);
+    expect(hz.hazards[0].stopped).toBeFalsy();
+    expect(game.projectiles.length).toBeGreaterThan(0);
+  });
+
   it("hands the Precinct sentry's burst to the echo while it stands", () => {
     const powers = { echo: null, isInvulnerable: () => false };
     const { game, hz } = levelGame(2, 5, { chronoPowers: powers });
@@ -747,6 +760,30 @@ describe("the collapse: catching you", () => {
     const [c, r] = stepCells(h, h.steps.length - 1)[3];
     expect(game.map.grid[r][c]).not.toBe(0);
     expect(hz.caught).toBe(0);
+  });
+
+  it("never seals you in a side room off its path, even after you reached its far end (IV-1)", () => {
+    // Entry — Last Time: the lobby falls column by column, west to east;
+    // an alcove opens off its south side, reached only through the lobby.
+    const { game, hz } = levelGame(4, 0, { settings: { difficulty: 1 }, time: 0, screenShake: 0 });
+    const h = hz.hazards.find((x) => x.id === "lobby_falls");
+    const p = game.player;
+    const last = h.steps.length - 1;
+    p.x = h.trigger[0] + 0.5;
+    p.y = h.trigger[1] + 5.5;
+    hz.update(game, 0.016);
+    // Out past the far end, then back west into the alcove ahead of the front.
+    const [lc, lr] = h.steps[last][5];
+    p.x = lc + 0.5;
+    p.y = lr + 0.5;
+    hz.update(game, 0.016);
+    expect(collapseStepAt(h, p.x, p.y)).toBe(last);
+    p.x = 11.5;
+    p.y = 43.5;
+    expect(collapseStepAt(h, p.x, p.y)).toBe(-1);
+    for (let i = 0; i < 20 * 60; i++) hz.update(game, 1 / 60);
+    // The alcove's way back into the lobby stays open.
+    for (let c = 9; c <= 12; c++) expect(game.map.grid[42][c], `cell ${c},42`).toBe(0);
   });
 
   it("resumes a collapse mid-fall from its saved clock", () => {
