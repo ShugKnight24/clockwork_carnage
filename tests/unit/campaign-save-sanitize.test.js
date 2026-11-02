@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeCampaignSave } from "../../src/core/save-system.js";
+import { sanitizeCampaignSave, levelContentHash } from "../../src/core/save-system.js";
 
 // 4×3 level: a ring of walls around two open cells.
 const level = {
@@ -17,6 +17,7 @@ const good = {
   aimOffsetX: 0, aimOffsetY: 0,
   weapons: [0, 2], currentWeapon: 1,
   health: 80,
+  contentHash: levelContentHash(level),
   mapGrid: level.grid,
   entityStates: [{ type: "enemy", x: 2.5, y: 1.5, health: 10, state: "idle", active: true }],
 };
@@ -66,5 +67,34 @@ describe("sanitizeCampaignSave", () => {
       level,
     );
     expect(out.entityStates[0]).toEqual({ type: "enemy", health: 5, state: "chase", active: true });
+  });
+
+  describe("a save made on another layout of the level", () => {
+    const moved = { ...level, grid: [[1, 1, 1, 1], [1, 0, 1, 1], [1, 1, 1, 1]] };
+
+    it("keeps progress but starts the level fresh", () => {
+      const out = sanitizeCampaignSave(good, moved);
+      expect(out.staleLayout).toBe(true);
+      for (const k of ["mapGrid", "entityStates", "killedEnemies", "playerX", "playerY", "playerAngle"]) expect(out[k], k).toBeUndefined();
+      expect(out.weapons).toEqual([0, 2]);
+      expect(out.health).toBe(80);
+      expect(out.level).toBe(0);
+    });
+
+    it("treats a save from before the hash as another layout", () => {
+      const { contentHash: _h, ...old } = good;
+      const out = sanitizeCampaignSave(old, level);
+      expect(out.staleLayout).toBe(true);
+      expect(out.mapGrid).toBeUndefined();
+    });
+  });
+});
+
+describe("levelContentHash", () => {
+  it("is stable for equal levels and changes with the layout", () => {
+    expect(levelContentHash(structuredClone(level))).toBe(levelContentHash(level));
+    const moved = structuredClone(level);
+    moved.grid[1][2] = 1;
+    expect(levelContentHash(moved)).not.toBe(levelContentHash(level));
   });
 });

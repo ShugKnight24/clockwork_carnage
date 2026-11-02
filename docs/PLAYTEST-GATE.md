@@ -29,7 +29,7 @@ Browser console equivalent:
 ccTest.gate({ players: ["scout", "striker", "gremlin"], modes: "all" })
 ```
 
-`window.ccTest` only exists when dev tools are enabled — that is, under `npm run dev`, or on any build loaded with a `?debug` query parameter. `js/main.js` skips loading `js/testing/` entirely otherwise, so on a plain production page `ccTest` is undefined.
+`window.ccTest` only exists under the Vite dev server (`npm run dev`, which the Playwright config starts). `js/main.js` loads `js/testing/` only when `import.meta.env.DEV` is true, so on the live site or a built page `ccTest` is undefined, whatever the URL says.
 
 ## Failure Rules
 
