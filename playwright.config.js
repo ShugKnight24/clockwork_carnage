@@ -19,7 +19,8 @@ export default defineConfig({
   // tests/unit/ holds vitest specs. Playwright globbed them too, so a bare
   // `npx playwright test` (what `npm test` runs) crashed on the vitest expect
   // symbol before reaching a single browser test.
-  testIgnore: "**/unit/**",
+  // tests/pages/ runs against the Pages-style server (playwright.pages.config.js).
+  testIgnore: ["**/unit/**", "**/pages/**"],
   timeout: 60_000,
   retries: 0,
   use: {

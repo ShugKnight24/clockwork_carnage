@@ -7,6 +7,7 @@ import { setSpriteBitmapCap, PHONE_SPRITE_PX } from "../src/rendering/svg-art/sp
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
+import { buildLabel } from "../src/build-info.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
@@ -148,7 +149,6 @@ import {
 import { SpatialGrid } from "../src/utils/spatial-grid.js";
 import { decay } from "../src/utils/math.js";
 
-export { GAME_VERSION } from "../src/constants.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { LevelBeats } from "../src/systems/level-beats.js";
 
@@ -1037,8 +1037,14 @@ export class Game {
       if (jp.confirm) this.handleKeyPress("Enter");
     } else if (this.state === GameState.PLAYING) {
       const p = this.player;
-      p.isFiring = held.fire;
-      p.isAiming = held.aim;
+      // The pad sets fire and aim when its triggers change, as the mouse does
+      // on its buttons: written every frame, a pad left plugged in held both
+      // false under a mouse that was firing.
+      const was = this._padHeld || (this._padHeld = { fire: false, aim: false });
+      if (held.fire !== was.fire) p.isFiring = held.fire;
+      if (held.aim !== was.aim) p.isAiming = held.aim;
+      was.fire = held.fire;
+      was.aim = held.aim;
       if (gp.lookX || gp.lookY) {
         const aimScale = 420 * dt;
         this.mouse.dx += gp.lookX * aimScale;
@@ -1605,8 +1611,9 @@ export class Game {
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
-  startTutorial() {
-    return this.tutorial.start();
+  /** `resume`: pick up at the prologue's saved checkpoint, if there is one. */
+  startTutorial({ resume = false } = {}) {
+    return this.tutorial.start({ resume });
   }
 
   initTutorialLevel() {
@@ -3529,10 +3536,24 @@ export class Game {
   }
 
   renderPauseScreen(ctx, w, h) {
-    if (isModernArt()) {
-      renderModernPauseScreen(this, ctx, w, h);
-      return;
-    }
+    if (isModernArt()) renderModernPauseScreen(this, ctx, w, h);
+    else this._renderLegacyPauseScreen(ctx, w, h);
+    if (!this.showAriaLog) this._drawBuildLabel(ctx, w, h);
+  }
+
+  /** The build, bottom-left on pause: a playtester's report names what they played. */
+  _drawBuildLabel(ctx, w, h) {
+    const sa = this.touchControls?.safeArea ?? { left: 0, bottom: 0 };
+    ctx.save();
+    ctx.font = "600 11px monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "rgba(185,200,214,0.55)";
+    ctx.fillText(buildLabel(), 12 + (sa.left || 0), h - 10 - (sa.bottom || 0));
+    ctx.restore();
+  }
+
+  _renderLegacyPauseScreen(ctx, w, h) {
     const compact = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,0,0,0.82)";
     ctx.fillRect(0, 0, w, h);

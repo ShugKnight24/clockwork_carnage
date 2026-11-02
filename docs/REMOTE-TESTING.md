@@ -1,15 +1,20 @@
 # Testing and benchmarking on another machine
 
-Two ways to look at a machine that plays badly. The benchmark needs only a
-browser. The full suite needs a clone of the repo.
+Two ways to look at a machine that plays badly. Both need a clone of the repo
+and `npm install`: the live site no longer loads the dev tools, so `?bench`
+only works on the dev server.
 
-## 1. Benchmark in the browser (no install)
+## 1. Benchmark in the browser
 
-Open the live game with `?bench`:
+Start the dev server and open it with `?bench`:
 
 ```
-https://shugknight24.github.io/clockwork_carnage/?bench
+npm run dev -- --port 5173
+http://localhost:5173/?bench
 ```
+
+`npm run bench` does the same in a Playwright window and writes the report to
+`bench-results/`.
 
 Leave the tab in front and keep the mouse still for about 35 seconds. The game
 loads Act I, level 1, and plays four phases: looking around, firing at nothing,
