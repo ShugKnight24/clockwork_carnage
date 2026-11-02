@@ -12,9 +12,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One checkout and one install. GitHub Pages serves master as it is, so a
-  # red run here is the signal not to merge. The slow tier (bots, the
-  # campaign sweep, forge, cinematics, perf, visuals) runs in nightly.yml.
+  # The static checks and the build, on one install. GitHub Pages serves
+  # master as it is, so a red run here or in e2e is the signal not to merge.
+  # The slow tier (bots, the campaign sweep, forge, cinematics, perf,
+  # visuals) runs in nightly.yml.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -46,6 +47,43 @@ jobs:
       - name: Size budget
         run: npm run check:size
 
+  # The PR tier (npm run test:pr) split across four runners. All of it on one
+  # runner never finished: a 4-core runner with no GPU renders every frame in
+  # software, and four browsers at once pushed the gameplay specs past their
+  # 60 s timeout. Playwright's --shard cuts by file order, which put every
+  # gameplay spec on one shard, so the groups are listed by hand, balanced on
+  # measured time. A spec added to test:pr goes in one of these groups too.
+  e2e:
+    name: e2e (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: deck
+            specs: tests/settings-deck.spec.js tests/cover.spec.js tests/loop.spec.js tests/exit.spec.js tests/gear-drops.spec.js
+          - group: bots
+            specs: tests/bots.spec.js tests/aim-bot.spec.js tests/arrivals.spec.js tests/crouch.spec.js
+          - group: effects
+            specs: tests/settings-effects.spec.js tests/customization.spec.js tests/classes.spec.js
+          # Smoke and cold-start also run on WebKit as an iPhone 15 Pro held
+          # sideways, and the Pages test serves the game the way Pages does.
+          - group: boot
+            specs: tests/smoke.spec.js tests/cold-start.spec.js
+            pages: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v4
@@ -61,21 +99,20 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium webkit
 
-      # Smoke, cold-start, the core loop and settings specs on Chromium, the
-      # bots' data/maps/balance/states/saveload groups, and smoke + cold-start
-      # again on WebKit as an iPhone 15 Pro held sideways (npm run test:pr).
-      # Four workers, one per runner core, keep it inside ten minutes.
-      - name: PR tier (dev server)
-        run: npm run test:pr -- --workers=4
+      # Two workers, so each browser has a core to itself next to the
+      # dev server.
+      - name: PR tier, ${{ matrix.group }} (dev server)
+        run: npx playwright test ${{ matrix.specs }} --grep-invert @nightly --workers=2
 
       - name: Pages (the live site as players load it)
+        if: ${{ matrix.pages && !cancelled() }}
         run: npm run test:pages
 
       - name: Upload test results on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.group }}
           path: |
             playwright-report/
             test-results/
