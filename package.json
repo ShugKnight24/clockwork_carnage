@@ -33,11 +33,17 @@
     "report": "npx playwright show-report",
     "test:e2e": "npx playwright test",
     "test:pages": "npx playwright test --config playwright.pages.config.js",
-    "release:playtest": "node scripts/release-playtest.mjs"
+    "release:playtest": "node scripts/release-playtest.mjs",
+    "lint": "eslint .",
+    "validate:maps": "node tests/tools/validate-maps.mjs",
+    "check:size": "node tests/tools/check-size.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.49.0",
     "@vitest/coverage-v8": "^4.1.4",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "vite": "^8.0.8",
     "vitest": "^4.1.4"
   }

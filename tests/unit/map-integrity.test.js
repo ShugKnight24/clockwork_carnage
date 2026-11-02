@@ -12,33 +12,8 @@ import { campaignMaps } from "../../src/data/index.js";
 // Each distinct campaign map once: every act replays the same nine.
 const CAMPAIGN_MAPS = campaignMaps();
 import { validatePropPosition } from "../../src/systems/spawner.js";
-
-const OPENABLE = new Set([0, 5, 6]);
-
-function reachableFrom(level) {
-  const sx = Math.floor(level.playerStart.x);
-  const sy = Math.floor(level.playerStart.y);
-  const seen = new Set([`${sx},${sy}`]);
-  const queue = [[sx, sy]];
-  for (let i = 0; i < queue.length; i++) {
-    const [cx, cy] = queue[i];
-    for (const [nx, ny] of [
-      [cx + 1, cy],
-      [cx - 1, cy],
-      [cx, cy + 1],
-      [cx, cy - 1],
-    ]) {
-      if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
-      const key = `${nx},${ny}`;
-      if (seen.has(key) || !OPENABLE.has(level.grid[ny][nx])) continue;
-      seen.add(key);
-      queue.push([nx, ny]);
-    }
-  }
-  return seen;
-}
-
-const label = (e) => `${e.enemyType || e.type}@${Math.floor(e.x)},${Math.floor(e.y)}`;
+// The same reachability `npm run validate:maps` runs.
+import { reachableFrom, entityLabel as label } from "../tools/map-checks.js";
 
 describe.each(CAMPAIGN_MAPS.map((level, i) => [i, level.name, level]))(
   "campaign level %i — %s",

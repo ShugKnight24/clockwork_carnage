@@ -1,0 +1,131 @@
+name: Nightly
+
+# The slow tier: what is too long or too noisy for every PR. Each suite runs
+# whether or not the one before it failed, and every screenshot, report and
+# trace is uploaded either way, so a red night still shows what it saw.
+on:
+  schedule:
+    - cron: "17 4 * * *" # 04:17 UTC, off the top of the hour
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium webkit --with-deps
+
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
+
+      - name: Playtest gate
+        id: gate
+        run: npx playwright test --project=chromium tests/playtest-gate.spec.js --output=test-results/gate
+      - name: Keep the gate report
+        if: ${{ !cancelled() }}
+        run: mv playwright-report reports-gate || true
+
+      - name: Bots (every profile and suite)
+        id: bots
+        if: ${{ !cancelled() }}
+        run: npx playwright test --project=chromium tests/bots.spec.js --output=test-results/bots
+      - name: Keep the bots report
+        if: ${{ !cancelled() }}
+        run: mv playwright-report reports-bots || true
+
+      - name: Forge, cinematic and the remaining specs
+        id: specs
+        if: ${{ !cancelled() }}
+        run: >
+          npx playwright test --project=chromium
+          tests/forge.spec.js tests/cinematic.spec.js tests/aria.spec.js
+          tests/weapon-fire.spec.js tests/mobile-layout.spec.js tests/suits.spec.js
+          --output=test-results/specs
+      - name: Keep the specs report
+        if: ${{ !cancelled() }}
+        run: mv playwright-report reports-specs || true
+
+      - name: Visual specs (screenshots, level looks)
+        id: visual
+        if: ${{ !cancelled() }}
+        run: npm run test:visual -- --output=test-results/visual
+      - name: Keep the visual report
+        if: ${{ !cancelled() }}
+        run: mv playwright-report reports-visual || true
+
+      # One worker each: the sweep plays levels in order, and perf budgets
+      # measure frame time, which parallel browsers would distort.
+      - name: Campaign sweep (all 29 levels)
+        id: sweep
+        if: ${{ !cancelled() }}
+        run: npm run test:sweep -- --output=test-results/sweep
+      - name: Keep the sweep report
+        if: ${{ !cancelled() }}
+        run: mv playwright-report reports-sweep || true
+
+      - name: Perf budget
+        id: perf
+        if: ${{ !cancelled() }}
+        run: npm run test:perf -- --output=test-results/perf
+      - name: Keep the perf report
+        if: ${{ !cancelled() }}
+        run: mv playwright-report reports-perf || true
+
+      - name: Upload screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload reports and traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-reports
+          path: |
+            reports-*/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # The suites above run past each other's failures; this makes the run
+      # red if any of them failed.
+      - name: Result
+        if: ${{ !cancelled() }}
+        run: |
+          echo "gate=${{ steps.gate.outcome }} bots=${{ steps.bots.outcome }} specs=${{ steps.specs.outcome }}"
+          echo "visual=${{ steps.visual.outcome }} sweep=${{ steps.sweep.outcome }} perf=${{ steps.perf.outcome }}"
+          for o in "${{ steps.gate.outcome }}" "${{ steps.bots.outcome }}" "${{ steps.specs.outcome }}" \
+                   "${{ steps.visual.outcome }}" "${{ steps.sweep.outcome }}" "${{ steps.perf.outcome }}"; do
+            [ "$o" = "success" ] || exit 1
+          done
