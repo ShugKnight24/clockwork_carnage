@@ -55,6 +55,7 @@ import { AudioManager } from "./audio.js";
 import { Player, Enemy, Pickup, Prop, Projectile } from "./entities.js";
 import { Profiler } from "../src/utils/profiler.js";
 import { trackEvent } from "./analytics.js";
+import * as playtestLog from "../src/systems/playtest-log.js";
 import {
   upgradeLayout,
   tutorialMenuLayout,
@@ -1114,6 +1115,7 @@ export class Game {
    * The pause menu on a pad: A / B / Start resume, Y or View opens Settings,
    * X asks to quit. LB used to arrive as Q and quit to the title in one
    * press, so quitting from a pad now waits for A (B or Start cancels).
+   * RB copies and saves the playtest session, LB files a bug report.
    */
   _padPauseMenu(jp) {
     if (this.pauseQuitConfirm) {
@@ -1132,6 +1134,8 @@ export class Game {
     if (jp.confirm) this.handleKeyPress("Enter");
     else if (jp.back || jp.pause) this.handleKeyPress("Escape");
     else if (jp.deploy || jp.minimap) this.handleKeyPress("KeyS");
+    else if (jp.nextTab) this.handleKeyPress("KeyJ");
+    else if (jp.prevTab) this.handleKeyPress("F8");
     else if (jp.randomize && !this.showAriaLog) {
       this.pauseQuitConfirm = true;
       this.audio.menuSelect?.();
@@ -2192,6 +2196,7 @@ export class Game {
     if (this.chronoPowers.isInvulnerable(this.player)) return;
     const prevHp = this.player.health;
     _damagePlayer(this, amount, attacker);
+    if (this.player.health < prevHp) playtestLog.noteHit(this, attacker);
     if (this._levelLog) this._levelLog.damageTaken += Math.max(0, prevHp - this.player.health);
     // Squad low-HP reaction: fires once per level when crossing 30% threshold
     if (this.squadComms && this.player.alive && this.player.maxHealth > 0) {
@@ -2294,6 +2299,7 @@ export class Game {
       return;
     }
     if (this.state !== GameState.PLAYING) return;
+    playtestLog.sample(this, this.deltaTime);
 
     // Hit-stop freeze — skip gameplay update but keep rendering.
     // Gives DOOM-like impact on kills: the world freezes for a beat.
@@ -2485,6 +2491,7 @@ export class Game {
     if (this.deathTimer > 0) {
       this.deathTimer -= this.deltaTime;
       if (this.deathTimer <= 0) {
+        playtestLog.noteDeath(this);
         if (this.mode === "playtest") {
           this.exitBuilderPlayTest();
           return;
@@ -2770,6 +2777,7 @@ export class Game {
       gear: [],
     };
     this._debrief = null;
+    playtestLog.noteLevelStart(this);
     // Fragments are announced on the card of the level that found them, so
     // anything left from an abandoned level is not carried in.
     this.archive?.drainPending();
@@ -2887,6 +2895,7 @@ export class Game {
           this.campaign.level + 1, // fragment data is 1-based
         );
         this._debrief = this._buildDebrief();
+        playtestLog.noteLevelComplete(this, this._debrief);
         this.queueAriaMessage("levelComplete");
       }
     }

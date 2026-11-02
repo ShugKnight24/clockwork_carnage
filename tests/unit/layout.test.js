@@ -80,8 +80,15 @@ function testPauseLayout() {
   assert.ok(mobile.buttons[0].w >= 44, "pause button width must be >= 44");
   assert.ok(mobile.saveBtn, "campaign mode should include save button");
 
+  assert.equal(mobile.sessionBtn.label, "SESSION");
+  assert.equal(mobile.bugBtn.label, "REPORT BUG");
+  for (const b of [mobile.saveBtn, mobile.sessionBtn, mobile.bugBtn]) {
+    assert.ok(b.x >= 0 && b.x + b.w <= 320, `${b.label} fits a 320px-wide phone`);
+  }
+
   const arena = pauseLayout(1024, 768, "arena");
   assert.equal(arena.saveBtn, null, "non-campaign mode should not show save");
+  assert.ok(arena.sessionBtn && arena.bugBtn, "every mode can export the session and report a bug");
 }
 
 function testUpgradeLayout() {

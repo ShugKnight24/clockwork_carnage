@@ -92,6 +92,19 @@ export function renderShareToast(ctx, w, h, toast, deltaTime) {
 
 // ── renderGameOver ──────────────────────────────────────────────────
 /**
+ * The game-over button row (Restart | Quit | Share | Session), shared by both
+ * renderers and the click handler: narrower buttons on a narrow screen.
+ */
+export function gameOverButtonRow(w, h) {
+  const count = 4, btnH = 34, btnGap = 12;
+  const btnW = Math.max(64, Math.min(110, Math.floor((w - 24 - btnGap * (count - 1)) / count)));
+  const totalBtnW = btnW * count + btnGap * (count - 1);
+  const btnBaseX = w / 2 - totalBtnW / 2;
+  const btnY = h - 70;
+  return { gameOverBtns: { btnBaseX, btnY, btnW, btnH, btnGap, count }, btnBaseX, btnY, btnW, btnH, btnGap };
+}
+
+/**
  * @param {CanvasRenderingContext2D} ctx
  * @param {number} w
  * @param {number} h
@@ -174,17 +187,14 @@ export function renderGameOver(ctx, w, h, state) {
     );
   }
 
-  // ── Bottom action buttons: RESTART | QUIT | SHARE ──
-  const btnW = 110, btnH = 34, btnGap = 12;
-  const totalBtnW = btnW * 3 + btnGap * 2;
-  const btnBaseX = w / 2 - totalBtnW / 2;
-  const btnY = h - 70;
-  const gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
+  // ── Bottom action buttons: RESTART | QUIT | SHARE | SESSION ──
+  const { gameOverBtns, btnBaseX, btnY, btnW, btnH, btnGap } = gameOverButtonRow(w, h);
 
   const btnDefs = [
     { label: mode === 'campaign' ? 'RETRY LEVEL' : 'RESTART', color: '#ff8844', bg: 'rgba(255,136,68,0.15)' },
     { label: 'QUIT', color: '#aaaaaa', bg: 'rgba(170,170,170,0.1)' },
     { label: 'SHARE', color: '#00ccff', bg: 'rgba(0,204,255,0.12)' },
+    { label: 'SESSION', color: '#22e6c0', bg: 'rgba(34,230,192,0.1)' },
   ];
   for (let i = 0; i < btnDefs.length; i++) {
     const bx = btnBaseX + i * (btnW + btnGap);
@@ -194,7 +204,7 @@ export function renderGameOver(ctx, w, h, state) {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(bx, btnY, btnW, btnH);
     ctx.fillStyle = btnDefs[i].color;
-    ctx.font = 'bold 13px monospace';
+    ctx.font = `bold ${btnW < 100 ? 11 : 13}px monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(btnDefs[i].label, bx + btnW / 2, btnY + 22);
   }
@@ -725,20 +735,17 @@ function renderGameOverModern(ctx, w, h, state, compact) {
     );
   }
 
-  const btnW = 110, btnH = 34, btnGap = 12;
-  const totalBtnW = btnW * 3 + btnGap * 2;
-  const btnBaseX = w / 2 - totalBtnW / 2;
-  const btnY = h - 70;
-  const gameOverBtns = { btnBaseX, btnY, btnW, btnH, btnGap };
+  const { gameOverBtns, btnBaseX, btnY, btnW, btnH, btnGap } = gameOverButtonRow(w, h);
   const btnDefs = [
     { label: state.mode === 'campaign' ? 'Retry Level' : 'Restart', color: UI.amber, focus: true },
     { label: 'Quit', color: UI.textDim },
     { label: 'Share', color: UI.cyan },
+    { label: 'Session', color: UI.green },
   ];
   for (let i = 0; i < btnDefs.length; i++) {
     const d = btnDefs[i];
     drawButton(ctx, btnBaseX + i * (btnW + btnGap), btnY, btnW, btnH, d.label, 'idle', d.color, {
-      idleAccent: d.color, idleColor: d.color, size: 14,
+      idleAccent: d.color, idleColor: d.color, size: btnW < 100 ? 12 : 14,
     });
   }
 

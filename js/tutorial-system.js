@@ -56,6 +56,7 @@ import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js"
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 import { warmPropSet } from "../src/rendering/props.js";
 import { CITY_GLASS, warmCityView } from "../src/rendering/env/city-view.js";
+import { notePrologueStep } from "../src/systems/playtest-log.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -2438,6 +2439,7 @@ export class TutorialSystem {
     this._events = new Set();
     const def = this.def;
     if (!def) return;
+    notePrologueStep(g);
     // A beat's first step is where you come back to (or its first that
     // allows it: nobody wants to sit through the alarm twice).
     const first = PROLOGUE_STEPS.findIndex((s) => s.beat === def.beat && s.checkpoint !== false);

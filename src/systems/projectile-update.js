@@ -164,7 +164,7 @@ function tryHitPlayer(p, ctx) {
     return true;
   }
   // The hit indicator points back along the bolt's flight, toward the shooter.
-  ctx.damagePlayer(p.damage, { x: p.x - p.dirX * 4, y: p.y - p.dirY * 4 });
+  ctx.damagePlayer(p.damage, { x: p.x - p.dirX * 4, y: p.y - p.dirY * 4, from: p.from });
   p.active = false;
   return true;
 }

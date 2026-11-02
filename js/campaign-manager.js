@@ -23,6 +23,7 @@ import {
 import { isBossEnemy } from "../src/systems/combat.js";
 import { levelsBefore, sceneFor, earnsTrueEnding } from "../src/data/campaign/acts.js";
 import { trackEvent } from "./analytics.js";
+import { noteRetry } from "../src/systems/playtest-log.js";
 import { GameState } from "../src/types.js";
 import { getArtStyle, ART_LEGACY } from "../src/rendering/art-style.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
@@ -474,6 +475,7 @@ export class CampaignManager {
     const g = this.game;
     const start = this._levelStart;
     g.mode = "campaign";
+    noteRetry(g);
     g.player.reset();
     this.loadLevel(this.level);
     if (start) {
