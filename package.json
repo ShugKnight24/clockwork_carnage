@@ -16,6 +16,7 @@
     "test:telemetry": "npx playwright test tests/telemetry.spec.js",
     "test:experts": "npx playwright test tests/experts.spec.js",
     "test:gate": "npx playwright test tests/playtest-gate.spec.js",
+    "test:sweep": "CC_SWEEP=1 npx playwright test tests/campaign-sweep.spec.js --workers=1",
     "test:perf": "npx playwright test tests/perf-budget.spec.js --workers=1",
     "bench": "node scripts/bench.mjs",
     "gate": "npm run test:gate",

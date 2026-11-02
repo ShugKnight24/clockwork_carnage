@@ -25,6 +25,7 @@ import {
 } from "../data.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { createPlaytestGate } from "./playtest-gate.js";
+import { createCampaignSweep, summariseSweeps } from "./campaign-sweep.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
 import { TUTORIAL_SANDBOX_STEP } from "../../src/constants.js";
 import { SeededRNG } from "../../src/utils/seeded-rng.js";
@@ -234,6 +235,11 @@ function distanceField(map, tx, ty) {
   return field;
 }
 
+/** Forget every path field: the grid changed in a way doorStamp misses (a seal, a rewrite). */
+function clearPathCache() {
+  _fields.clear();
+}
+
 /** Changes whenever a door opens, so a field computed with it shut is rebuilt. */
 function doorStamp(map) {
   let n = 0;
@@ -348,12 +354,17 @@ const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" &&
  * in the head zone at this distance. Zones without a head get the centre.
  */
 function aimForHead(game, e) {
+  aimAtZone(game, e, "head");
+}
+
+/** aimForHead for any zone: "head", or "body" for a player who aims centre mass. */
+function aimAtZone(game, e, zone) {
   const p = game.player;
   const d = Math.max(0.5, Math.hypot(e.x - p.x, e.y - p.y));
   // A grid level measures heights from the standing eye line the figures
   // are drawn about; the shot leaves from the player's own eye, eyeOffsetZ
   // above it (pickHitscanTarget in src/systems/combat.js).
-  const y = zoneAimHeight(e, "head", !game.world) - (game.world ? 0 : eyeOffsetZ(p));
+  const y = zoneAimHeight(e, zone, !game.world) - (game.world ? 0 : eyeOffsetZ(p));
   const h = game.canvas?.height || 1;
   const barH = currentBarH(game);
   const tanPitch = y / d;
@@ -2411,6 +2422,26 @@ export function createTestRunner(game) {
       console.log(report.ok ? "ALL GATE RUNS PASSED" : `${report.failures.length} GATE FAILURE(S)`);
       console.log("═══════════════════════════════════════\n");
       return report;
+    },
+
+    /**
+     * The campaign fighting sweep (campaign-sweep.js): the bot plays each
+     * level for real, retrying on death. `opts`: seed, aim ("head"|"body"),
+     * act or from/to [act, level], attempts, assist, levelCapS, stuckS.
+     * An array of opts runs each and adds a per-level `summary`.
+     */
+    async sweep(opts = {}) {
+      await game.preloadLazyModes();
+      const sweep = createCampaignSweep(game, {
+        stepGame, clearInput, aimAt, pathSteps, stepToward, clearPathCache, aimAtZone,
+        pickWeapon, botReload, kite, flank, shieldFacing, shotReaches, liveEnemy,
+      });
+      const list = Array.isArray(opts) ? opts : [opts];
+      const runs = list.map((o) => {
+        resetGame(game);
+        return sweep.run(o);
+      });
+      return Array.isArray(opts) ? { runs, summary: summariseSweeps(runs) } : runs[0];
     },
 
     /** Run everything */
