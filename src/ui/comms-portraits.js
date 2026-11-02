@@ -22,6 +22,7 @@
 
 import { VOICES, voiceKeyFor } from "../audio/voice.js";
 import { SpriteCache } from "../rendering/sprite-cache.js";
+import { lcg as rng } from "../utils/rng.js";
 
 const INK = "#04060b";
 
@@ -979,15 +980,6 @@ function backdrop(g, style, tint, holo) {
     g.fillStyle = beam;
     g.fillRect(-2, 40, 104, 62);
   }
-}
-
-/** Seeded noise so grain and static never repaint differently. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
 }
 
 function finish(g, style, tint, holo, s, dpr) {

@@ -8,16 +8,18 @@
  * See ../index.js for the model format.
  */
 
+import { clamp, lerpPoint as lerp } from "../../../utils/math.js";
+
+export { lerp };
+
 export const INK = "#04060b";
 export const RIM = "#22e6ff";
 
 export const f = (n) => Math.round(n * 10) / 10;
 export const pt = (x, y) => `${f(x)},${f(y)}`;
-export const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 const angle = (a, b) => (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI - 90;
 /** Mirror every "x,y" pair of an absolute path across x = 0. */
 export const mirror = (d) => d.replace(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g, (_, x, y) => `${f(-x)},${y}`);
-export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
 /** Point `len` from p, `deg` degrees off straight down (positive swings toward screen right). */
 export const polar = (p, deg, len) => {

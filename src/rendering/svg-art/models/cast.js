@@ -8,6 +8,7 @@
 import { FULL_PARTY, orderParty, partyLayout } from "../../party.js";
 import { INK, r1, lin, rad, blur, at, mir, limb, headPath, faceDefs, face, lightDefs, formLight, fold } from "./cast/kit.js";
 import { ariaModel } from "./cast/aria.js";
+import { lerpPoint as lerp } from "../../../utils/math.js";
 
 // ── Arm rig ───────────────────────────────────────────────────────────────
 // Headings are degrees off straight down (positive swings toward screen right);
@@ -17,7 +18,6 @@ import { ariaModel } from "./cast/aria.js";
 const DEG = Math.PI / 180;
 const polar = (p, a, len) => [p[0] + Math.sin(a * DEG) * len, p[1] + Math.cos(a * DEG) * len];
 const heading = (a, b) => Math.atan2(b[0] - a[0], b[1] - a[1]) / DEG;
-const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 const P = (q) => `${r1(q[0])},${r1(q[1])}`;
 /** Transform placing local +y along heading `a` at point p. */
 const frame = (p, a) => `translate(${r1(p[0])} ${r1(p[1])}) rotate(${r1(-a)})`;

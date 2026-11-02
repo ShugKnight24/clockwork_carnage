@@ -10,6 +10,8 @@
  * that curve is checked against the walls before a loop is accepted.
  */
 
+import { mulberry32 } from "../utils/rng.js";
+
 // Packs a cell into one number for Set lookups; wider than any map can be.
 const CELL_KEY = 1 << 16;
 const isOpen = (grid, x, y) => grid[y]?.[x] === 0;
@@ -204,18 +206,6 @@ function searchLoop(grid, start, { minClear, stride, maxTurn, minPoints, maxPoin
   // The curve check is the costly part: run it best-first and stop at the first loop that passes.
   closed.sort((a, b) => b.score - a.score);
   return closed.find((c) => curveClear(grid, c.loop))?.loop ?? null;
-}
-
-/** Small deterministic PRNG (mulberry32). */
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** Shoelace area: a loop that encloses space sweeps a room, a thin one paces it. */

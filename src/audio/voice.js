@@ -19,6 +19,7 @@
  */
 
 import { SeededRNG } from "../utils/seeded-rng.js";
+import { clamp01 } from "../utils/math.js";
 
 // ── Voices ──────────────────────────────────────────────────────────────────
 
@@ -131,8 +132,6 @@ export const EMOTIONS = {
   angry:    { pitch: 1,    range: 1.3,  breath: -0.1,  tilt: -0.5,  legato: -0.08, accent: 1.8, jitter: 1.3, vibrato: 1,   gain: 1.02, fall: -3,   pause: 0.8 },
   menacing: { pitch: -2,   range: 0.7,  breath: 0.1,   tilt: -0.1,  legato: 0.08,  accent: 1.2, jitter: 0.8, vibrato: 1.2, gain: 1.05, fall: -3.5, pause: 1.3 },
 };
-
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 /** A voice with an emotion applied; this is what the planner and synth read. */
 export function resolveVoice(voice, emotion = null) {

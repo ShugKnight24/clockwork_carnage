@@ -19,6 +19,7 @@ import { beatsToSec, reelDuration } from "../src/cinematic/timeline.js";
 import { SIZZLE } from "../src/cinematic/reels/sizzle.js";
 import { filmById } from "../src/cinematic/films.js";
 import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/cinematic/attract.js";
+import { idle } from "../src/utils/schedule.js";
 
 const primaryTouch = isPrimaryTouchDevice();
 if (primaryTouch) lockPageZoom();
@@ -815,8 +816,7 @@ setTimeout(() => {
       .then(() => game.cutsceneEngine?.prewarm?.("intro_flipbook", game.renderer.ctx, gameCanvas.width, gameCanvas.height))
       .catch(() => {});
   };
-  if (typeof requestIdleCallback === "function") requestIdleCallback(warm, { timeout: 3000 });
-  else warm();
+  idle(warm, { timeout: 3000, fallbackMs: null });
 }, 1500);
 
 // Opening the audio device (new AudioContext) cost ~260 ms of the title
@@ -831,8 +831,7 @@ setTimeout(() => {
       if (game.audio.ctx?.state === "running" && !_firstInteraction) game.audio.ctx.suspend();
     } catch (_) {}
   };
-  if (typeof requestIdleCallback === "function") requestIdleCallback(open, { timeout: 4000 });
-  else open();
+  idle(open, { timeout: 4000, fallbackMs: null });
 }, 1000);
 
 // Auto-save on tab close / navigate away
@@ -927,11 +926,11 @@ const warmLazyModules = () =>
     () => import("../src/rendering/voxel/voxel-renderer.js"),
     () => import("./forge.js"),
   ].reduce((chain, load) => chain.then(() => load().catch(() => {})), Promise.resolve());
-(window.requestIdleCallback ?? ((fn) => setTimeout(fn, 3000)))(warmLazyModules, { timeout: 8000 });
+idle(warmLazyModules, { timeout: 8000, fallbackMs: 3000 });
 
 // Settings is one click from the menu, so its deck mounts as soon as the
 // title is idle rather than waiting behind the warm-up chain above.
-(window.requestIdleCallback ?? ((fn) => setTimeout(fn, 200)))(() => preloadSettingsDeck(game), { timeout: 2000 });
+idle(() => preloadSettingsDeck(game), { timeout: 2000, fallbackMs: 200 });
 
 // Mobile touch controls — auto-activates on touch devices
 const touch = TouchControls.init(game);

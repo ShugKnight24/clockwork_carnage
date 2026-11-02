@@ -32,6 +32,7 @@ import { setPieceFor } from "../src/data/campaign/set-pieces.js";
 import { Pickup } from "./entities.js";
 import { playLoreThen } from "../src/cinematic/films.js";
 import { clearArrivals } from "../src/systems/arrival.js";
+import { hasIdleCallback } from "../src/utils/schedule.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
 const GIFT_LINES = {
@@ -299,7 +300,7 @@ export class CampaignManager {
     // An iPhone browser paints canvases later, in its GPU process: reading
     // one pixel back makes each bake pay inside the slice that queued it,
     // not in whatever frame next waits on the GPU (as _prewarmStation does).
-    const queued = typeof requestIdleCallback !== "function";
+    const queued = !hasIdleCallback();
     const settle = () => {
       if (!queued) return;
       try {

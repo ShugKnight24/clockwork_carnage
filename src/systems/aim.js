@@ -29,8 +29,7 @@ import {
   PLAYER_ADS_SENS,
   COMPACT_PHONE_HEIGHT,
 } from "../constants.js";
-
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+import { clamp } from "../utils/math.js";
 
 /**
  * Aim-down-sights blend: 0 = hip-fire, 1 = fully aimed. One eased value drives

@@ -25,9 +25,9 @@
  */
 
 import { INK, f, mix } from "./geom.js";
+import { lerpPoint as lerp } from "../../../utils/math.js";
 
 const pt = ([x, y]) => `${f(x)},${f(y)}`;
-const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 // How far past the screen edge sleeves run (viewmodel units from centre): covers
 // bob/kick plus the rig following the free-aim reticle to its limits.
 const EDGE_Y = 168;

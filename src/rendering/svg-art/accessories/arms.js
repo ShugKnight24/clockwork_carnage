@@ -4,13 +4,11 @@
  * over the arms (`top`); fallen, the pinned right arm lies under the body, so
  * its gear stays with the body (`front`).
  */
+
+import { mixHex as mix } from "../../../utils/color.js";
+
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
-const mix = (a, b, t) => {
-  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-};
 const BRASS = "#d9a441";
 const rect = (x, y, w, h, rx, fill, sw = 0.9) =>
   `<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" rx="${f(rx)}" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>`;

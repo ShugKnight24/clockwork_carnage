@@ -7,8 +7,14 @@
 export const clamp = (v, min, max) =>
   v < min ? min : v > max ? max : v;
 
+/** Clamp value to [0, 1]. */
+export const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
 /** Linear interpolation from a to b by t. */
 export const lerp = (a, b, t) => a + (b - a) * t;
+
+/** Linear interpolation between two [x, y] points; returns a new point. */
+export const lerpPoint = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
 /** Euclidean distance between two points. */
 export const dist = (x1, y1, x2, y2) => {

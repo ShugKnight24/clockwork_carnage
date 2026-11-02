@@ -17,13 +17,13 @@ import { planBind, applyBind, previewBind, resetBindings, savePadBinds, REMAPPAB
 import { DEFAULT_KEYBINDS } from "../input-manager.js";
 import { COLOR, tokensCss } from "../../src/ui/design-tokens.js";
 import { onArtStyleChange } from "../../src/rendering/art-style.js";
+import { clamp } from "../../src/utils/math.js";
 
 // px: narrower portrait windows get the bottom sheet. A landscape phone keeps
 // the side panel; a sheet on a 375px-tall screen left about one row.
 const SHEET_BELOW = 700;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const defOf = (key) => SETTINGS_REGISTRY.find((d) => d.key === key);
 const decimals = (step) => (String(step).split(".")[1] || "").length;
 

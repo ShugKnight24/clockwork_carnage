@@ -23,6 +23,7 @@
  * the previous shot plays: the cut opens on the whole valley.
  */
 import { beatsToSec, secToBeats } from "../timeline.js";
+import { nextFrame, whenIdle } from "../../utils/schedule.js";
 
 // A valley with room for the tower and trees around it (column-gen v2).
 const SEED = 20260924;
@@ -40,20 +41,6 @@ let voxel = null; // { VoxelRenderer, generateWorld, styleName } once imported
 
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-function nextFrame() {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(resolve, 0));
-    else setTimeout(resolve, 0);
-  });
-}
-
-function idle() {
-  return new Promise((resolve) => {
-    if (typeof requestIdleCallback === "function") requestIdleCallback(() => resolve(), { timeout: 200 });
-    else setTimeout(resolve, 0);
-  });
-}
-
 export const forge = {
   // The renderer's GL context and its atlas bake (~60 ms in one piece) are
   // made while the reel opens on black, not under the shot before.
@@ -61,7 +48,7 @@ export const forge = {
 
   prepare(game, spec, { live = () => true } = {}) {
     const prep = { sandbox: null, done: null, discarded: false };
-    prep.done = createSandbox(game, spec, live, idle).then((sb) => {
+    prep.done = createSandbox(game, spec, live, () => whenIdle(200)).then((sb) => {
       if (sb && (prep.discarded || !live())) {
         dispose(sb);
         return null;

@@ -529,6 +529,7 @@ function hashSeed(value) {
   return hash >>> 0;
 }
 
+// Mulberry32 (src/utils/rng.js) stepped in place, so the state lives on the run.
 function nextRandom(run) {
   run.seed = Math.imul(run.seed + 0x6d2b79f5, 1);
   let t = run.seed;

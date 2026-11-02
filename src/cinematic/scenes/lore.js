@@ -29,9 +29,10 @@ import { art } from "./art.js";
 import { creator } from "./creator.js";
 import { AGENT_VIEW, buildAgentParts } from "../../rendering/svg-art/agent-rig.js";
 import { getLayerImage } from "../../rendering/svg-art/raster.js";
+import { clamp01 } from "../../utils/math.js";
+import { nextFrame } from "../../utils/schedule.js";
 
 const TAU = Math.PI * 2;
-const clamp01 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x);
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const easeOutCubic = (x) => 1 - (1 - clamp01(x)) ** 3;
 const profileNow = () => (typeof document !== "undefined" && document.documentElement.dataset.artProfile) || "modern";
@@ -299,13 +300,6 @@ function drawSilhouette(ctx, w, h, key, t, touch) {
 
 const MOTES = 70;
 const WARM_FRAMES = 45;
-
-function nextFrame() {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(resolve, 0));
-    else setTimeout(resolve, 0);
-  });
-}
 
 function hash(str) {
   let h = 2166136261;

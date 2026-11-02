@@ -23,6 +23,7 @@ import {
 } from "./modern-ui-kit.js";
 import { drawPrompt } from "./input-glyphs.js";
 import { FILMS } from "../cinematic/films.js";
+import { wrapWords } from "../utils/text.js";
 
 /** Footer: the keys or pad buttons that drive this screen (src/ui/input-glyphs.js). */
 const FOOTER = [["navigateV", "select"], ["navigateH", "tab"], ["back", "back"]];
@@ -94,20 +95,7 @@ export function archiveEntries(tab, archive) {
 }
 
 function wrapText(ctx, text, maxW) {
-  const words = String(text).split(/\s+/);
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxW && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+  return wrapWords(String(text).split(/\s+/), (s) => ctx.measureText(s).width, maxW);
 }
 
 /**

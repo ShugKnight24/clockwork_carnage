@@ -1,4 +1,5 @@
 import { attachArtSwitch, modelHtml } from "./title-art-layers.js";
+import { lcg as rng } from "../../src/utils/rng.js";
 
 const template = document.createElement("template");
 template.innerHTML = `
@@ -212,15 +213,6 @@ const INK = "#04060b";
 const DECK = { cx: 350, cy: 334, rx: 346, ry: 56 };
 const HORIZON = 292;
 const f = (n) => Math.round(n * 10) / 10;
-
-/** Deterministic PRNG so stars and windows never shift between loads. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 const blur = (id, sd) =>
   `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${sd}"/></filter>`;

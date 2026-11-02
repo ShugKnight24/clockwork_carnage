@@ -2,13 +2,11 @@
  * Back slot. Gear sits behind the torso and cape (`back`); straps that cross
  * the chest go in `front`, and lights in `glow`.
  */
+
+import { mixHex as mix } from "../../../utils/color.js";
+
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
-const mix = (a, b, t) => {
-  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-};
 /** Fallen art lies on its side: nudge back gear out from under the body. */
 const lie = (A, markup) => (A.pose === "fallen" ? `<g transform="translate(-6,4) rotate(-12)">${markup}</g>` : markup);
 

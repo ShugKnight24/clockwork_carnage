@@ -16,6 +16,8 @@
  * filters run when the browser decodes each layer bitmap, never per frame.
  */
 
+import { hexRgb, rgbHex, mixHexClamped as mixHex } from "../../../utils/color.js";
+
 const INK = "#04060b";
 
 /**
@@ -28,20 +30,6 @@ export const SOFT_HIGHLIGHTS = { "#eaf4ff": "#9aa2a8", "#f4faff": "#a6adb2", "#d
 // ---------------------------------------------------------------------------
 // Colour
 // ---------------------------------------------------------------------------
-
-const hexRgb = (h) => {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-};
-const rgbHex = (r) =>
-  `#${r.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
-
-/** Blend two hex colours; t = 0 → a, 1 → b. */
-export const mixHex = (a, b, t) => {
-  const x = hexRgb(a);
-  const y = hexRgb(b);
-  return rgbHex(x.map((v, i) => v + (y[i] - v) * t));
-};
 
 /** True for colours that read as light sources: bright and saturated. */
 export function isEmissive(hex) {

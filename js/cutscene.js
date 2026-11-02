@@ -21,6 +21,7 @@ import {
   setTracking,
   wrapText,
 } from "../src/ui/cutscene-text.js";
+import { lcg } from "../src/utils/rng.js";
 
 // A party frame draws only the members it names (`party: ["lyra", "you"]`),
 // or, naming nobody, whoever is with you in this slot; both renderers read
@@ -113,13 +114,7 @@ const FB_MAX_BACKDROPS = 6; // flattened backdrops shared across pages
 const FB_MAX_PX = 2600; // bake resolution cap (lettering stays on the crisp text layer)
 
 /** Seeded 0..1 generator, so paper and inks are the same every bake. */
-function fbRand(seed) {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
+const fbRand = (seed) => lcg(seed >>> 0 || 1);
 
 // Paper stock as a repeating tile: newsprint fibres and specks for Comic
 // (multiplied over the inks), fine film grain for Modern.

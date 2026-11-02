@@ -2,6 +2,7 @@ import { VoiceSynth, VOICES, playerVoice, planUtterance, planBark, enemyVoiceKey
 import { Speech } from "../src/audio/speech.js";
 import { heartbeatInterval, muffleCutoff, streakNotes } from "../src/systems/player-feedback.js";
 import { hushCutoff } from "../src/systems/stillness.js";
+import { xorshift32 } from "../src/utils/rng.js";
 
 /** Which death sound an enemy type gets (enemyDeath); the rest are "body". */
 const DEATH_KINDS = {
@@ -15,13 +16,7 @@ const DEATH_KINDS = {
  * seeded run's shared stream by however many sounds wall time let through,
  * and the same seed played a different fight.
  */
-let _audioSeed = 0x9e3779b9;
-function audioRandom() {
-  _audioSeed ^= _audioSeed << 13;
-  _audioSeed ^= _audioSeed >>> 17;
-  _audioSeed ^= _audioSeed << 5;
-  return (_audioSeed >>> 0) / 4294967296;
-}
+const audioRandom = xorshift32(0x9e3779b9);
 
 export class AudioManager {
   constructor() {
@@ -147,11 +142,8 @@ export class AudioManager {
       // cached depends on what played before, so drawing tens of thousands of
       // numbers from the shared stream on a cache miss knocked a seeded run
       // (the arena bots) onto a different fight.
-      let s = (key * 2654435761) >>> 0 || 1;
-      for (let i = 0; i < n; i++) {
-        s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
-        d[i] = ((s >>> 0) / 4294967296) * 2 - 1;
-      }
+      const rnd = xorshift32((key * 2654435761) >>> 0 || 1);
+      for (let i = 0; i < n; i++) d[i] = rnd() * 2 - 1;
       if (this._noiseClips.size > 64) this._noiseClips.clear();
       this._noiseClips.set(key, buf);
     }

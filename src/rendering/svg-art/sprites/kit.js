@@ -7,6 +7,9 @@
  * per frame.
  */
 
+import { lerpPoint as lerp } from "../../../utils/math.js";
+import { mixHex as mix } from "../../../utils/color.js";
+
 export const INK = "#04060b";
 
 export const f = (n) => Math.round(n * 10) / 10;
@@ -21,19 +24,10 @@ export function polar(p, deg, len) {
 /** Heading of a→b in polar's convention. */
 export const heading = (a, b) => (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180) / Math.PI;
 
-export const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-
-function hex(c) {
-  const n = parseInt(c.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
+export { lerp };
 
 /** Blend two #rrggbb colours (t = 0 → a, 1 → b). */
-export function mix(a, b, t) {
-  const A = hex(a);
-  const B = hex(b);
-  return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
-}
+export { mix };
 
 /** Tapered capsule outline from joint a (width wa) to joint b (width wb). */
 export function capsule(a, b, wa, wb) {

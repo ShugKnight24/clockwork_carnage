@@ -12,7 +12,7 @@
  * deliberate 30 fps cap must not read as a machine that cannot keep up.
  */
 
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+import { clamp } from "../utils/math.js";
 
 /** Frame target options, indexed by `settings.frameTarget`. 0 = uncapped. */
 const FRAME_TARGETS = [0, 30, 60, 90, 120];

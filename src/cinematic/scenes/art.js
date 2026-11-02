@@ -14,6 +14,9 @@
  * backdrop bitmaps so the shot does not open on the procedural fallback.
  */
 
+import { lerp } from "../../utils/math.js";
+import { nextFrame } from "../../utils/schedule.js";
+
 const WARM_FRAMES = 30;
 
 /**
@@ -27,15 +30,7 @@ const MAX_ASPECT = 2;
 
 let cs = null; // the cutscene drawing functions, once their chunk has loaded
 
-function nextFrame() {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(resolve, 0));
-    else setTimeout(resolve, 0);
-  });
-}
-
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-const lerp = (a, b, k) => a + (b - a) * k;
 
 export const art = {
   async build(game, spec, rng, { live = () => true } = {}) {

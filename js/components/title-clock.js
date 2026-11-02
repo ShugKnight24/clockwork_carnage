@@ -1,4 +1,5 @@
 import { attachArtSwitch, modelHtml } from "./title-art-layers.js";
+import { lcg as rng } from "../../src/utils/rng.js";
 
 const template = document.createElement("template");
 template.innerHTML = `
@@ -661,15 +662,6 @@ template.innerHTML = `
 const INK = "#04060b";
 const f = (n) => Math.round(n * 10) / 10;
 const polar = (r, deg) => [f(Math.cos((deg - 90) * (Math.PI / 180)) * r), f(Math.sin((deg - 90) * (Math.PI / 180)) * r)];
-
-/** Deterministic PRNG so sparks and shards never shift between loads. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 const CLOCK_DEFS = `
 <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">

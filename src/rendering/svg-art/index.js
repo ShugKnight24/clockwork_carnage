@@ -29,6 +29,7 @@ import { MODELS as SCENE_ART, BACKGROUNDS as SCENE_BGS } from "./models/scenes.j
 import { MODELS as HOUND } from "./models/hound.js";
 import { BACKGROUNDS as BACKDROPS } from "./models/backdrops.js";
 import { partyMembers } from "../party.js";
+import { hasIdleCallback } from "../../utils/schedule.js";
 
 const MODELS = { ...HERO, ...CAST, ...VILLAIN, ...SCENE_ART, ...HOUND };
 const BACKGROUNDS = { ...SCENE_BGS, ...BACKDROPS };
@@ -93,7 +94,7 @@ export function setCastCharacter(character) {
   castEntries[1].clear();
   // Build the current style's models while the browser is idle, so the first
   // cutscene frame only blits. A later change supersedes this one.
-  if (castLook && typeof requestIdleCallback === "function") {
+  if (castLook && hasIdleCallback()) {
     const hash = castHash;
     requestIdleCallback(() => {
       if (hash !== castHash) return;

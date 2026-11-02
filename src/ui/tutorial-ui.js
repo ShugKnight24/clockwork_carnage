@@ -21,6 +21,7 @@ import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padL
 import { PROLOGUE_STEPS, PROLOGUE_BEATS } from "../data/prologue.js";
 import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
 import { formatKeyCode } from "./key-labels.js";
+import { wrapWords } from "../utils/text.js";
 
 // ─── Tunable design tokens (single source of truth for tutorial UI) ───
 const ACCENT = "#00ffcc";
@@ -385,20 +386,7 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
 
 /** Greedy word-wrapper for canvas text. Returns an array of lines. */
 function wrapText(ctx, text, maxWidth) {
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const candidate = line ? line + " " + word : word;
-    if (ctx.measureText(candidate).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = candidate;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+  return wrapWords(text.split(" "), (s) => ctx.measureText(s).width, maxWidth);
 }
 
 /**
@@ -557,20 +545,7 @@ function narrationState(n) {
 
 /** Plain word wrap on a font (narration rows). */
 function wrapFont(font, text, maxW) {
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const cand = line ? `${line} ${word}` : word;
-    if (line && measureSpaced(font, cand) > maxW) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = cand;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+  return wrapWords(text.split(" "), (s) => measureSpaced(font, s), maxW);
 }
 
 /** Draw up to `chars` characters of wrapped lines, left-aligned from x. */

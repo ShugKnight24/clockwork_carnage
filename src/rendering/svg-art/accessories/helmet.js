@@ -3,13 +3,11 @@
  * the head's turn and the fallen head roll; lights go in `glow`. The rig
  * seats crown / browL / sideL on each helmet's shell.
  */
+
+import { mixHex as mix } from "../../../utils/color.js";
+
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
-const mix = (a, b, t) => {
-  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-};
 const rect = (x, y, w, h, rx, fill, sw = 0.9) =>
   `<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" rx="${f(rx)}" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>`;
 const stroke = (d, color, w) => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${f(w)}" stroke-linecap="round"/>`;
