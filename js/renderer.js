@@ -650,8 +650,11 @@ export class Renderer {
    * close, so a texture blit there bought nothing and cost a draw call.
    */
   _drawWallCap(ctx, x, top, bot, menv, wallType, dist, real, glWalls = null) {
-    const mmips = menv ? menv.walls[wallType] : null;
-    const tex = mmips ? mmips[mmips.length - 1] : this.textures[wallType] || this.textures[1];
+    // A Modern wall type without art of its own takes the env's common wall
+    // (or, failing that, a flat steel): Legacy's texture would paint and
+    // read back its 256px face mid-play (~340 ms first sight on an iPhone).
+    const mmips = menv ? menv.walls[wallType] || menv.walls[1] : null;
+    const tex = menv ? (mmips ? mmips[mmips.length - 1] : null) : this.textures[wallType] || this.textures[1];
     const lut = this._capLUT(tex, menv, real);
     let s;
     if (menv) {
