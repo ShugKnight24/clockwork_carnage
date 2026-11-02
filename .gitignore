@@ -18,6 +18,7 @@ scripts/*
 !scripts/brand/
 !scripts/reel/
 !scripts/bench.mjs
+!scripts/release-playtest.mjs
 
 # Playwright / automation engine — output only. The specs, the debug bridge,
 # the config and package.json are tracked so a clone can install and run them.
@@ -27,7 +28,8 @@ screenshots/
 .playwright/
 
 # Node tooling
-node_modules/
+# A worktree may link node_modules to the main checkout: a symlink, not a dir.
+node_modules
 
 # Telemetry & simulation data
 telemetry/
@@ -58,3 +60,12 @@ weapons_enemies.md
 
 # Benchmark reports (npm run bench)
 bench-results/
+
+# Production builds (npm run build). Pages serves master's source tree, not dist/.
+dist/
+
+# Local scratch work, logs and agent/editor state
+scratch/
+*.log
+.claude/
+.superpowers/
