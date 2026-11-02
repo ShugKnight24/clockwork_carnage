@@ -82,6 +82,7 @@ export class CampaignManager {
       g.map.grid,
       g.entities,
       g.killedEnemies,
+      Save.levelContentHash(campaignLevelMap(this.act, this.level)),
     );
   }
 
@@ -142,6 +143,9 @@ export class CampaignManager {
         g._levelLog.secretsAtStart = Math.max(0, (g.player.secretsFound || 0) - opened);
       }
       this._levelStart = this._snapshotPlayer();
+      // loadLevel saved the fresh player it started with; a second Continue
+      // before the next save would have lost the health and loadout restored here.
+      this.save();
       return true;
     } catch (err) {
       // A save this build cannot apply: restart its level rather than leave

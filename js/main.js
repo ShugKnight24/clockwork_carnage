@@ -155,9 +155,14 @@ function updateContinueButtons() {
   const saves = game.getSaveInfo();
   const campaign = saves.find((s) => s.mode === "campaign");
   const arena = saves.find((s) => s.mode === "arena");
+  // With no campaign save yet, Continue picks the prologue up at its last beat.
+  const prologue = !campaign && saves.find((s) => s.mode === "prologue");
   if (campaign) {
     btnContinueCampaign.classList.remove("hidden");
     continueCampaignDesc.textContent = `Level ${campaign.level} (${campaign.score} pts)`;
+  } else if (prologue) {
+    btnContinueCampaign.classList.remove("hidden");
+    continueCampaignDesc.textContent = `Prologue${prologue.beat ? `: ${prologue.beat}` : ""}`;
   } else {
     btnContinueCampaign.classList.add("hidden");
   }
@@ -539,6 +544,10 @@ btnContinueCampaign.addEventListener("click", () => {
   game.audio.menuConfirm();
   if (game.loadCampaignSave()) {
     showGameCanvases();
+  } else if (game.getSaveInfo().some((s) => s.mode === "prologue")) {
+    showGameCanvases();
+    trackEvent("mode_start", { mode: "tutorial", resume: true });
+    game.startTutorial({ resume: true });
   } else {
     updateContinueButtons();
   }

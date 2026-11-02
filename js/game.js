@@ -1036,8 +1036,14 @@ export class Game {
       if (jp.confirm) this.handleKeyPress("Enter");
     } else if (this.state === GameState.PLAYING) {
       const p = this.player;
-      p.isFiring = held.fire;
-      p.isAiming = held.aim;
+      // The pad sets fire and aim when its triggers change, as the mouse does
+      // on its buttons: written every frame, a pad left plugged in held both
+      // false under a mouse that was firing.
+      const was = this._padHeld || (this._padHeld = { fire: false, aim: false });
+      if (held.fire !== was.fire) p.isFiring = held.fire;
+      if (held.aim !== was.aim) p.isAiming = held.aim;
+      was.fire = held.fire;
+      was.aim = held.aim;
       if (gp.lookX || gp.lookY) {
         const aimScale = 420 * dt;
         this.mouse.dx += gp.lookX * aimScale;
@@ -1601,8 +1607,9 @@ export class Game {
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
-  startTutorial() {
-    return this.tutorial.start();
+  /** `resume`: pick up at the prologue's saved checkpoint, if there is one. */
+  startTutorial({ resume = false } = {}) {
+    return this.tutorial.start({ resume });
   }
 
   initTutorialLevel() {

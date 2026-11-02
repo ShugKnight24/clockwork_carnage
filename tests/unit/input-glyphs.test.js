@@ -228,6 +228,23 @@ describe("default pad layout in play", () => {
     frame(game, []);
   };
 
+  it("a pad at rest leaves the mouse's fire and aim alone; its triggers still work", () => {
+    const game = padGame();
+    const p = game.player;
+    frame(game, []);
+    p.isFiring = true; // left mouse down
+    p.isAiming = true; // right mouse down
+    frame(game, []);
+    frame(game, []);
+    expect([p.isFiring, p.isAiming]).toEqual([true, true]);
+    p.isFiring = false;
+    p.isAiming = false;
+    frame(game, [PAD.RT, PAD.LT]);
+    expect([p.isFiring, p.isAiming]).toEqual([true, true]);
+    frame(game, []);
+    expect([p.isFiring, p.isAiming]).toEqual([false, false]);
+  });
+
   it("X reloads when there is nothing in front of you to use", () => {
     const game = padGame();
     game.interact = () => (game.calls.push("interact"), false);

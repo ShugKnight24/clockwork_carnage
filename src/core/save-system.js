@@ -23,6 +23,29 @@ const SAVE_VERSION = 1;
  */
 export const CAMPAIGN_SAVE_VERSION = 2;
 
+/**
+ * A fingerprint of a prepared campaign level (src/data/levels/campaign.js):
+ * its grid, start, and the entities a save's states are matched to by index.
+ * A build that changes the map changes this, and a save made on the old
+ * layout keeps its progress but not its mid-level state (sanitizeCampaignSave).
+ * FNV-1a over the level's JSON; cached per level object, which is shared.
+ */
+const _hashes = new WeakMap();
+export function levelContentHash(level) {
+  if (!level || typeof level !== "object") return "";
+  let h = _hashes.get(level);
+  if (h) return h;
+  const s = JSON.stringify(level);
+  let x = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    x ^= s.charCodeAt(i);
+    x = Math.imul(x, 0x01000193);
+  }
+  h = (x >>> 0).toString(36);
+  _hashes.set(level, h);
+  return h;
+}
+
 function clampSetting(key, val) {
   const def = SETTINGS_REGISTRY.find((s) => s.key === key);
   if (!def) return val;
@@ -299,12 +322,21 @@ export function saveArena(round, player, upgradeLevels, difficulty) {
  * as null, left the player staring at walls unable to move. Anything that no
  * longer fits is dropped, so the caller falls back to the level's own start
  * for that part and keeps the rest (weapons, score, upgrades).
+ *
+ * A save made on another layout of the level (its contentHash differs from
+ * levelContentHash(level), or it predates the hash) passed the shape checks
+ * yet restored the old map: same size, different walls, entity states
+ * matched to the wrong things by index. It keeps its progress and starts the
+ * level fresh, flagged `staleLayout`.
  */
 export function sanitizeCampaignSave(data, level) {
   const out = { ...data };
   const fin = Number.isFinite;
   const { width: W, height: H } = level;
+  const sameLayout = data.contentHash === levelContentHash(level);
+  if (!sameLayout) out.staleLayout = true;
   const gridOk =
+    sameLayout &&
     Array.isArray(data.mapGrid) && data.mapGrid.length === H &&
     data.mapGrid.every((row) => Array.isArray(row) && row.length === W && row.every(fin));
   if (!gridOk) {
@@ -316,7 +348,7 @@ export function sanitizeCampaignSave(data, level) {
   const open = (x, y) =>
     fin(x) && fin(y) && x >= 0 && y >= 0 && x < W && y < H && grid[Math.floor(y)][Math.floor(x)] === 0;
 
-  if (!open(data.playerX, data.playerY) || !fin(data.playerAngle)) {
+  if (!sameLayout || !open(data.playerX, data.playerY) || !fin(data.playerAngle)) {
     delete out.playerX;
     delete out.playerY;
     delete out.playerAngle;
@@ -422,7 +454,8 @@ export function migrateCampaignSave(data) {
   return { ...kept, version: CAMPAIGN_SAVE_VERSION, act: to.act, level: to.level, migrated: true };
 }
 
-export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGrid, entities, killedEnemies) {
+/** `contentHash` is levelContentHash of the level being played (sanitizeCampaignSave). */
+export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGrid, entities, killedEnemies, contentHash = "") {
   try {
     const entityStates = entities.map(e => {
       if (e.type === "enemy") {
@@ -442,6 +475,7 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
       aimOffsetY: player.aimOffsetY || 0,
       ...player.serialize(),
       difficulty,
+      contentHash,
       mapGrid,
       entityStates,
       killedEnemies,
@@ -450,27 +484,77 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
   } catch (_) {}
 }
 
-/**
- * Returns parsed save data, migrated to the current version, or null. Game
- * applies state changes. A save no migration can read is cleared.
- */
-export function loadCampaignData() {
+/** Parse a stored save, or null; a string that is not JSON is not kept around. */
+function readSave(key, clear) {
+  let raw;
   try {
-    const raw = localStorage.getItem("cc_campaign_save");
-    if (!raw) return null;
-    const data = migrateCampaignSave(JSON.parse(raw));
-    if (!data) {
-      clearCampaignSave();
-      return null;
-    }
-    return data;
+    raw = localStorage.getItem(key);
   } catch (_) {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    // A truncated or corrupt write: it can never load, and left in place it
+    // kept a Continue on the title that did nothing.
+    clear();
     return null;
   }
 }
 
+/**
+ * Returns parsed save data, migrated to the current version, or null. Game
+ * applies state changes. A save no migration can read, or that is not JSON,
+ * is cleared.
+ */
+export function loadCampaignData() {
+  const parsed = readSave("cc_campaign_save", clearCampaignSave);
+  if (!parsed) return null;
+  const data = migrateCampaignSave(parsed);
+  if (!data) clearCampaignSave();
+  return data;
+}
+
 export function clearCampaignSave() {
   try { localStorage.removeItem("cc_campaign_save"); }
+  catch (_) {}
+}
+
+// ── Prologue Checkpoint ──────────────────────────────────
+
+const PROLOGUE_CHECKPOINT_VERSION = 1;
+
+/**
+ * Where the prologue last put the cadet back to (the first step of a beat;
+ * tutorial-system _saveCheckpoint), so closing the tab mid-prologue resumes
+ * there instead of at the locker room.
+ */
+export function savePrologueCheckpoint(cp) {
+  try {
+    localStorage.setItem("cc_prologue_checkpoint", JSON.stringify({ version: PROLOGUE_CHECKPOINT_VERSION, ...cp }));
+  } catch (_) {}
+}
+
+/** The saved checkpoint, or null; one this build cannot use is cleared. */
+export function loadPrologueCheckpoint() {
+  const cp = readSave("cc_prologue_checkpoint", clearPrologueCheckpoint);
+  if (!cp) return null;
+  const fin = Number.isFinite;
+  const ok =
+    cp.version === PROLOGUE_CHECKPOINT_VERSION &&
+    Number.isInteger(cp.step) && cp.step > 0 &&
+    fin(cp.x) && fin(cp.y) && fin(cp.angle) &&
+    Array.isArray(cp.weapons) && cp.weapons.every((w) => Number.isInteger(w) && w >= 0 && w < WEAPONS.length);
+  if (!ok) {
+    clearPrologueCheckpoint();
+    return null;
+  }
+  return cp;
+}
+
+export function clearPrologueCheckpoint() {
+  try { localStorage.removeItem("cc_prologue_checkpoint"); }
   catch (_) {}
 }
 
@@ -480,21 +564,18 @@ export function hasSave() {
   return getSaveInfo().length > 0;
 }
 
+/** Each save on its own: a broken arena save no longer hides the campaign's. */
 export function getSaveInfo() {
   const info = [];
-  try {
-    const arena = localStorage.getItem("cc_arena_save");
-    if (arena) {
-      const d = JSON.parse(arena);
-      info.push({ mode: "arena", round: d.round, score: d.score });
-    }
-    const campaign = localStorage.getItem("cc_campaign_save");
-    // Report where a Continue will actually land, after any migration.
-    const d = campaign ? migrateCampaignSave(JSON.parse(campaign)) : null;
-    if (d) {
-      info.push({ mode: "campaign", act: d.act || 1, level: d.level + 1, score: d.score, ngPlusCycle: d.ngPlusCycle || 0 });
-    }
-  } catch (_) {}
+  const arena = readSave("cc_arena_save", clearArenaSave);
+  if (arena) info.push({ mode: "arena", round: arena.round, score: arena.score });
+  // Report where a Continue will actually land, after any migration.
+  const d = migrateCampaignSave(readSave("cc_campaign_save", clearCampaignSave));
+  if (d) {
+    info.push({ mode: "campaign", act: d.act || 1, level: d.level + 1, score: d.score, ngPlusCycle: d.ngPlusCycle || 0 });
+  }
+  const cp = loadPrologueCheckpoint();
+  if (cp) info.push({ mode: "prologue", step: cp.step, beat: cp.beat ?? null });
   return info;
 }
 
