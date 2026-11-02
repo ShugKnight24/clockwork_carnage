@@ -245,13 +245,16 @@ export class CampaignManager {
   }
 
   /**
-   * Bake the next level's environment while its briefing plays: an idle
-   * callback during the scenes, so the level's first frame is not a ~200 ms
-   * freeze. Harmless if the level starts first (loadLevel bakes it then).
-   * `now` bakes it at once instead.
+   * Bake the next level while its briefing plays, a piece per idle moment:
+   * its environment and own walls, the city behind any glass, their upload
+   * to the GPU wall pass and Realistic's lamp field. Left to the level's
+   * first frame, those were one frame: the bake (~200 ms), the wall array's
+   * upload and mipmaps, and two pixel reads. Harmless if the level starts
+   * first (loadLevel calls this with `now`, which does what is left at once).
    */
   _prewarmLevel(actId, index, now = false) {
-    const r = this.game.renderer;
+    const g = this.game;
+    const r = g.renderer;
     const act = getAct(actId);
     const entry = act && getActLevel(actId, index);
     if (!r?.prewarmEnv || !entry) return;
@@ -259,10 +262,66 @@ export class CampaignManager {
     // them otherwise bakes them all in its first frame.
     const walls = new Set();
     for (const row of campaignMap(entry)?.grid ?? []) for (const v of row) if (v >= 10) walls.add(v);
-    const run = () => r.prewarmEnv(act.palette, entry.env, [...walls]);
-    if (now) return run();
-    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1500 });
-    else setTimeout(run, 300);
+    const ids = [...walls];
+    const left = ids.slice();
+    const palette = act.palette;
+    const level = entry.env;
+    let built = false;
+    let city = false;
+    let uploaded = false;
+    // One piece of the work (the walls `count` faces at a time); false once there is none left.
+    const work = (deadline, count) => {
+      if (!built) {
+        r.prewarmEnv(palette, level);
+        built = true;
+      } else if (left.length) {
+        // At least one a slice: an idle callback that timed out has no time left.
+        do r.prewarmEnv(palette, level, [left.shift()]);
+        while (left.length && deadline.timeRemaining() > 4);
+      } else if (!city) {
+        city = r.prewarmCityView?.(palette, level, ids) ?? true;
+      } else if (!uploaded) {
+        uploaded = r.prewarmWallPass?.(palette, level, count) ?? true;
+      } else {
+        r.prewarmLampField?.(palette, level);
+        return false;
+      }
+      return true;
+    };
+    // A newer prewarm (the next level's, or this one's `now`) takes over.
+    const token = (this._prewarmToken = {});
+    if (now) {
+      const deadline = { timeRemaining: () => Infinity };
+      while (work(deadline, Infinity));
+      return;
+    }
+    // An iPhone browser paints canvases later, in its GPU process: reading
+    // one pixel back makes each bake pay inside the slice that queued it,
+    // not in whatever frame next waits on the GPU (as _prewarmStation does).
+    const queued = typeof requestIdleCallback !== "function";
+    const settle = () => {
+      if (!queued) return;
+      try {
+        r.ctx?.getImageData(0, 0, 1, 1);
+      } catch (_) {
+        // A tainted or lost canvas: the next frame settles it instead.
+      }
+    };
+    // Safari has no requestIdleCallback; its stand-in's deadline runs out.
+    const idle = (fn) =>
+      queued
+        ? setTimeout(() => {
+            const end = performance.now() + 12;
+            fn({ timeRemaining: () => Math.max(0, end - performance.now()) });
+          }, 16)
+        : requestIdleCallback(fn, { timeout: 100 });
+    const slice = (deadline) => {
+      if (this._prewarmToken !== token || g.mode !== "campaign") return;
+      const more = work(deadline, 8);
+      settle();
+      if (more) idle(slice);
+    };
+    idle(slice);
   }
 
   loadLevel(index) {

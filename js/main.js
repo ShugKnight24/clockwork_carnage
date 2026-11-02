@@ -916,11 +916,14 @@ if (devToolsEnabled) {
 // hitch on the first cutscene, Meltdown run or Forge visit that the local dev
 // server never shows. Once the title is idle, load them one after another so
 // those imports resolve from the module map. Module loading only: nothing runs
-// until the game asks for it. The Modern floor shader compiles here too.
+// until the game asks for it. The Modern floor and wall shaders compile here too.
 // Literal import() calls, so a bundler maps each to its chunk.
 const warmLazyModules = () =>
   [
     async () => isModernArt() && game.renderer?.glRenderer?.precompile?.(),
+    // The Modern wall program too: compiled in a level's first frame, its
+    // link waits on the GPU process like the floor's did.
+    async () => isModernArt() && game.renderer?.gpuWalls && game.renderer.glRenderer?.wallPass?.(),
     () => import("./cutscene.js"),
     () => import("./meltdown.js"),
     () => import("../src/rendering/voxel/voxel-renderer.js"),
