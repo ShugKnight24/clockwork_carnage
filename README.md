@@ -62,6 +62,12 @@ All controls are rebindable in Settings → Controls.
 
 **Mobile:** Full touch control support with virtual joystick and action buttons.
 
+## Privacy and playtest logs
+
+**Analytics.** The first time you play, a card asks whether to share anonymous play data. Only if you choose Allow does the game load Google Analytics and send it events: which modes you start, which campaign levels you start, clear, fail, retry or quit (act and level), and the game's build. There is no name, account or free text. No thanks sends nothing, and nothing is stored for analytics before you answer. You can change your answer any time in Settings › Gameplay › Share Play Data.
+
+**Playtest log.** The game keeps a log of your sessions on your own device (localStorage `cc_playtest_log`): per level, your attempts, deaths, time, retries, quits, grade and frame rate, plus your device type, input and settings. It is never sent anywhere. To share it, press J on the pause or game-over screen (RB on a controller, or Session on touch): it is copied to the clipboard and saved as a `.json` file you can send us. F8 (LB on a controller in the pause menu, or Report bug on touch) saves a bug report: a screenshot and a snapshot of the game's state.
+
 ## Credits
 
 Built as an AI-augmented development experiment. Open to suggestions.

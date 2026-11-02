@@ -99,6 +99,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
 //   widget         – special sub-widget key ("crosshairPreview")
 //   --- action-specific ---
 //   buttonLabel, color, onClick(game) – a command row with no stored value
+/** The analytics answer: "accepted", "declined" or null (not asked yet). */
+function analyticsConsent() {
+  try {
+    return localStorage.getItem("cc_analytics_consent");
+  } catch (_) {
+    return null;
+  }
+}
+
 /** Live controller status ({ value, desc }), bound by the game at start-up. */
 let gamepadStatus = null;
 
@@ -713,6 +722,23 @@ export const SETTINGS_REGISTRY = [
     wrap: true,
     platform: "all",
     height: { compact: 30, normal: 44 },
+  },
+  {
+    // Google Analytics opt-in (js/analytics.js), the consent card's answer.
+    key: "analyticsConsent",
+    label: "Share Play Data",
+    desc: "Anonymous play events (modes, levels started, cleared, failed or quit, build) to Google Analytics. Off sends nothing. The playtest log stays on this device unless you send it.",
+    type: "action",
+    get buttonLabel() {
+      return analyticsConsent() === "accepted" ? "ON" : "OFF";
+    },
+    color: "#22e6c0",
+    platform: "all",
+    height: { compact: 30, normal: 44 },
+    onClick: () => {
+      const on = analyticsConsent() !== "accepted";
+      window.dispatchEvent(new CustomEvent("cc:analytics-consent", { detail: on }));
+    },
   },
   {
     key: "editAgent",
