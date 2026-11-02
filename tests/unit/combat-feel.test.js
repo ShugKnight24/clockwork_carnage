@@ -4,6 +4,9 @@ import { calculateEnemyDamage } from "../../src/systems/combat.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { Enemy } from "../../js/entities.js";
 import { FORMS } from "../../src/systems/paradox-forms.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 const openMap = () => ({ width: 30, height: 30, grid: Array.from({ length: 30 }, () => new Array(30).fill(0)) });

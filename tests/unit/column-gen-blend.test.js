@@ -1,20 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { generateColumn, sampleColumn, fillColumn, surfaceHeight, biomeAt } from "../../src/world/column-gen.js";
 import * as V2 from "../../src/world/column-gen-v2.js";
 import { BAND, DYKE, perimeter } from "../../src/world/column-gen-blend.js";
 import { checkGen } from "../../src/world/world-delta.js";
 import { expandWorld } from "../../src/world/world-expand.js";
 import { rleEncode } from "../../src/world/rle.js";
-import { AIR, BEDROCK, WATER, LOG, LEAVES } from "../../src/world/blocks.js";
+import { AIR, WATER, LOG, LEAVES } from "../../src/world/blocks.js";
 import { oldVoidWorld, oldTerrain } from "./fixtures/old-world.js";
+import { GRASS, SAND, GROUND, groundOf, sha } from "./column-gen-helpers.js";
 
-const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
-const GROUND = new Set([BEDROCK, GRASS, DIRT, SAND, ROCK, ORE]);
-const sha = (u8) => createHash("sha256").update(u8).digest("hex");
-const at = (col, lx, ly, z) => col[(z << 8) | (ly << 4) | lx];
-const groundOf = (col, lx, ly) => { let z = -1; while (z < 63 && GROUND.has(at(col, lx, ly, z + 1))) z++; return z; };
 /** Top of the natural ground at a cell of a world. */
 const groundAt = (w, x, y) => { let z = -1; while (z < 63 && GROUND.has(w.get(x, y, z + 1))) z++; return z; };
 
@@ -146,18 +141,20 @@ describe("blend generator: the seam", () => {
     for (const shape of ["flat", "low", "terrain"]) for (const seed of [42, 1234567]) {
       const w = grownAround(shape, seed, 2);
       let water = 0;
+      const bad = [];
       for (let y = -32; y < 160; y++) for (let x = -32; x < 160; x++) {
         if (dist(x, y) < 1) continue;
         for (let z = 0; z < V2.SEA; z++) {
           if (w.get(x, y, z) !== WATER) continue;
           water++;
-          expect(dist(x, y), `${shape} ${seed} ${x},${y}`).toBeGreaterThanOrEqual(DYKE);
+          if (dist(x, y) < DYKE) bad.push(`in the dyke ${shape} ${seed} ${x},${y}`);
           for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
             if (Math.max(Math.abs(nx - 64), Math.abs(ny - 64)) >= 96) continue; // outside what is loaded
-            expect(w.get(nx, ny, z), `${shape} ${seed} ${nx},${ny},${z}`).not.toBe(AIR);
+            if (w.get(nx, ny, z) === AIR) bad.push(`air beside water ${shape} ${seed} ${nx},${ny},${z}`);
           }
         }
       }
+      expect(bad).toEqual([]);
       // Seeds 42 and 1234567 have sea near the old box: the test is not vacuous.
       expect(water, `${shape} ${seed}`).toBeGreaterThan(100);
     }

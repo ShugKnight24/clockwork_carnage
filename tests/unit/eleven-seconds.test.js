@@ -6,6 +6,9 @@ import { Enemy, Projectile } from "../../js/entities.js";
 import { AISystem } from "../../src/systems/ai.js";
 import { updateProjectiles } from "../../src/systems/projectile-update.js";
 import { damageEnemy } from "../../src/systems/combat-orchestrator.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 // Spec §6, Form 3 "Eleven Seconds": he stops time at 75%, 50% and 25%. The
 // first stop holds you too and lands a hit that never kills; every later one

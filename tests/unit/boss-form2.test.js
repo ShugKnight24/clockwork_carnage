@@ -16,6 +16,9 @@ import {
 import { AISystem } from "../../src/systems/ai.js";
 import { Enemy } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 

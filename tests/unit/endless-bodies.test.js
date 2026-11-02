@@ -9,6 +9,9 @@ import { spawnFromMeta } from "../../src/systems/voxel-glue.js";
 import { stationsInRange } from "../../src/rpg/stations.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { Projectile } from "../../js/entities.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const FLAT = Object.freeze({ kind: "flat", v: GEN_VERSION });
 /** A flat endless world, ground top at z = 31, with the 3 × 3 columns around (8, 8) loaded: x and y in -16..32. */

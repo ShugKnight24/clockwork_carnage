@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import { VoxelAISystem } from "../../src/systems/voxel-ai.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const mkEnemy = (type, x, y, z) => ({ type: "enemy", enemyType: type, def: ENEMY_TYPES[type], active: true, x, y, z, vz: 0, state: "chase", stateTime: 1, painTimer: 0, lastAttackTime: -1e9, alertRange: 20, health: 50 });
 const ctx = (world, entities, player) => ({ world, map: null, entities, player, time: 1000, fx: { spawnPointLight() {}, spawnHitImpact() {} }, audio: { playEnemyAttack() {} }, settings: {}, damagePlayer() {}, spawnProjectile() {} });

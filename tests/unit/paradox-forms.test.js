@@ -4,6 +4,9 @@ import { Enemy } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { calculateEnemyDamage, hitSpan } from "../../src/systems/combat.js";
 import { FORMS, TAUNTS, ringAngles, shellCrackDue, undoDue, tickBossForm } from "../../src/systems/paradox-forms.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 

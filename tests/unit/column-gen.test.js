@@ -1,27 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import {
   GEN_V1, BIOMES, MAX_TOP, generateColumn, sampleColumn, fillColumn, surfaceHeight, findSpawn, biomeAt,
 } from "../../src/world/column-gen.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { AIR, BEDROCK } from "../../src/world/blocks.js";
+import { GRASS, DIRT, SAND, ROCK, ORE, at, topOf, sha, areaHeights, slopeStats } from "./column-gen-helpers.js";
 
-const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
 const terrain = (seed) => ({ kind: "terrain", seed, v: 1 });
-const at = (col, lx, ly, z) => col[(z << 8) | (ly << 4) | lx];
-const topOf = (col, lx, ly) => { let z = 63; while (z >= 0 && at(col, lx, ly, z) === AIR) z--; return z; };
-const sha = (u8) => createHash("sha256").update(u8).digest("hex");
 
 /** Tops of an n × n block area starting at (x0, y0), both multiples of 16, through generateColumn. */
-function tops(gen, x0, y0, n) {
-  const out = new Int16Array(n * n);
-  for (let cy = 0; cy < n / 16; cy++) for (let cx = 0; cx < n / 16; cx++) {
-    const col = generateColumn(gen, (x0 >> 4) + cx, (y0 >> 4) + cy);
-    for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) out[(cy * 16 + ly) * n + cx * 16 + lx] = topOf(col, lx, ly);
-  }
-  return out;
-}
+const tops = (gen, x0, y0, n) => areaHeights(gen, x0, y0, n, topOf);
 
 describe("generateColumn: determinism", () => {
   it("makes the same bytes alone and after a hundred other columns and seeds", () => {
@@ -138,17 +127,7 @@ describe("generateColumn: environment variants", () => {
       const gen = terrain(seed), n = 384, t = tops(gen, x0, y0, n);
       const highland = new Uint8Array(n * n);
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) highland[y * n + x] = biomeAt(gen, x0 + x, y0 + y).weights[2] >= 0.5 ? 1 : 0;
-      let pairs = 0, steep = 0, worstRocky = 0, worst = 0;
-      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-        const i = y * n + x;
-        for (const j of [x + 1 < n ? i + 1 : -1, y + 1 < n ? i + n : -1]) {
-          if (j < 0) continue;
-          const d = Math.abs(t[j] - t[i]);
-          if (highland[i] || highland[j]) { worstRocky = Math.max(worstRocky, d); continue; }
-          worst = Math.max(worst, d);
-          pairs++; if (d > 1) steep++;
-        }
-      }
+      const { pairs, steep, worst, worstRocky } = slopeStats(t, n, (i, j) => highland[i] || highland[j]);
       expect(worstRocky, `seed ${seed}`).toBeLessThanOrEqual(4);
       expect(worst, `seed ${seed}`).toBeLessThanOrEqual(2);
       expect(steep / pairs, `seed ${seed}`).toBeLessThan(0.01);
@@ -205,14 +184,12 @@ describe("generateColumn: layering and ore", () => {
 describe("flat and void generators", () => {
   it("flat: today's layers everywhere, no ore, at any coordinate", () => {
     for (const [cx, cy] of [[0, 0], [-3, 7], [65000, -65000]]) {
-      const col = generateColumn({ kind: "flat", seed: 5, v: 1 }, cx, cy);
+      const col = generateColumn({ kind: "flat", seed: 5, v: 1 }, cx, cy), bad = [];
+      const want = (z) => (z === 0 ? BEDROCK : z < 27 ? ROCK : z < 31 ? DIRT : z === 31 ? GRASS : AIR);
       for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
-        expect(at(col, lx, ly, 0)).toBe(BEDROCK);
-        for (let z = 1; z < 27; z++) expect(at(col, lx, ly, z)).toBe(ROCK);
-        for (let z = 27; z < 31; z++) expect(at(col, lx, ly, z)).toBe(DIRT);
-        expect(at(col, lx, ly, 31)).toBe(GRASS);
-        expect(at(col, lx, ly, 32)).toBe(AIR);
+        for (let z = 0; z <= 32; z++) if (at(col, lx, ly, z) !== want(z)) bad.push(`${cx},${cy} ${lx},${ly},${z}`);
       }
+      expect(bad).toEqual([]);
     }
     expect(surfaceHeight({ kind: "flat", seed: 1, v: 1 }, 123, -456)).toBe(31);
   });

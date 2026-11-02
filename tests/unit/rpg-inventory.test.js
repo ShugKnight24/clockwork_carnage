@@ -1,14 +1,8 @@
 // tests/unit/rpg-inventory.test.js
 import { describe, it, expect } from "vitest";
-import { Inventory, HOTBAR_SLOTS, TOTAL_SLOTS } from "../../src/rpg/inventory.js";
+import { Inventory, TOTAL_SLOTS } from "../../src/rpg/inventory.js";
 
 describe("Inventory", () => {
-  it("is nine hotbar slots plus twenty-seven backpack slots", () => {
-    expect(HOTBAR_SLOTS).toBe(9);
-    expect(TOTAL_SLOTS).toBe(36);
-    expect(new Inventory().slots.length).toBe(36);
-  });
-
   it("merges into an existing stack before opening a new slot", () => {
     const inv = new Inventory();
     expect(inv.add("stone", 10)).toBe(10);

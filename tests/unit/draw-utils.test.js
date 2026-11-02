@@ -10,10 +10,6 @@ const mockCtx = () => ({
 });
 
 describe("drawGlow", () => {
-  it("is an exported function", () => {
-    expect(typeof drawGlow).toBe("function");
-  });
-
   it("creates a radial gradient and draws an arc", () => {
     const ctx = mockCtx();
     drawGlow(ctx, 100, 200, 32, "#ff0000", 0.5);
@@ -32,10 +28,6 @@ describe("drawGlow", () => {
 });
 
 describe("drawTechLines", () => {
-  it("is an exported function", () => {
-    expect(typeof drawTechLines).toBe("function");
-  });
-
   it("draws vertical lines across the area", () => {
     const ctx = mockCtx();
     drawTechLines(ctx, 0, 0, 20, 40, "#00ff00", 0.3);

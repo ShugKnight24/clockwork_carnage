@@ -3,6 +3,9 @@ import { AISystem, enemyTimeRate, inView, inFrontArc, blinkLanding, ACQUIRE_SECO
 import { Enemy } from "../../js/entities.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { resolveHitZone, zoneAimHeight, hitSpan, calculateEnemyDamage } from "../../src/systems/combat.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 const SHIFT = 0.3; // the world's time scale while the player shifts (game.js)

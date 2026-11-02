@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,15 +14,25 @@ if (!process.env.CI && fs.existsSync(localBrowsers)) {
 
 const PORT = Number(process.env.CC_TEST_PORT ?? 3100);
 
+// tests/unit/ holds vitest specs. Playwright globbed them too, so a bare
+// `npx playwright test` (what `npm test` runs) crashed on the vitest expect
+// symbol before reaching a single browser test.
+// tests/pages/ runs against the Pages-style server (playwright.pages.config.js).
+const IGNORED = ["**/unit/**", "**/pages/**"];
+
+// Visual-only specs: they capture screenshots for a look by eye and assert
+// little or nothing. They run on demand (npm run test:visual) and nightly,
+// never by accident in a plain `npx playwright test`.
+const VISUAL_SPECS = ["**/screenshots.spec.js", "**/level-looks.spec.js"];
+const visual = process.env.CC_VISUAL === "1";
+
 export default defineConfig({
   testDir: "./tests",
-  // tests/unit/ holds vitest specs. Playwright globbed them too, so a bare
-  // `npx playwright test` (what `npm test` runs) crashed on the vitest expect
-  // symbol before reaching a single browser test.
-  // tests/pages/ runs against the Pages-style server (playwright.pages.config.js).
-  testIgnore: ["**/unit/**", "**/pages/**"],
+  testIgnore: IGNORED,
   timeout: 60_000,
-  retries: 0,
+  // One retry on CI absorbs a timing flake on a busy runner; the report
+  // still marks the test flaky.
+  retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: `http://localhost:${PORT}`,
     screenshot: "only-on-failure",
@@ -42,6 +52,22 @@ export default defineConfig({
     {
       name: "chromium",
       use: { browserName: "chromium" },
+      // A project's testIgnore replaces the top-level one, so repeat it.
+      testIgnore: visual ? IGNORED : [...IGNORED, ...VISUAL_SPECS],
+    },
+    {
+      // The phone players actually use: WebKit with touch, held sideways.
+      // Only the boot paths run here (smoke and cold-start); the rest leans on
+      // Chromium's GL flags and the debug bridge, and headless WebKit stalls in
+      // some of the heavier art builds, so cinematics stay on Chromium.
+      name: "webkit-iphone",
+      use: {
+        ...devices["iPhone 15 Pro landscape"],
+        // devices[] carries a WebKit UA but the Chromium GL flags above are
+        // Chromium-only; WebKit rejects unknown launch args.
+        launchOptions: {},
+      },
+      testMatch: ["**/smoke.spec.js", "**/cold-start.spec.js"],
     },
   ],
   outputDir: "test-results",

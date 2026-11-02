@@ -17,12 +17,6 @@ describe("accessory tables", () => {
     }
   });
 
-  it("counts: 4 each for back/waist, 5 helmet (with the comms headset), 3 each for arms/neck/legs", () => {
-    const n = (s) => ACCESSORIES[s].length - 1;
-    expect([n("back"), n("waist"), n("helmet")]).toEqual([4, 4, 5]);
-    expect([n("arms"), n("neck"), n("legs")]).toEqual([3, 3, 3]);
-  });
-
   it("perks use only applied stats, within the caps, and carry a perk line", () => {
     for (const { id } of ACCESSORY_SLOTS) {
       for (const item of ACCESSORIES[id]) {

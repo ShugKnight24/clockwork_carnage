@@ -4,6 +4,9 @@ import { calculateEnemyDamage } from "../../src/systems/combat.js";
 import { updateProjectiles, BANK_DAMAGE_MULT } from "../../src/systems/projectile-update.js";
 import { AISystem } from "../../src/systems/ai.js";
 import { Enemy, Projectile } from "../../js/entities.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const byName = (name) => WEAPONS.find((w) => w.name === name);
 const dps = (w) => (w.damage * (w.pellets || 1) * 1000) / w.fireRate;

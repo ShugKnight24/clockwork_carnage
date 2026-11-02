@@ -10,6 +10,9 @@ export default defineConfig({
   ...base,
   testDir: "./tests/pages",
   testIgnore: [],
+  // Chromium only. The base projects carry their own testIgnore (which skips
+  // tests/pages/) and a WebKit project scoped to the dev-server specs.
+  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   use: { ...base.use, baseURL: `http://localhost:${PORT}/clockwork_carnage/` },
   webServer: {
     command: `node tests/pages/server.mjs ${PORT}`,

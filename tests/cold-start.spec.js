@@ -5,6 +5,9 @@
  * before it runs, so it cannot catch code that touches one of those instances
  * before anything has loaded it. These tests drive the real UI with no warming
  * at all, which is what a returning player actually does.
+ *
+ * The first-run checks (start prompt, featured Campaign, every mode on the
+ * menu, arena entry) came from user-journeys.spec.js, which only logged them.
  */
 import { test, expect } from "@playwright/test";
 
@@ -62,6 +65,30 @@ test.describe("Cold start", () => {
     const errors = await boot(page, RETURNING_PLAYER);
     await page.click("#btnBuilder");
     await page.waitForTimeout(2000);
+    expect(errors, errors.join("\n")).toHaveLength(0);
+  });
+
+  test("arena entry without errors", async ({ page }) => {
+    const errors = await boot(page, RETURNING_PLAYER);
+    await page.click("#btnArena");
+    await page.waitForFunction(() => window.ccDebug?.getState() === "playing", null, { timeout: 10_000 });
+    await page.waitForTimeout(1500);
+    expect(errors, errors.join("\n")).toHaveLength(0);
+  });
+
+  test("a first-time player sees the start prompt, then every mode with Campaign featured", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => localStorage.setItem("cc_analytics_consent", "declined"));
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.waitForSelector("#titleScreen", { state: "visible", timeout: 10_000 });
+    await expect(page.locator(".start-prompt")).toBeVisible();
+    await page.click("#titleScreen");
+    await page.waitForSelector("#modeSelect", { state: "visible", timeout: 5000 });
+    await expect(page.locator("#btnCampaign")).toHaveClass(/\bfeatured\b/);
+    for (const id of ["btnCampaign", "btnMeltdown", "btnArena", "btnTutorial", "btnBuilder", "btnCustomize"]) {
+      await expect(page.locator(`#${id}`), id).toBeVisible();
+    }
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
 

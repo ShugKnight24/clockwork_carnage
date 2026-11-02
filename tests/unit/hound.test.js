@@ -12,6 +12,9 @@ import { MODELS as HOUND_ART } from "../../src/rendering/svg-art/models/hound.js
 import { drawCutsceneArt } from "../../src/rendering/cutscene-art.js";
 import { setArtStyle, getArtStyle, ART_LEGACY } from "../../src/rendering/art-style.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 // The Hound, suit C-0016 (spec §6): always visible, solid only while you
 // shift, and every attack it has comes with a tell you can read and still

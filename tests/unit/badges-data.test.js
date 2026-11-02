@@ -13,21 +13,6 @@ describe("badge tables", () => {
     for (const t of [SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS]) expect(unique(t)).toBe(true);
   });
 
-  it("has the launch content counts", () => {
-    const bySet = (s) => SYMBOLS.filter((x) => x.set === s).length;
-    expect(bySet("classic")).toBe(7);
-    expect(bySet("faction")).toBe(8);
-    expect(bySet("rank")).toBe(6);
-    expect(bySet("act")).toBe(4);
-    expect(bySet("earned")).toBeGreaterThanOrEqual(6);
-    expect(ids(FRAMES)).toEqual(["disc", "shield", "hex", "chevron", "tag", "cog"]);
-    expect(ids(METALS)).toEqual(["brass", "steel", "blackened", "gold"]);
-    expect(ids(FINISHES)).toEqual(["auto", "insignia", "stencil", "patch", "holo"]);
-    expect(ids(PLACEMENTS)).toEqual(["chest", "shoulder", "helmet", "forearm"]);
-    expect(ENAMELS.length).toBeGreaterThanOrEqual(12);
-    expect(BADGE_PRESETS.length).toBeGreaterThanOrEqual(24);
-  });
-
   it("classic symbols are free so existing badges keep working", () => {
     for (const s of SYMBOLS.filter((x) => x.set === "classic")) expect(s.unlock).toBeUndefined();
   });

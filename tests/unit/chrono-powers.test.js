@@ -27,6 +27,9 @@ import { Enemy, Projectile } from "../../js/entities.js";
 import { AISystem } from "../../src/systems/ai.js";
 import { rayEnemyHit, projectileHitsEnemy } from "../../src/systems/combat.js";
 import { updateProjectiles } from "../../src/systems/projectile-update.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 // Spec §3 (Resonance), §4 (the four powers), §16.3, and the 2026-09-22
 // decisions: Story only on Easy, Rewind on its own input, no powers outside

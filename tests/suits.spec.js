@@ -1,5 +1,9 @@
-/** Full-look captures: each new suit with its matching helmet and pauldrons. */
-import { test } from "@playwright/test";
+/**
+ * Full-look captures: each new suit with its matching helmet and pauldrons.
+ * Each look has to name real table entries (a missing id used to fall back to
+ * the first entry silently) and the showroom has to draw a figure for it.
+ */
+import { test, expect } from "@playwright/test";
 import { loadGame, debug } from "./helpers.js";
 
 const LOOKS = [
@@ -16,20 +20,34 @@ for (const look of LOOKS) {
     await loadGame(page);
     await debug(page, "showCharacterCreate");
     await page.waitForTimeout(700);
-    await page.evaluate(async (l) => {
+    const missing = await page.evaluate(async (l) => {
       const g = window.ccDebug.game;
       const m = await import("/src/systems/unlocks.js");
       for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
       const d = await import("/src/data/cosmetics.js");
-      const idx = (table, id) => Math.max(0, table.findIndex((t) => t.id === id));
+      const missing = [];
+      const idx = (table, id) => {
+        const i = table.findIndex((t) => t.id === id);
+        if (i < 0) missing.push(id);
+        return Math.max(0, i);
+      };
       g.character.armorIndex = idx(d.ARMOR_STYLES, l.armor);
       g.character.helmetIndex = idx(d.HELMET_STYLES, l.helmet);
       g.character.shoulderIndex = idx(d.SHOULDER_STYLES, l.shoulder);
       g.character.visorIndex = idx(d.VISOR_STYLES, l.visor);
       const el = document.querySelector("agent-showroom");
       if (el?.isOpen) el.renderAll();
+      return missing;
     }, look);
+    expect(missing, "look ids not in the cosmetics tables").toEqual([]);
     await page.waitForTimeout(900);
+    const drawn = await page.evaluate(() => {
+      const fig = document.querySelector("agent-showroom")?.shadowRoot?.querySelector(".figure");
+      if (!fig) return 0;
+      const r = fig.getBoundingClientRect();
+      return fig.querySelectorAll("svg *, img, canvas").length && r.width > 0 && r.height > 0 ? fig.querySelectorAll("svg *, img, canvas").length : 0;
+    });
+    expect(drawn, "the showroom draws a figure").toBeGreaterThan(0);
     await page.locator("agent-showroom").screenshot({ path: `screenshots/look-${look.name}.png` });
   });
 }

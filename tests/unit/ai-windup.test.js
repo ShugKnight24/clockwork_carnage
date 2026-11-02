@@ -6,6 +6,9 @@ import {
   ENEMY_MELEE_WINDUP_MS,
   ENEMY_RANGED_WINDUP_MS,
 } from "../../src/constants.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 
