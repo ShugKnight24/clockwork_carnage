@@ -8,18 +8,23 @@
  * the art never gets upscaled into blur.
  */
 
+import { setSpriteBudget, spriteBytes } from "../sprite-cache.js";
+
 const MAX_PX = 4096;
 // Decoded bitmaps cost width×height×4 bytes. Past this budget the least
 // recently used sizes are dropped (a level can show dozens of sprite sizes).
 // Phones get less (setRasterBudget): iOS caps all of a page's canvases at
-// ~384 MB, and the station's wall art needs its share of that.
+// ~384 MB, and the station's wall art needs its share of that. Baked UI
+// sprites (sprite-cache.js) count against the same budget.
 let BYTE_BUDGET = 256 * 1024 * 1024;
 // 64 MB on a phone: at 112 the prologue's people alone held ~110 MB of an
 // iPhone's canvas memory, and Safari ended the page in the locker room.
 export const PHONE_RASTER_BUDGET = 64 * 1024 * 1024;
-/** Cap decoded art at `bytes`; idle layers past it are dropped on the next draw. */
+/** Cap decoded art and UI sprites at `bytes`; idle layers past it are dropped on the next draw. */
 export function setRasterBudget(bytes) {
   BYTE_BUDGET = bytes;
+  // UI sprites may hold a quarter of it; the rest is left for decoded art.
+  setSpriteBudget(bytes / 4);
 }
 const EVICT_IDLE_MS = 2000;
 const layers = new Map(); // layer id -> Map(bucket -> { img, ready, failed, bytes, lastUsed })
@@ -129,7 +134,8 @@ function hasReady(buckets) {
 }
 
 function evictIdle(now) {
-  if (totalBytes <= BYTE_BUDGET) return;
+  const budget = BYTE_BUDGET - spriteBytes();
+  if (totalBytes <= budget) return;
   const idle = [];
   for (const [id, buckets] of layers) {
     for (const [bucket, e] of buckets) {
@@ -138,7 +144,7 @@ function evictIdle(now) {
   }
   idle.sort((a, b) => a[0] - b[0]);
   for (const [, id, bucket, e] of idle) {
-    if (totalBytes <= BYTE_BUDGET) break;
+    if (totalBytes <= budget) break;
     const buckets = layers.get(id);
     buckets.delete(bucket);
     if (!buckets.size) layers.delete(id);

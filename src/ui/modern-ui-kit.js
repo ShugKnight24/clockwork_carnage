@@ -13,6 +13,7 @@
  */
 
 import { COLOR, FONT, PANEL, CAPTION, KEYCAP, TITLE } from "./design-tokens.js";
+import { SpriteCache } from "../rendering/sprite-cache.js";
 
 /** Palette (shared with the DOM menus through design-tokens.js). */
 export const UI = COLOR;
@@ -36,8 +37,9 @@ export function uiFont(px, weight = 700, mono = false) {
 
 // ─── Sprite cache ───────────────────────────────────────────────────────────
 
-const _sprites = new Map();
-const MAX_SPRITES = 220;
+// Was 220 sprites. At 2x DPR the arena's run from ~60 KB (median) to a few
+// MB (full-width banners); 128 KB each keeps the old count for typical ones.
+const _sprites = new SpriteCache(220 * 128 * 1024);
 
 /** Device pixel ratio baked into a context's transform (HUD canvas uses dpr). */
 export function pixelRatio(ctx) {
@@ -61,9 +63,7 @@ function sprite(key, w, h, pad, dpr, paint) {
   g.scale(dpr, dpr);
   g.translate(pad, pad);
   paint(g, w, h);
-  if (_sprites.size >= MAX_SPRITES) _sprites.delete(_sprites.keys().next().value);
-  _sprites.set(k, c);
-  return c;
+  return _sprites.set(k, c);
 }
 
 function blit(ctx, c, x, y, w, h, pad) {

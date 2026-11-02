@@ -21,6 +21,7 @@
  */
 
 import { VOICES, voiceKeyFor } from "../audio/voice.js";
+import { SpriteCache } from "../rendering/sprite-cache.js";
 
 const INK = "#04060b";
 
@@ -887,25 +888,18 @@ export function isRadioLine(msg) {
 
 // ─── Sprite cache ──────────────────────────────────────────────────────────
 
-const _sprites = new Map();
-const MAX_SPRITES = 160;
+// Was 160 portraits; one is ~46 KB at 2x DPR.
+const _sprites = new SpriteCache(160 * 48 * 1024);
 const PAD = 2;
 
 function cached(key, w, h, dpr, paint) {
   let c = _sprites.get(key);
-  if (c) {
-    // Most recently used goes to the back of the eviction line.
-    _sprites.delete(key);
-    _sprites.set(key, c);
-    return c;
-  }
+  if (c) return c;
   c = document.createElement("canvas");
   c.width = Math.max(1, Math.ceil(w * dpr));
   c.height = Math.max(1, Math.ceil(h * dpr));
   paint(c.getContext("2d"), c);
-  if (_sprites.size >= MAX_SPRITES) _sprites.delete(_sprites.keys().next().value);
-  _sprites.set(key, c);
-  return c;
+  return _sprites.set(key, c);
 }
 
 /** How many portrait bitmaps are cached (for tests and the perf overlay). */
