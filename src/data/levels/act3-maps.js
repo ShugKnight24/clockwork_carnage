@@ -21,7 +21,6 @@ import {
   createHeights,
   carve,
   hWall,
-  vWall,
   tile,
   door,
   room,

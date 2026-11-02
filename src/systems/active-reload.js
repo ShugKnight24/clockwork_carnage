@@ -19,7 +19,7 @@ export const BOOST = 1.15;
 /** Extra ms a jammed reload takes. */
 export const JAM_MS = 600;
 /** The perfect zone is this share of the sweet zone, at its leading edge. */
-export const PERFECT_SHARE = 0.35;
+const PERFECT_SHARE = 0.35;
 /** A weapon with no tuning of its own. */
 const DEFAULT_ZONE = [0.5, 0.15];
 const DEFAULT_RELOAD_MS = 1600;

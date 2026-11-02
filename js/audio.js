@@ -4,7 +4,7 @@ import { heartbeatInterval, muffleCutoff, streakNotes } from "../src/systems/pla
 import { hushCutoff } from "../src/systems/stillness.js";
 
 /** Which death sound an enemy type gets (enemyDeath); the rest are "body". */
-export const DEATH_KINDS = {
+const DEATH_KINDS = {
   phantom: "phase", phaseStalker: "phase", temporalSummoner: "phase",
   drone: "machine", echoDrone: "machine", glitchling: "machine", chronoBomber: "machine", sentinel: "machine",
 };

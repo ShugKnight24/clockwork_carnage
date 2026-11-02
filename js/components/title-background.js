@@ -509,7 +509,7 @@ async function realBackground() {
   };
 }
 
-export class TitleBackground extends HTMLElement {
+class TitleBackground extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });

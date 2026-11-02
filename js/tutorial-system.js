@@ -4174,6 +4174,3 @@ function trialComment(trial, r) {
   if (good) return `${name}: ${r.grade}. Don't let it go to your head.`;
   return `${name}: ${r.grade}. It's on the sheet now, Cadet. Next.`;
 }
-
-/** Step logic ids, for the tests: every prologue step must have logic. */
-export const PROLOGUE_LOGIC_IDS = Object.keys(LOGIC);

@@ -33,13 +33,8 @@ import {
   ENEMY_TYPES,
   ARENA_MAPS,
   UPGRADES,
-  WALL_COLORS,
-  TUTORIAL_MAP,
-  ARIA_COMMS,
   CHARACTER_COLORS,
   SKIN_TONES,
-  ARMOR_STYLES,
-  BADGES,
   WEAPON_SKINS,
   LOADOUT_CLASSES,
   BACKSTORIES,
@@ -48,18 +43,15 @@ import {
   gearBonuses,
 } from "./data.js";
 import { Renderer } from "./renderer.js";
-import { renderPostFX as _renderPostFX } from "../src/rendering/postfx.js";
 import { drawGlow as _drawGlow } from "../src/rendering/draw-utils.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { AudioManager } from "./audio.js";
 
-import { Player, Enemy, Pickup, Prop, Projectile } from "./entities.js";
+import { Player, Enemy, Pickup } from "./entities.js";
 import { Profiler } from "../src/utils/profiler.js";
 import { trackEvent } from "./analytics.js";
 import * as playtestLog from "../src/systems/playtest-log.js";
 import {
-  upgradeLayout,
-  tutorialMenuLayout,
   isCompactPhone,
 } from "./layout.js";
 import { styleName, spawnFromMeta, standableNear, fallbackEnemyArea } from "../src/systems/voxel-glue.js";
@@ -74,7 +66,6 @@ import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
 import {
   isPassable as _isPassable,
-  moveWithCollision,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
 import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
@@ -144,7 +135,6 @@ import {
 import {
   renderCharacterCreator as _renderCharacterCreator,
   CREATOR_CATEGORIES,
-  getCreatorLayout,
 } from "../src/ui/character-creator.js";
 import { SpatialGrid } from "../src/utils/spatial-grid.js";
 import { decay } from "../src/utils/math.js";
@@ -233,7 +223,7 @@ function _safeCall(name, fn) {
   }
 }
 
-// TODO: Rethink this entire file... It handles too much. Split into multiple classes/files (Player, Enemy, Projectile, GameState, etc.) and have a main Game class that manages everything? Likely a StateManager that handles states and the Game class handles core game logic and delegates to other classes as needed. Definitely a base ECS that extracts shared logic and data between entities
+// TODO: This file still handles too much. Entities live in entities.js and states in state-manager.js; a base ECS that extracts shared logic and data between entities is still open
 
 /** The agent's time scale during Chrono Shift: near real time while the world slows. */
 const CHRONO_PLAYER_SPEED = 0.85;
@@ -1530,7 +1520,6 @@ export class Game {
   }
 
   startArenaRound() {
-    // TODO: Refactor as we don't properly clean the Arena between rounds, we just reset the player and spawn new enemies on top. Deep cloning will cause performance issues on later levels. Clear entities properly after levels
     // Rotate maps each round
     const mapIdx = (this.arenaRound - 1) % ARENA_MAPS.length;
     this.map = structuredClone(ARENA_MAPS[mapIdx]);
@@ -3107,7 +3096,6 @@ export class Game {
     return _isPassable(this.map, mx, my);
   }
 
-  // TODO: Improve Enemy AI
   // ─── VFX / Particles ──────────────────────────────────────────────────────
 
   /**

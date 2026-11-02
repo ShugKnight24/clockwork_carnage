@@ -18,7 +18,7 @@ export function parSeconds({ openCells = 0, enemies = 0, powerCells = 0 } = {}) 
 }
 
 /** Lowest score for each letter, best first. */
-export const GRADE_BANDS = [
+const GRADE_BANDS = [
   ["S", 90],
   ["A", 78],
   ["B", 62],

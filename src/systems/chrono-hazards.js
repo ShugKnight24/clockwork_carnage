@@ -69,11 +69,11 @@ const REHIT = { blade: 0.5, vent: 0.3, gate: 0.3, piston: 0.6, train: 1 };
  * What the rubble costs when a collapse catches you, by difficulty (Easy,
  * Normal, Hard, Nightmare). One hit per catch, never below 1 HP.
  */
-export const COLLAPSE_HIT = [5, 10, 20, 20];
+const COLLAPSE_HIT = [5, 10, 20, 20];
 /** Seconds from being set down on a landing until the front reaches it again. */
 export const COLLAPSE_GRACE = 1.6;
 /** The card the second catch brings up. */
-export const COLLAPSE_HINT = {
+const COLLAPSE_HINT = {
   title: "{SHIFT} — OUTRUN IT IN TIME",
   hint: "ARIA: \"It falls at a crawl while you shift, and you don't.\" {SHIFT} as the red line closes, and run.",
 };
@@ -91,7 +91,7 @@ export function collapseStepAt(h, x, y) {
 }
 
 /** The step with a cell nearest (x, y): where along the path a body off it stands. */
-export function collapseNearestStep(h, x, y) {
+function collapseNearestStep(h, x, y) {
   let best = -1;
   let bd = Infinity;
   h.steps.forEach((s, i) => {
@@ -118,7 +118,7 @@ export function collapseLanding(h, at) {
  * Where a caught runner is set down on landing step `land`: its open cell
  * nearest the step's middle, facing on up the path.
  */
-export function landingSpot(h, land, grid) {
+function landingSpot(h, land, grid) {
   const centre = (cells) => {
     const n = cells.length || 1;
     return { x: cells.reduce((a, [c]) => a + c + 0.5, 0) / n, y: cells.reduce((a, [, r]) => a + r + 0.5, 0) / n };
@@ -316,7 +316,7 @@ export function stepHeat(spec, heat, dClock) {
 }
 
 /** An objective's card hint with its progress filled in. */
-export function objectiveHint(o) {
+function objectiveHint(o) {
   return o.hintTemplate
     .replace("{DONE}", String(o.cleared.length))
     .replace("{COUNT}", String(o.stations.length))
@@ -973,12 +973,5 @@ export class ChronoHazards {
       o.card.hint = objectiveHint(o);
     }
   }
-}
-
-/** The teach card to show, if any: `{ card, power, done, age }`. */
-export function activeTeachCard(hazards) {
-  const t = hazards?.teach;
-  if (!t?.card) return null;
-  return { card: t.card, power: t.power, done: t.done, progress: t.progress, goal: t.goal };
 }
 

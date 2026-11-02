@@ -8,7 +8,7 @@ import { buildWallSet, extendWallSet, hasWallPainter, paintWall, buildUpperBand 
 import { CEILING_Z } from "../systems/physics.js";
 import { buildDeckSet } from "./env/deck-art.js";
 import { guardBake } from "./env/paint.js";
-import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
+import { resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
 const hashNoise = (x, y, seed = 0) => {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;

@@ -253,7 +253,7 @@ export function radialDeadzone(x, y, dz, out = { x: 0, y: 0 }) {
 // ── Status Text ─────────────────────────────────────────────────
 
 /** Browser facts the status text needs. */
-export function detectBrowserEnv(nav = typeof navigator !== 'undefined' ? navigator : null) {
+function detectBrowserEnv(nav = typeof navigator !== 'undefined' ? navigator : null) {
   const ua = (nav && nav.userAgent) || '';
   return {
     supported: !!(nav && typeof nav.getGamepads === 'function'),

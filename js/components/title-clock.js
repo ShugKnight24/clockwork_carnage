@@ -949,8 +949,6 @@ function sparks(seed, n) {
   return glowCopy(m, "b1");
 }
 
-const G = (cx, cy, m) => `<g transform="translate(${cx} ${cy})">${m}</g>`;
-
 function modernClock() {
   const p = portalLayers();
   const box = [-180, -180, 360, 360];
@@ -1021,7 +1019,7 @@ async function realClock() {
   return model;
 }
 
-export class TitleClock extends HTMLElement {
+class TitleClock extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });

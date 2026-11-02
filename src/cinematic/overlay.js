@@ -26,7 +26,7 @@ const SLIDE_PX = 24;
 const PUNCH_S = 0.2; // logo/title scale punch 1.08 → 1
 const CARD_OPEN_S = 0.22;
 // Narration never wraps past this; overlayLayout reserves a band this tall.
-export const NARRATION_LINES = 2;
+const NARRATION_LINES = 2;
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));

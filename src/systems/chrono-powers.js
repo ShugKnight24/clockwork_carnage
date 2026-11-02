@@ -123,7 +123,7 @@ export function giftsFor(act, level, { ngPlus = 0, acts = ACTS } = {}) {
  * two: one more response allowed a level, a pack one bigger, and ten seconds
  * off the cooldown.
  */
-export const NG_PLUS_HUNT = { cycles: 2, cap: 1, pack: 1, cooldown: 10 };
+const NG_PLUS_HUNT = { cycles: 2, cap: 1, pack: 1, cooldown: 10 };
 
 /** Caps, pack size and cooldown for a difficulty and NG+ cycle. */
 export function huntRules(difficulty, ngPlus = 0) {

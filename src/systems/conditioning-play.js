@@ -57,7 +57,7 @@ function saveNow(game) {
 }
 
 /** Push the levels' bonuses onto the player and the aim. */
-export function applyConditioning(game) {
+function applyConditioning(game) {
   const b = conditioningBonuses(game.conditioning);
   const p = game.player;
   if (p) {

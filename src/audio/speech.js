@@ -16,7 +16,7 @@
  */
 
 /** Characters that speak, with the gender of voice to cast and an offset. */
-export const SPEECH_CAST = {
+const SPEECH_CAST = {
   aria: { gender: "f", pitch: 1.04, rate: 1.0, prefer: ["aria", "jenny", "samantha", "sonia", "libby", "zira"] },
   lyra: { gender: "f", pitch: 1.0, rate: 1.02, prefer: ["sonia", "libby", "emma", "ava", "michelle"] },
   miri: { gender: "f", pitch: 1.08, rate: 0.98, prefer: ["ava", "emma", "michelle", "jenny"] },
@@ -33,7 +33,7 @@ export const SPEECH_CAST = {
 };
 
 /** The player's voice profiles (VOICE_PROFILES ids). Synthetic stays babble. */
-export const PLAYER_CAST = {
+const PLAYER_CAST = {
   rookie: { gender: "m", pitch: 1.12, rate: 1.06, prefer: ["andrew", "eric", "brian"] },
   veteran: { gender: "m", pitch: 0.8, rate: 0.92, prefer: ["davis", "christopher", "guy"] },
   calm: { gender: "m", pitch: 0.96, rate: 0.96, prefer: ["brian", "ryan", "guy"] },

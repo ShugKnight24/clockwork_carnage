@@ -14,7 +14,7 @@
 
 import { WALL_GLOW_INDEX } from "./palettes.js";
 
-export const AO_W = 1, AO_E = 2, AO_N = 4, AO_S = 8, AO_NW = 16, AO_NE = 32, AO_SW = 64, AO_SE = 128;
+const AO_W = 1, AO_E = 2, AO_N = 4, AO_S = 8, AO_NW = 16, AO_NE = 32, AO_SW = 64, AO_SE = 128;
 
 export class EnvMap {
   constructor() {

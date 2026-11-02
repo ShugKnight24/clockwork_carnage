@@ -47,7 +47,7 @@ export const VESSEL_KINDS = Object.keys(VESSELS);
 /** Blocks from the player's feet to a hull's centre within which `B` boards it. */
 export const MOUNT_REACH = 2.5;
 /** How far from the hull leaving it looks for dry land before stepping into the water. */
-export const DISMOUNT_REACH = 4;
+const DISMOUNT_REACH = 4;
 /** The rider's eye above the seat: lower than standing, as a seated body is. */
 export const SEATED_EYE = 1.0;
 /** A world never holds more than this many; a save claiming more is cut. */

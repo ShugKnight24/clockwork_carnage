@@ -33,7 +33,7 @@ export function activeReloadOf(game) {
 const held = (game) => game.player?.getWeaponDef?.() ?? null;
 
 /** Start reloading the held gun, if a reload would add anything. */
-export function beginReload(game) {
+function beginReload(game) {
   const p = game.player;
   const wep = held(game);
   if (!wep || !p.canReload?.(wep.id)) return false;

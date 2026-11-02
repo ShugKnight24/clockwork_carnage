@@ -75,7 +75,7 @@ function _initEmber(e, w, h) {
 /**
  * Pre-allocate particle pools.  Safe to call multiple times (idempotent).
  */
-export function initWeather() {
+function initWeather() {
   if (_inited) return;
   _inited = true;
 

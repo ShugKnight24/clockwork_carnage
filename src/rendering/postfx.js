@@ -231,7 +231,7 @@ function scratch(canvas, w, h) {
  * edges (~0.2% of the width there). Hits and glitches widen it. Before, it
  * only ran for 300 ms after damage at 12% alpha, so the toggle showed nothing.
  */
-export function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchEffect) {
+function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchEffect) {
   let intensity = glitchEffect * 0.5;
   if (player.hurtTime) {
     const elapsed = time - player.hurtTime;
@@ -267,7 +267,7 @@ export function drawChromaticAberration(ctx, w, h, canvas, time, player, glitchE
 let _bloomA = null;
 let _bloomB = null;
 
-export function drawBloom(ctx, w, h, canvas) {
+function drawBloom(ctx, w, h, canvas) {
   const bw = Math.max(1, w >> 3);
   const bh = Math.max(1, h >> 3);
   _bloomA = scratch(_bloomA, bw, bh);
@@ -294,7 +294,7 @@ export function drawBloom(ctx, w, h, canvas) {
 }
 
 /** Color grade — per-act tint overlay. */
-export function drawColorGrade(ctx, w, h, act) {
+function drawColorGrade(ctx, w, h, act) {
   if (isRealisticArt()) {
     drawRealisticGrade(ctx, w, h);
     return;
@@ -337,7 +337,7 @@ function realisticVignette(w, h) {
   return c;
 }
 
-export function drawRealisticGrade(ctx, w, h) {
+function drawRealisticGrade(ctx, w, h) {
   // Saturation, contrast and exposure are CSS filters on the canvas element
   // (style.css, data-art-profile="realistic"): the compositor applies them on
   // the GPU with no pixel readback. Only the lens falloff is drawn here.

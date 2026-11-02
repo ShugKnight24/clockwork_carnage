@@ -791,7 +791,7 @@ template.innerHTML = `
 // title colours, standing on the deck opposite the hero.
 const LORD_PLACEMENT = { x: 554, y: 207, scale: 0.84 };
 
-export class TitleParadoxLord extends HTMLElement {
+class TitleParadoxLord extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });

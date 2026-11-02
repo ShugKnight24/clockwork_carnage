@@ -1561,7 +1561,7 @@ template.innerHTML = `
 // it is that agent, dressed the way cutscenes dress the cast.
 const HERO_PLACEMENT = { x: 138, y: 214, scale: 2.1 };
 
-export class TitleHero extends HTMLElement {
+class TitleHero extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });

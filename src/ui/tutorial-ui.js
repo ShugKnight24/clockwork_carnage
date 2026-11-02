@@ -217,7 +217,7 @@ export function tutorialStepCopy(device, game = null) {
 const keyHint = (key, k) => (typeof key === "function" ? key(k) : key);
 
 /** A key code as a hint names it: "C", "SHIFT", "SPACE", "CTRL". */
-export function keyName(code) {
+function keyName(code) {
   return formatKeyCode(code || "").replace(/^[LR]-/, "").toUpperCase();
 }
 
@@ -541,7 +541,7 @@ export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1, lay = {}) {
 const NARRATION_TYPE_RATE = 60; // chars/s, ARIA's own plate rate
 
 /** Seconds a phone shows a card's hint before folding it to the title. */
-export const CARD_COLLAPSE_AFTER = 6;
+const CARD_COLLAPSE_AFTER = 6;
 
 /**
  * A folded comms line's presence (0..1: in over 0.3 s, out over its last

@@ -16,7 +16,7 @@
  * the output object.
  */
 
-export const LAMP_GRID = 16;
+const LAMP_GRID = 16;
 
 /** Baseline light when nothing is overhead: dim, slightly cool. */
 export const AMBIENT = Object.freeze({ r: 0.46, g: 0.5, b: 0.56 });

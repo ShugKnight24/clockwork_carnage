@@ -174,7 +174,7 @@ export function inferEmotion(text, fallback = "neutral") {
 // ── Planning ────────────────────────────────────────────────────────────────
 
 /** Average adult formants (Hz) for the vowel classes babble needs. */
-export const FORMANTS = {
+const FORMANTS = {
   A: [730, 1090, 2440],
   E: [530, 1840, 2480],
   I: [300, 2200, 2900],

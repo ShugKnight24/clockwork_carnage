@@ -18,7 +18,7 @@ export function arenaRoundPacks(round) {
 }
 
 /** Whether a boss is standing in the level (any form). */
-export function bossStanding(game) {
+function bossStanding(game) {
   return game.entities.some((e) => e.type === "enemy" && e.active && e.state !== "dead" && isBossEnemy(e));
 }
 

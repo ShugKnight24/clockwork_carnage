@@ -63,16 +63,6 @@ export function coverBlocks(g, hm, cells, layers = LAYER.WAIST, v = 3) {
   });
 }
 
-/**
- * Scatter low cover through a room on a spacing, the way `coverGrid` places
- * full pillars — but shootable over, so a firefight has angles instead of
- * blind corners.
- */
-export function lowCoverGrid(g, hm, r1, c1, r2, c2, spacingR = 5, spacingC = 6, layers = LAYER.WAIST, v = 3) {
-  for (let r = r1; r <= r2; r += spacingR)
-    for (let c = c1; c <= c2; c += spacingC) lowTile(g, hm, r, c, layers, v);
-}
-
 /** Carve a rectangle to a given tile value (default: open floor). */
 export function carve(g, r1, c1, r2, c2, v = 0) {
   for (let r = r1; r <= r2; r++)
@@ -111,37 +101,6 @@ export function room(g, r1, c1, r2, c2, wallType = 1) {
 /** Carve a corridor connecting two areas. */
 export function corridor(g, r1, c1, r2, c2) {
   carve(g, Math.min(r1, r2), Math.min(c1, c2), Math.max(r1, r2), Math.max(c1, c2));
-}
-
-/**
- * Place cover pillars in a grid pattern within bounds.
- * spacing: distance between pillars; offset: starting offset from top-left.
- */
-export function coverGrid(g, r1, c1, r2, c2, spacingR = 4, spacingC = 4, v = 3) {
-  for (let r = r1; r <= r2; r += spacingR)
-    for (let c = c1; c <= c2; c += spacingC) g[r][c] = v;
-}
-
-/**
- * Place a row of cell rooms along a wall (like holding cells or offices).
- * Each cell: cellW wide, cellH tall, with a door centered on doorSide.
- * Returns array of cell interior centers for entity placement.
- */
-export function cellRow(g, startR, startC, count, cellW, cellH, wallType = 3, doorSide = "south") {
-  const centers = [];
-  for (let i = 0; i < count; i++) {
-    const c1 = startC + i * (cellW - 1); // overlap walls between cells
-    const r1 = startR;
-    const r2 = r1 + cellH - 1;
-    const c2 = c1 + cellW - 1;
-    room(g, r1, c1, r2, c2, wallType);
-    // Door placement
-    const doorC = c1 + Math.floor(cellW / 2);
-    if (doorSide === "south") door(g, r2, doorC);
-    else if (doorSide === "north") door(g, r1, doorC);
-    centers.push({ x: (c1 + c2) / 2 + 0.5, y: (r1 + r2) / 2 + 0.5 });
-  }
-  return centers;
 }
 
 // ── Composition ───────────────────────────────────────────────────

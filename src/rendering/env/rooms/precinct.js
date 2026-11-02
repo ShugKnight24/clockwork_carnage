@@ -18,7 +18,7 @@
 
 import { PRECINCT_WALLS as W } from "../../../data/levels/rooms/precinct.js";
 import { say, glow, paper, lines, stationWall, base, blockWall, paintSign } from "./corridor.js";
-import { T, lin, plate, ink, lightStrip, led, relief, grey, hazard, emit } from "../paint.js";
+import { T, plate, ink, lightStrip, led, relief, grey, hazard, emit } from "../paint.js";
 
 const S = (x) => T - x;
 const KICKY = 456;

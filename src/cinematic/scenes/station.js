@@ -250,7 +250,7 @@ function placeCamera(game, st, local) {
  * [x, y, angle, pitch] at shot time `local`: one Catmull-Rom curve through the keys,
  * the shot's time eased by `ease` over the whole move.
  */
-export function sampleGlide(reel, cam, local) {
+function sampleGlide(reel, cam, local) {
   const keys = cam?.keys;
   if (!keys?.length) return null;
   const k = unwrapKeys(keys);

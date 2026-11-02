@@ -42,8 +42,6 @@ export function partyMembers(key) {
   return list.length ? list : null;
 }
 
-export const isPartyKey = (key) => partyMembers(key) !== null;
-
 /**
  * x position of each member (art units, 0 = centre of frame). The player
  * stays central when present; the group as a whole is centred.

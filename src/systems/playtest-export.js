@@ -17,7 +17,7 @@ export function sessionFileName(kind = "session", ext = "json", d = new Date()) 
 }
 
 /** Text to the clipboard: the async API where there is one, a selected textarea where not. */
-export function copyText(text) {
+function copyText(text) {
   try {
     if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).then(() => true, () => legacyCopy(text));
   } catch (_) {}
@@ -46,7 +46,7 @@ function legacyCopy(text) {
  * attribute (iOS Safari 13+ asks where to save it). Where links cannot
  * download, the file opens in a new tab to save or share from there.
  */
-export function saveFile(name, blob) {
+function saveFile(name, blob) {
   try {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -103,7 +103,7 @@ export function shareSession(game) {
 }
 
 /** The game canvas with the HUD over it, as the reel's poster frame is made (js/main.js). */
-export function captureScreenshot(game) {
+function captureScreenshot(game) {
   const { canvas, hudCanvas } = game ?? {};
   if (!canvas) return null;
   // A WebGL canvas keeps its drawing buffer only until it is composited:
@@ -123,7 +123,7 @@ export function captureScreenshot(game) {
 }
 
 /** What the game was doing when the player pressed F8. */
-export function bugSnapshot(game) {
+function bugSnapshot(game) {
   const p = game?.player ?? {};
   const c = game?.campaign;
   const weaponId = p.weapons?.[p.currentWeapon];

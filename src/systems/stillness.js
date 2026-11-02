@@ -33,7 +33,7 @@ export const HUSH_NEAR = 0.9;
 export const HUSH_FAR = 2.6;
 
 /** The echo's cycle, seconds: one step out and the snap back. */
-export const ECHO_PERIOD_S = 1;
+const ECHO_PERIOD_S = 1;
 /** How far the echo's step carries it, in tiles. */
 export const ECHO_STEP = 0.32;
 /** Share of the cycle spent stepping; the rest it hangs there, fading, then snaps back. */

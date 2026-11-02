@@ -20,7 +20,7 @@ export const HIT_SHRINK = 0.85;
 export const MIN_TOUCH_TARGET = 44;
 
 /** Smallest drawn radius whose shrunk hit circle still clears the minimum. */
-export const MIN_BUTTON_RADIUS = MIN_TOUCH_TARGET / 2 / HIT_SHRINK;
+const MIN_BUTTON_RADIUS = MIN_TOUCH_TARGET / 2 / HIT_SHRINK;
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 

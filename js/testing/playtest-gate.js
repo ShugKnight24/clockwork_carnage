@@ -464,7 +464,7 @@ export function createPlaytestGate(game, tools) {
   return { run };
 }
 
-export function snapshotGame(game) {
+function snapshotGame(game) {
   const player = game.player || {};
   return {
     state: game.state,
@@ -499,7 +499,7 @@ export function snapshotGame(game) {
   };
 }
 
-export function detectProblemState(snap) {
+function detectProblemState(snap) {
   if (!VALID_STATES.has(snap.state)) return `invalid state ${snap.state}`;
   for (const [key, value] of Object.entries(snap.player)) {
     if (typeof value === "number" && !Number.isFinite(value)) return `non-finite player.${key}`;

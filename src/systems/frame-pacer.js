@@ -15,7 +15,7 @@
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 /** Frame target options, indexed by `settings.frameTarget`. 0 = uncapped. */
-export const FRAME_TARGETS = [0, 30, 60, 90, 120];
+const FRAME_TARGETS = [0, 30, 60, 90, 120];
 
 /** Frames per second the loop should render at, given the player's settings. */
 export function frameCapFor(settings) {

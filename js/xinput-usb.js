@@ -14,11 +14,11 @@
  */
 
 /** Any interface of class 0xFF / subclass 0x5D / protocol 0x01 is 360 input. */
-export const XINPUT_FILTERS = [{ classCode: 0xff, subclassCode: 0x5d, protocolCode: 0x01 }];
+const XINPUT_FILTERS = [{ classCode: 0xff, subclassCode: 0x5d, protocolCode: 0x01 }];
 
 const AXIS_MAX = 32767;
 
-export const webUsbSupported = () => typeof navigator !== 'undefined' && !!navigator.usb;
+const webUsbSupported = () => typeof navigator !== 'undefined' && !!navigator.usb;
 
 /** Is this USBDevice a 360-protocol pad? */
 export function isXInputDevice(device) {

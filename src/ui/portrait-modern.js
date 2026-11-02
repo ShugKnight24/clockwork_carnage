@@ -421,19 +421,3 @@ function backdropMarkup(accent) {
     `<ellipse cx="0" cy="-56" rx="30" ry="9" fill="#000" opacity=".45"/>`
   );
 }
-
-/** Stage index the portrait would show for a health fraction (testing aid). */
-export function portraitStage(pct, alive = true) {
-  if (!alive || pct <= 0) return 10;
-  return Math.min(9, Math.floor((1 - pct) * 10 + 1e-4));
-}
-
-/** Forget hit/heal history (tooling and level restarts). */
-export function resetPortraitMotion() {
-  P.health = -1;
-  P.shield = -1;
-  P.hitAt = -1e9;
-  P.healAt = -1e9;
-  P.shieldAt = -1e9;
-  P.deadAt = -1e9;
-}

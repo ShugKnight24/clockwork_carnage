@@ -12,7 +12,7 @@ import {
   HEADSHOT_PRECISION_PAD,
   ZONE_RADIUS_PAD,
 } from "../constants.js";
-import { CROUCH_EYE_Z, EYE_Z, wallHeight, playerEyeZ, eyeOffsetZ } from "./physics.js";
+import { EYE_Z, wallHeight, playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { raycastBlocks, playerEyeZ3D } from "../world/voxel-physics.js";
 import { ENEMY_TYPES } from "../data/enemies.js";
 import { ENEMY_ART_SPAN, DEFAULT_ART_SPAN, LEGACY_ART_SPAN, LEGACY_DEFAULT_ART_SPAN } from "../data/enemy-art.js";
