@@ -1181,7 +1181,7 @@ function safeInsets(w, h) {
 /**
  * Landscape phone Vanguard. Touch controls own the lower corners, so vitals
  * move to the top-left and the weapon block to the bottom centre. The minimap
- * (top-right) and pause button (top-left, before the vitals) are drawn by hud.js / touch.js.
+ * (top-right) and pause button (top-left, before the vitals) are drawn by hud-compact.js / touch.js.
  */
 export function renderVanguardCompact(game, ctx, w, h, barH, f, portraitState) {
   const fs = (game.settings.fontScale || 100) / 100;

@@ -4,7 +4,6 @@ import { TouchControls } from "./touch.js";
 import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice, lockPageZoom } from "../src/utils/device.js";
-import { invalidateHUD } from "../src/ui/hud.js";
 import { preloadShowroom, preloadSettingsDeck, settingsDeckLoading } from "../src/rendering/render-pipeline.js";
 import { onArtStyleChange, isModernArt, getArtStyle, ART_LEGACY, ART_REALISTIC } from "../src/rendering/art-style.js";
 import { detectDeviceTier, budgetedRenderSize } from "../src/utils/device-tier.js";
@@ -136,7 +135,6 @@ function resizeCanvases() {
     game.renderer.resize(gw, gh);
   }
   game.voxelRenderer?.resize(gw, gh);
-  invalidateHUD();
 }
 
 window.addEventListener("resize", resizeCanvases);

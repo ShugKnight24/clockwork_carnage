@@ -1,7 +1,8 @@
 /**
- * Modern-mode HUD layouts (graphic-novel realism). hud.js calls these in
- * place of the legacy panel blocks when isModernArt() is on; shared overlays
- * (crosshair, hit markers, kill streak, toasts, ARIA comms) stay in hud.js.
+ * Modern-mode HUD layouts (graphic-novel realism). hud.js and the style
+ * modules call these in place of the legacy panel blocks when isModernArt()
+ * is on; shared overlays (crosshair, hit markers, kill streak, toasts, ARIA
+ * comms) come from hud-shared.js and hud-minimal.js.
  *
  * Same anchors as the legacy layouts so nothing else on screen (minimap,
  * kill-streak banner, ARIA box, touch buttons) has to move. Static chrome is
@@ -37,7 +38,7 @@ const DIFF_NAMES = ["EASY", "NORMAL", "HARD", "NIGHTMARE"];
 const DIFF_SCHEMES = ["steel", "cyan", "amber", "crimson"];
 
 /**
- * Where this frame's top-left stack ended, in screen pixels, so hud.js can
+ * Where this frame's top-left stack ended, in screen pixels, so hud-shared.js can
  * hang the power-cell chip under whatever the layout put in that corner.
  * hud.js zeroes it each frame; 0 means the layout drew nothing there.
  */
@@ -1099,7 +1100,7 @@ export function renderModernCompact(game, ctx, w, h, barH, hudFactor) {
 /**
  * Floating tactical console: two angled steel wings either side of a thin
  * arc under the reticle — vitals left, ammo right, weapon name on the arc.
- * The shared overlays (minimap, reticle, toasts, comms) come from hud.js.
+ * The shared overlays (minimap, reticle, toasts, comms) come from hud-minimal.js.
  */
 export function renderModernTacticalPanels(game, ctx, w, h, f) {
   const p = game.player;

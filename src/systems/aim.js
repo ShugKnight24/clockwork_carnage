@@ -343,13 +343,13 @@ export function resetAdsFov() {
 }
 
 /**
- * The HUD bar's height in HUD (CSS) pixels, as `src/ui/hud.js` draws it and
+ * The HUD bar's height in HUD (CSS) pixels, as `src/ui/hud-state.js` sizes it and
  * places the reticle above it. Inline, so combat code needs no import cycle.
  */
 export function hudBarH(game) {
   const hudH = game.hudH || game.canvas?.height || 0;
   const hudFactor = (game.settings?.hudScale || 100) / 100;
-  // isCompactPhone (js/layout.js), on the HUD's height, as hud.js tests it.
+  // isCompactPhone (js/layout.js), on the HUD's height, as hud-state.js tests it.
   const compact = game.isTouchDevice && hudH > 0 && hudH < COMPACT_PHONE_HEIGHT;
   if (compact) return Math.round(60 * hudFactor);
   return game.settings?.hudStyle === 1 ? Math.round(160 * hudFactor) : 0;
