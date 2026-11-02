@@ -72,7 +72,7 @@ function number(ctx, text, x, y, size, color, align = "left") {
 }
 
 /** Largest size <= `size` at which `text` fits `maxW` in the UI number font. */
-export function fitFontSize(ctx, text, size, maxW, weight = 800) {
+function fitFontSize(ctx, text, size, maxW, weight = 800) {
   ctx.font = uiFont(size, weight);
   const tw = ctx.measureText(text).width;
   if (tw <= maxW || tw <= 0) return size;

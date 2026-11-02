@@ -307,12 +307,6 @@ export function layerBaked(id, scale) {
   return !!(e && (e.baked || e.failed));
 }
 
-/** True once any bucket of a layer failed to decode (bad markup). */
-export function layerFailed(id) {
-  for (const e of layers.get(id)?.values() ?? []) if (e.failed) return true;
-  return false;
-}
-
 const releaseListeners = new Set();
 
 /**

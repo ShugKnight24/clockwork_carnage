@@ -903,11 +903,6 @@ function cached(key, w, h, dpr, paint) {
   return _sprites.set(key, c);
 }
 
-/** How many portrait bitmaps are cached (for tests and the perf overlay). */
-export function portraitCacheSize() {
-  return _sprites.size;
-}
-
 function cutPath(g, x, y, w, h, k) {
   g.beginPath();
   g.moveTo(x + k, y);
@@ -1226,13 +1221,6 @@ export function drawCommsPortrait(ctx, o) {
   }
   ctx.restore();
   ctx.globalAlpha = a0;
-}
-
-/** Paint every frame of a bust ahead of time (the plate never stalls on one). */
-export function warmCommsPortrait(speaker, style, size, tone, dpr = 1) {
-  const id = portraitIdFor(speaker);
-  const variant = id === "officer" ? hashOf(String(speaker)) % 997 : 0;
-  for (let f = 0; f < (CAST[id].blinks ? 4 : 3); f++) bustSprite(id, style, size, dpr, f, tone, variant);
 }
 
 /** Every bust id, for the contact sheet and tests. */

@@ -1381,11 +1381,6 @@ function drawVoiceBars(ctx, x, midY, t, color, amp) {
   }
 }
 
-function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-}
-
 const _truncCache = new Map();
 /** Ellipsised text that fits maxW, cached (log rows repeat every frame). */
 function truncateTo(ctx, font, text, maxW) {
