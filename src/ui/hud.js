@@ -1,4 +1,4 @@
-import { isCompactPhone } from "../../js/layout.js";
+import { isCompactPhone } from "./layout.js";
 import { isModernArt } from "../rendering/art-style.js";
 import {
   renderModernMinimalPanels,

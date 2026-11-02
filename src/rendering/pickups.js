@@ -2,7 +2,7 @@
 
 import { isModernArt, isRealisticArt } from "./art-style.js";
 import { CEILING_Z } from "../systems/physics.js";
-import { projectileKind } from "../../js/vfx.js";
+import { projectileKind } from "./vfx.js";
 import { drawSvgSprite, warmSvgSprites } from "./props.js";
 import { DEFS as PICKUP_DEFS, PICKUP_SPRITES } from "./svg-art/sprites/pickups.js";
 

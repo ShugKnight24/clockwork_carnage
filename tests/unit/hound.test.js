@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AISystem, quillFan } from "../../src/systems/ai.js";
 import { windupLine } from "../../src/systems/chrono-powers.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { buildEnemyModel } from "../../src/rendering/svg-art/sprites/enemies.js";
 import { ENEMY_RENDERERS } from "../../src/rendering/enemies/index.js";

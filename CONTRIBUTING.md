@@ -97,7 +97,7 @@ index.html          — Vite entry; boots js/main.js and the title web component
 style.css           — DOM/menu styling
 vite.config.js      — build config and vitest config
 
-js/                 — app shell and entry point (23 top-level modules)
+js/                 — app shell and entry point (17 top-level modules)
   main.js           — boot, frame loop, dev-tool wiring
   game.js           — game object and state machine (~3,100 lines)
   renderer.js       — DDA raycaster, sprite rendering, WebGL2 init and the hybrid GL path
@@ -106,11 +106,6 @@ js/                 — app shell and entry point (23 top-level modules)
   meltdown.js       — Meltdown: Reactor Run (endless runner)
   cutscene.js       — cutscene engine
   touch.js          — mobile touch controls
-  input-manager.js  — keyboard/mouse state, keybinds, pointer lock
-  layout.js         — shared screen geometry and hit-testing
-  settings-registry.js — settings definitions
-  entities.js       — entity classes
-  data.js           — 18-line barrel re-exporting src/data/
   components/       — web components used in the title markup
   testing/          — debug bridge and bots; loaded only when dev tools are on
   net/              — multiplayer prototype; currently referenced by nothing
@@ -119,14 +114,17 @@ src/                — the bulk of the code (129 modules, ~57,700 lines)
   constants.js      — shared tuning values
   core/             — save system and persistence
   data/             — weapons, enemies, walls, dialogue, cosmetics, achievements, levels/
+  entities/         — entity classes (Player, Enemy, Pickup, Prop, Projectile)
+  settings/         — settings registry: definitions and defaults
   world/            — voxel world data, physics, saves, legacy conversion
-  rendering/        — render pipeline, textures, post-FX, props, weather,
+  rendering/        — render pipeline, textures, post-FX, props, weather, VFX, particles,
                       plus enemies/, env/, svg-art/ (Comic and Modern art) and webgl/
     voxel/          — WebGL2 chunk renderer, mesher, atlas, shaders (the Forge)
   systems/          — AI, aim, combat, physics, player and projectile updates,
-                      spawner, input dispatch, archive, unlocks
-  ui/               — HUD variants, settings, character creator, archive,
-                      upgrade and game-over screens
+                      spawner, input manager and dispatch, archive, unlocks
+  ui/               — HUD variants, settings, character creator, archive, stats,
+                      upgrade and game-over screens; layout.js holds shared
+                      screen geometry and hit-testing
   utils/            — math, seeded RNG, pooling, profiling
   assets/           — manifest-backed image loader
 ```

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Player, Enemy, Pickup, Projectile } from "../../js/entities.js";
+import { Player, Enemy, Pickup, Projectile } from "../../src/entities/index.js";
 
 describe("Player", () => {
   it("constructs with default spawn position", () => {

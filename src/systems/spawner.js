@@ -2,8 +2,8 @@
 // Pure entity-creation functions for arena / campaign / meltdown.
 // No game state mutation — returns entity arrays for the caller to place.
 // ────────────────────────────────────────────────────────────────────────────
-import { Enemy, Pickup, Prop } from "../../js/entities.js";
-import { ENEMY_TYPES } from "../../js/data.js";
+import { Enemy, Pickup, Prop } from "../entities/index.js";
+import { ENEMY_TYPES } from "../data/index.js";
 import { SeededRNG } from "../utils/seeded-rng.js";
 import { ACTS, getAct } from "../data/campaign/acts.js";
 

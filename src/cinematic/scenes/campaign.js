@@ -32,12 +32,12 @@
  * shot's seeded PRNG, so live and recorded playback match.
  */
 import { beatsToSec } from "../timeline.js";
-import { getActLevel, getAct } from "../../../js/data.js";
+import { getActLevel, getAct } from "../../data/index.js";
 import {
   stageLevelScene, installStagedLevel, prewarmStyle, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
 } from "../../systems/showcase.js";
 import { samplePath } from "../../systems/showcase-path.js";
-import { Enemy } from "../../../js/entities.js";
+import { Enemy } from "../../entities/index.js";
 import { ENEMY_TYPES } from "../../data/enemies.js";
 import { AISystem, beginWindup } from "../../systems/ai.js";
 import { ChronoPowers } from "../../systems/chrono-powers.js";

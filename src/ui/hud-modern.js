@@ -29,7 +29,7 @@ import { drawChronoCluster } from "./chrono-hud.js";
 import { glyph } from "./input-glyphs.js";
 import { ammoTint } from "./reload-hud.js";
 import { drawWeaponIcon, SILHOUETTE_BOX } from "./weapon-silhouettes.js";
-import { WEAPONS } from "../../js/data.js";
+import { WEAPONS } from "../data/index.js";
 import { touchZones, BUTTON_KEYS } from "./touch-layout.js";
 import { hudMotion as M, since, easeOut } from "./hud-motion.js";
 import { activeDamageCues, lowHealthSeverity, lowHealthVignetteAlpha, heartPulse } from "../systems/player-feedback.js";

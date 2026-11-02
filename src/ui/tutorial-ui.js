@@ -3,7 +3,7 @@
 // All rendering is purely a function of state passed in; no globals besides
 // performance.now(). Shared backdrop / menu helpers are private to this file.
 
-import { tutorialMenuLayout } from "../../js/layout.js";
+import { tutorialMenuLayout } from "./layout.js";
 import { drawScanlines } from "./scanlines.js";
 import { isModernArt } from "../rendering/art-style.js";
 import {
@@ -19,7 +19,7 @@ import {
 } from "./modern-ui-kit.js";
 import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padLabelGlyph } from "./input-glyphs.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS } from "../data/prologue.js";
-import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { DEFAULT_KEYBINDS } from "../systems/input-manager.js";
 import { formatKeyCode } from "./key-labels.js";
 import { wrapWords } from "../utils/text.js";
 

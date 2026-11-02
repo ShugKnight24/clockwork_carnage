@@ -2,12 +2,12 @@
  * stats-screen.js — Standalone lifetime stats screen renderer.
  *
  * Usage:
- *   import { drawStatsScreen } from "./stats-screen.js";
+ *   import { drawStatsScreen } from "../ui/stats-screen.js";
  *   drawStatsScreen(ctx, w, h, achievementStats, conditioning);
  *
  * Pure drawing function — no game state references.
  */
-import { SKILL_IDS, SKILLS, MAX_LEVEL, levelOf, progressOf } from "../src/systems/conditioning.js";
+import { SKILL_IDS, SKILLS, MAX_LEVEL, levelOf, progressOf } from "../systems/conditioning.js";
 
 /**
  * Render the full-screen lifetime stats overlay.

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, getVisibleSettings } from "../../js/settings-registry.js";
+import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, getVisibleSettings } from "../../src/settings/registry.js";
 import { SECTIONS, SECTION_OF, rowsForSection, QUICK_CARDS } from "../../src/ui/settings-sections.js";
 import { applySettingValue, stepSetting, resetSetting } from "../../src/ui/settings-apply.js";
-import * as registry from "../../js/settings-registry.js";
+import * as registry from "../../src/settings/registry.js";
 
 const ids = SECTIONS.map((s) => s.id);
 

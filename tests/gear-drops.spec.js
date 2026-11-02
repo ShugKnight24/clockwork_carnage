@@ -28,7 +28,7 @@ test("a dropped piece is granted, announced and kept", async ({ page }) => {
 
   // Force a drop next to the player, then walk onto it.
   const result = await page.evaluate(async () => {
-    const { Pickup } = await import("/js/entities.js");
+    const { Pickup } = await import("/src/entities/index.js");
     const m = await import("/src/systems/unlocks.js");
     const g = window.ccDebug.game;
     const pick = m.lockedItems(m.gameUnlockContext(g, { fresh: true }))[0];

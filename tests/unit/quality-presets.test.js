@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AdaptiveQuality, effectCeilings, effectCapReason } from "../../src/utils/perf.js";
-import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../../js/settings-registry.js";
+import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../../src/settings/registry.js";
 
 describe("quality preset post-FX ceilings", () => {
   it("copies bloom, chromatic aberration and grain from the preset", () => {

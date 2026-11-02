@@ -6,7 +6,7 @@
  *
  * Usage in game.js:
  *   import { spawnPickupBurst, spawnSmoke, spawnEnergyBurst, spawnDebris,
- *            updateParticles, updateDustMotes } from "./particle-system.js";
+ *            updateParticles, updateDustMotes } from "../src/rendering/particle-system.js";
  *
  *   // Spawn a burst when a pickup is collected:
  *   spawnPickupBurst(this.player.particles, x, y, "health");
@@ -23,7 +23,7 @@
  *   // Tick particles each frame (also ticks dust motes):
  *   this.dustMotes = updateParticles(this.player.particles, dt, this.timeScale, this.dustMotes, this.player);
  */
-import { particlePool } from "../src/utils/particle-pool.js";
+import { particlePool } from "../utils/particle-pool.js";
 
 /**
  * Spawn a radial burst of particles around a world-space pickup position.

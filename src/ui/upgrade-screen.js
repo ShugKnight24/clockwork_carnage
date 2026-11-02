@@ -1,7 +1,7 @@
 // Upgrade screen — rendered between arena rounds
 
-import { UPGRADES } from "../../js/data.js";
-import { upgradeLayout, isCompactPhone } from "../../js/layout.js";
+import { UPGRADES } from "../data/index.js";
+import { upgradeLayout, isCompactPhone } from "./layout.js";
 import { drawScanlines } from "./scanlines.js";
 import { getUpgradeSprite } from "../assets/loader.js";
 import { isModernArt } from "../rendering/art-style.js";

@@ -8,7 +8,7 @@ import { VoxelAISystem } from "../../src/systems/voxel-ai.js";
 import { spawnFromMeta } from "../../src/systems/voxel-glue.js";
 import { stationsInRange } from "../../src/rpg/stations.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
-import { Projectile } from "../../js/entities.js";
+import { Projectile } from "../../src/entities/index.js";
 import { seedMathRandom } from "./seeded-random.js";
 
 seedMathRandom();

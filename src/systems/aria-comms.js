@@ -3,7 +3,7 @@
 
 import { ARIA_COMMS } from "../data/dialogue.js";
 import { voiceKeyFor } from "../audio/voice.js";
-import { isCompactPhone } from "../../js/layout.js";
+import { isCompactPhone } from "../ui/layout.js";
 import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 import { drawSvgModelAt } from "../rendering/svg-art/index.js";
 

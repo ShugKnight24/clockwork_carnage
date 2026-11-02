@@ -1,5 +1,5 @@
 import { isModernArt } from "../src/rendering/art-style.js";
-import { isCompactPhone } from "./layout.js";
+import { isCompactPhone } from "../src/ui/layout.js";
 import { drawViewmodel, hasViewmodel } from "../src/rendering/svg-art/viewmodels.js";
 import { getAimBlend } from "../src/systems/aim.js";
 import { GameState } from "../src/types.js";

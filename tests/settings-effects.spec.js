@@ -55,7 +55,7 @@ async function setup(browser, artStyle) {
   await page.goto("/?debug");
   await page.waitForFunction(() => window.ccDebug, null, { timeout: 30_000 });
   await page.evaluate(async () => {
-    window.__R = await import("/js/settings-registry.js");
+    window.__R = await import("/src/settings/registry.js");
     ccDebug.startCampaign(0, 1);
   });
   await page.waitForTimeout(3500);

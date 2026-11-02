@@ -3,7 +3,7 @@ import { PlayerUpdateSystem } from "../../src/systems/player-update.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { PLAYER } from "../../src/world/voxel-physics.js";
 import { PLAYER_PITCH_LIMIT } from "../../src/constants.js";
-import { Player } from "../../js/entities.js";
+import { Player } from "../../src/entities/index.js";
 
 const DT = 1 / 60;
 const GROUND = 32; // generateWorld({ terrain: false }) fills z 0..31

@@ -5,7 +5,7 @@ import {
   pauseLayout,
   upgradeLayout,
   tutorialMenuLayout,
-} from "../../js/layout.js";
+} from "../../src/ui/layout.js";
 
 function testIsCompactPhone() {
   assert.equal(isCompactPhone(419), true, "h=419 should be compact");

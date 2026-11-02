@@ -3,7 +3,7 @@
  * The inventory screen. Draws only: every rect comes from `inventoryLayout`
  * so the renderer and the mouse handler cannot drift apart.
  */
-import { inventoryLayout } from "../../js/layout.js";
+import { inventoryLayout } from "./layout.js";
 import { BLOCKS } from "../world/blocks.js";
 import { itemById, blockForItem } from "../rpg/items.js";
 

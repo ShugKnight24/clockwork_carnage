@@ -14,7 +14,7 @@ import { WEAPONS } from "../../src/data/weapons.js";
 import { falloffMult } from "../../src/systems/combat-orchestrator.js";
 import { calculateEnemyDamage } from "../../src/systems/combat.js";
 import { updateProjectiles } from "../../src/systems/projectile-update.js";
-import { Player, Projectile } from "../../js/entities.js";
+import { Player, Projectile } from "../../src/entities/index.js";
 import { HEADSHOT_MULT } from "../../src/constants.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 

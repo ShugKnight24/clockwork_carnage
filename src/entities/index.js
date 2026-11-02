@@ -1,11 +1,11 @@
-import { WEAPONS, ENEMY_TYPES } from "./data.js";
+import { WEAPONS, ENEMY_TYPES } from "../data/index.js";
 import {
   PLAYER_SPAWN_X,
   PLAYER_SPAWN_Y,
   PLAYER_SPAWN_ANGLE,
   PLAYER_MAX_HP,
   TWO_PI,
-} from "../src/constants.js";
+} from "../constants.js";
 
 /**
  * Player entity representing the player character.

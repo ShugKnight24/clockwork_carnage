@@ -33,7 +33,7 @@
  * sprite), `_spriteScale` (sprite and hit span), `_takenMul` (damage taken),
  * `_rateMul` (fire rate), `_bossHold` (seconds he stands still).
  */
-import { Projectile } from "../../js/entities.js";
+import { Projectile } from "../entities/index.js";
 import { isPassable } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 import { recordShot } from "./boss-form2.js";

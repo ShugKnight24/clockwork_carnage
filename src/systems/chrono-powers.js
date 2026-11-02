@@ -24,7 +24,7 @@
  */
 import { ACTS, getAct, getActLevel } from "../data/campaign/acts.js";
 import { ENEMY_TYPES } from "../data/enemies.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../entities/index.js";
 import { hasLineOfSight, isPassable } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 import { arrive, ARRIVALS } from "./arrival.js";

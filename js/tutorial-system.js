@@ -22,16 +22,16 @@
  * Receives a `game` reference for the shared state (player, entities, audio,
  * map, comms).
  */
-import { TUTORIAL_MAP } from "./data.js";
+import { TUTORIAL_MAP } from "../src/data/index.js";
 import { STATION_WALLS } from "../src/data/walls.js";
-import { Enemy, Pickup, Prop, Projectile } from "./entities.js";
+import { Enemy, Pickup, Prop, Projectile } from "../src/entities/index.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, TRIAL_GRADES, gradeTrial, lineDuration, trialStart } from "../src/data/prologue.js";
 import { ARIA_COMMS } from "../src/data/dialogue.js";
 import { drawLine } from "../src/systems/aria-comms.js";
-import { spawnEnergyBurst } from "./particle-system.js";
+import { spawnEnergyBurst } from "../src/rendering/particle-system.js";
 import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
 import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { aimAnglesForGame } from "../src/systems/aim.js";

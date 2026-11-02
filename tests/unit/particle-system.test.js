@@ -6,7 +6,7 @@ import {
   spawnDebris,
   updateParticles,
   updateDustMotes,
-} from "../../js/particle-system.js";
+} from "../../src/rendering/particle-system.js";
 
 // ── helpers ──
 const makePlayer = (x = 5, y = 5) => ({ x, y });

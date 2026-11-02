@@ -34,7 +34,7 @@ test("an enemy arriving through a tear in view is not active or damaging during 
   const run = await page.evaluate(async () => {
     const g = window.ccDebug.game;
     const { arrive, ARRIVALS, ARMED_AFTER } = await import("/src/systems/arrival.js");
-    const { Enemy } = await import("/js/entities.js");
+    const { Enemy } = await import("/src/entities/index.js");
     const p = g.player;
     // A melee enemy arriving right in front of the player, already hunting.
     const a = arrive(g, {

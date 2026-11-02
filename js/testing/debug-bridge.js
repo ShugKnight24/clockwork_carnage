@@ -16,9 +16,9 @@ import {
   campaignMap,
   UPGRADES,
   ENEMY_TYPES,
-} from "../data.js";
+} from "../../src/data/index.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
-import { Enemy } from "../entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { effectiveAimFov } from "../../src/systems/aim.js";
 import { bestTool } from "../../src/rpg/tools.js";
 import { streamerFor } from "../../src/world/world-streamer.js";

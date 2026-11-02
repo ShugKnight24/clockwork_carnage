@@ -1,5 +1,5 @@
 import { GameState } from "../game.js";
-import { ACTS, isLastAct, UPGRADES } from "../data.js";
+import { ACTS, isLastAct, UPGRADES } from "../../src/data/index.js";
 import { isBossEnemy } from "../../src/systems/combat.js";
 import { powersFor } from "../../src/systems/chrono-powers.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";

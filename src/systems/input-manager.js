@@ -16,8 +16,8 @@
 import {
   STORAGE_KEY_KEYBINDS,
   DOUBLE_TAP_WINDOW_MS,
-} from "../src/constants.js";
-import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
+} from "../constants.js";
+import { requestPointerLockSafe, exitPointerLockSafe } from "../utils/pointer-lock.js";
 
 /**
  * Default keybind mappings for game actions.

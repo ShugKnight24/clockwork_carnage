@@ -10,8 +10,8 @@
  */
 
 import { effectiveAimFov } from "../systems/aim.js";
-import { isCompactPhone } from "../../js/layout.js";
-import { CHARACTER_COLORS, HELMET_STYLES, VISOR_STYLES } from "../../js/data.js";
+import { isCompactPhone } from "./layout.js";
+import { CHARACTER_COLORS, HELMET_STYLES, VISOR_STYLES } from "../data/index.js";
 import { isModernArt } from "../rendering/art-style.js";
 import { ammoTint } from "./reload-hud.js";
 

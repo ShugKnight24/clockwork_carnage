@@ -3,7 +3,7 @@
  * Extracted from Renderer.generateTextures() and Renderer._generateFloorCeilTextures().
  * Upgraded to 256x256 resolution for sharper visuals.
  */
-import { WALL_COLORS } from "../../js/data.js";
+import { WALL_COLORS } from "../data/index.js";
 import { buildWallSet, extendWallSet, hasWallPainter, paintWall, buildUpperBand } from "./env/wall-art.js";
 import { CEILING_Z } from "../systems/physics.js";
 import { buildDeckSet } from "./env/deck-art.js";

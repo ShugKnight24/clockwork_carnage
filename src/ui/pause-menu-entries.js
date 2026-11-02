@@ -2,7 +2,7 @@
  * The pause menu's rows, shared by the Legacy (js/game.js) and Modern
  * renderers. With a pad in use only the rows a pad can reach are listed,
  * with its buttons; quitting from a pad asks first (Game._padPauseMenu).
- * Touch has its own buttons (js/layout.js pauseLayout).
+ * Touch has its own buttons (src/ui/layout.js pauseLayout).
  */
 import { activeDevice } from "./input-glyphs.js";
 

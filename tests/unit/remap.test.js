@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { PAD, GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS } from "../../src/systems/pad-actions.js";
 import { planBind, applyBind, previewBind, resetBindings, loadPadBinds, savePadBinds, isReservedKey, isReservedButton, REMAPPABLE_KEY_ACTIONS } from "../../src/systems/remap.js";
-import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { DEFAULT_KEYBINDS } from "../../src/systems/input-manager.js";
 import { glyph } from "../../src/ui/input-glyphs.js";
 
 const pad = () => ({ ...DEFAULT_GAMEPAD_ACTIONS });

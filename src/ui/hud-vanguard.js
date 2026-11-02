@@ -34,7 +34,7 @@ import { healthTone, ghostFor, noteHealth, drawTopLeftStack, drawBossBar, hudAnc
 import { drawPortrait } from "./portrait.js";
 import { drawMinimap } from "./minimap.js";
 import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
-import { WEAPONS } from "../../js/data.js";
+import { WEAPONS } from "../data/index.js";
 import { reticlePoint } from "../systems/aim.js";
 import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";

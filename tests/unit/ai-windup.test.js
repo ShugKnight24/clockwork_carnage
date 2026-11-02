@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AISystem, attackWindupMs } from "../../src/systems/ai.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import {
   ENEMY_MELEE_WINDUP_MS,

@@ -28,7 +28,7 @@
 import { ACQUIRE_SECONDS } from "./ai.js";
 import { isPassable, CEILING_Z } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
-import { spawnEnergyBurst, spawnDebris } from "../../js/particle-system.js";
+import { spawnEnergyBurst, spawnDebris } from "../rendering/particle-system.js";
 
 /** Seconds of telegraph and of stepping out, per way in. */
 export const ARRIVALS = {

@@ -14,7 +14,7 @@ import {
   pendingReplay,
 } from "../../src/systems/boss-form2.js";
 import { AISystem } from "../../src/systems/ai.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { seedMathRandom } from "./seeded-random.js";
 

@@ -1,10 +1,10 @@
 /**
- * Ammo economy around the per-gun reserves (js/entities.js Player.reserves):
+ * Ammo economy around the per-gun reserves (src/entities/index.js Player.reserves):
  * what an arena round hands out, kill drops by mode, and the boss arenas'
  * crates, which come back while a boss stands so a long fight never starves
  * the guns you hold. The caps stay; only the supply is topped up.
  */
-import { Pickup } from "../../js/entities.js";
+import { Pickup } from "../entities/index.js";
 import { isBossEnemy } from "./combat.js";
 
 /** Chance a kill drops an ammo crate, by mode. Arena rounds are all fighting. */

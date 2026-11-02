@@ -3,7 +3,7 @@
  * into named groups, in the order the spec lays out. The registry stays the
  * one list of settings; this file only says where each one is shown.
  */
-import { SETTINGS_REGISTRY, getVisibleSettings } from "../../js/settings-registry.js";
+import { SETTINGS_REGISTRY, getVisibleSettings } from "../settings/registry.js";
 
 export const SECTIONS = [
   { id: "quick", label: "Quick" },

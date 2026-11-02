@@ -9,7 +9,7 @@ import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
 import { buildLabel } from "../src/build-info.js";
 import { AssetEditor } from "./editor.js";
-import { InputManager } from "./input-manager.js";
+import { InputManager } from "../src/systems/input-manager.js";
 import { GamepadManager } from "./gamepad.js";
 import { GAMEPAD_ACTIONS } from "../src/systems/pad-actions.js";
 import { loadPadBinds, STORAGE_KEY_PADBINDS } from "../src/systems/remap.js";
@@ -19,14 +19,14 @@ import {
   spawnPickupBurst as _spawnPickupBurst,
   spawnEnergyBurst as _spawnEnergyBurst,
   updateParticles as _updateParticles,
-} from "./particle-system.js";
+} from "../src/rendering/particle-system.js";
 import {
   spawnHitImpact as _spawnHitImpact,
   spawnMuzzleFlash as _spawnMuzzleFlash,
   spawnDeathParticles as _spawnDeathParticles,
   spawnWallSparks as _spawnWallSparks,
   spawnPointLight as _spawnPointLight,
-} from "./vfx.js";
+} from "../src/rendering/vfx.js";
 import {
   WEAPONS,
   ACHIEVEMENTS,
@@ -41,19 +41,19 @@ import {
   VOICE_PROFILES,
   DEFAULT_CHARACTER,
   gearBonuses,
-} from "./data.js";
+} from "../src/data/index.js";
 import { Renderer } from "./renderer.js";
 import { drawGlow as _drawGlow } from "../src/rendering/draw-utils.js";
 import { requestPointerLockSafe, exitPointerLockSafe } from "../src/utils/pointer-lock.js";
 import { AudioManager } from "./audio.js";
 
-import { Player, Enemy, Pickup } from "./entities.js";
+import { Player, Enemy, Pickup } from "../src/entities/index.js";
 import { Profiler } from "../src/utils/profiler.js";
 import { trackEvent } from "./analytics.js";
 import * as playtestLog from "../src/systems/playtest-log.js";
 import {
   isCompactPhone,
-} from "./layout.js";
+} from "../src/ui/layout.js";
 import { styleName, spawnFromMeta, standableNear, fallbackEnemyArea } from "../src/systems/voxel-glue.js";
 import { World } from "../src/world/world.js";
 import { KillStreakSystem } from "../src/systems/kill-streak.js";
@@ -142,7 +142,7 @@ import { decay } from "../src/utils/math.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { LevelBeats } from "../src/systems/level-beats.js";
 
-import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "./settings-registry.js";
+import { DEFAULT_SETTINGS, bindGamepadStatus, gamepadSettingsFrom } from "../src/settings/registry.js";
 import { GRAPHICS_PRESETS, QUALITY_PRESETS, effectCeilings } from "../src/utils/perf.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { setWallBase, setWallNormals, T } from "../src/rendering/env/paint.js";

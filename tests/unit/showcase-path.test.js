@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getActLevel, campaignMap } from "../../js/data.js";
+import { getActLevel, campaignMap } from "../../src/data/index.js";
 import { buildShowcasePath, hasLineOfSight, samplePath } from "../../src/systems/showcase-path.js";
 
 const open = (m, x, y) => m.grid[Math.floor(y)]?.[Math.floor(x)] === 0;

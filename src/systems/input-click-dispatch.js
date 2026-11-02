@@ -16,7 +16,7 @@ import {
   tabRect,
 } from "../ui/character-creator.js";
 import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
-import { isCompactPhone } from "../../js/layout.js";
+import { isCompactPhone } from "../ui/layout.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 
 export function handleCreatorClick(game, e) {

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { updateProjectiles } from "../../src/systems/projectile-update.js";
 import { generateWorld } from "../../src/world/world-gen.js";
 import { World } from "../../src/world/world.js";
-import { Projectile } from "../../js/entities.js";
+import { Projectile } from "../../src/entities/index.js";
 
 /** Flat world: blocks fill z < 32, so a body stands with its feet at z = 32. */
 const FLOOR = 32;

@@ -10,11 +10,11 @@
 import { SECTIONS, SECTION_OF, rowsForSection, QUICK_CARDS, ART_CARDS } from "../../src/ui/settings-sections.js";
 import { applySettingValue, stepSetting, resetSetting } from "../../src/ui/settings-apply.js";
 import { createDeckState, deckKey, deckKeyUp, CAPTURE_MS } from "../../src/ui/settings-deck-model.js";
-import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../settings-registry.js";
+import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../../src/settings/registry.js";
 import { activeDevice, renderDomGlyphs, GLYPH_CSS, glyph, glyphHTML, buttonGlyph, keyLabel, padFamily } from "../../src/ui/input-glyphs.js";
 import { PAD, PAD_LABELS, GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS } from "../../src/systems/pad-actions.js";
 import { planBind, applyBind, previewBind, resetBindings, savePadBinds, REMAPPABLE_KEY_ACTIONS, STORAGE_KEY_PADBINDS } from "../../src/systems/remap.js";
-import { DEFAULT_KEYBINDS } from "../input-manager.js";
+import { DEFAULT_KEYBINDS } from "../../src/systems/input-manager.js";
 import { COLOR, tokensCss } from "../../src/ui/design-tokens.js";
 import { onArtStyleChange } from "../../src/rendering/art-style.js";
 import { clamp } from "../../src/utils/math.js";

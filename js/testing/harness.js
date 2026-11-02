@@ -21,7 +21,7 @@ import {
   UPGRADES,
   ACHIEVEMENTS,
   TUTORIAL_MAP,
-} from "../data.js";
+} from "../../src/data/index.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { createPlaytestGate } from "./playtest-gate.js";
 import { createCampaignSweep, summariseSweeps } from "./campaign-sweep.js";

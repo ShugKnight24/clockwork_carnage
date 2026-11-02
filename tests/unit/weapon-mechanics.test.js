@@ -3,7 +3,7 @@ import { WEAPONS } from "../../src/data/weapons.js";
 import { calculateEnemyDamage } from "../../src/systems/combat.js";
 import { updateProjectiles, BANK_DAMAGE_MULT } from "../../src/systems/projectile-update.js";
 import { AISystem } from "../../src/systems/ai.js";
-import { Enemy, Projectile } from "../../js/entities.js";
+import { Enemy, Projectile } from "../../src/entities/index.js";
 import { seedMathRandom } from "./seeded-random.js";
 
 seedMathRandom();

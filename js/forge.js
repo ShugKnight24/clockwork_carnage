@@ -40,7 +40,7 @@ import { PlayerStore } from "../src/rpg/player-store.js";
 import { itemById } from "../src/rpg/items.js";
 import { returnStack, takeStack, dropStack, shiftMove } from "../src/rpg/inventory-ops.js";
 import { HOTBAR_SLOTS } from "../src/rpg/inventory.js";
-import { inventoryLayout, resolveInventoryHit } from "./layout.js";
+import { inventoryLayout, resolveInventoryHit } from "../src/ui/layout.js";
 import { ForgeHand, heldKey } from "../src/ui/forge-viewmodel.js";
 /**
  * The HUD, and with it the constants that only exist to be drawn. The

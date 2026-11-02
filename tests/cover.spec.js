@@ -133,7 +133,7 @@ test("down behind cover a frontal shot is stopped; peeking takes it", async ({ p
   await coverAtCounter(page);
   const shoot = () =>
     page.evaluate(async () => {
-      const { Projectile } = await import("/js/entities.js");
+      const { Projectile } = await import("/src/entities/index.js");
       const g = window.ccDebug.game;
       // From the far side of the counter, straight at the player.
       const b = new Projectile(29.5, 46.5, 0, 1, 10, 8, "enemy");

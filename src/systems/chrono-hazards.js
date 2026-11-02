@@ -42,7 +42,7 @@
  * The set piece's teach room lives here too: its seal, the room it clears,
  * the enemies it adds, its goal and the card (drawn by the HUD).
  */
-import { Enemy, Projectile } from "../../js/entities.js";
+import { Enemy, Projectile } from "../entities/index.js";
 import { getAct } from "../data/campaign/acts.js";
 import { SEAL_TILE, setPieceFor } from "../data/campaign/set-pieces.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";

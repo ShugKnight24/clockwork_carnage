@@ -6,10 +6,10 @@
  * list of game fields (SHOWCASE_FIELDS) and puts them back exactly on stop.
  * The game does not update in SETTINGS, so enemy AI and damage never run.
  */
-import { getActLevel, campaignMap, getAct, ENEMY_TYPES } from "../../js/data.js";
-import { Enemy, Player } from "../../js/entities.js";
-import { updateParticles, spawnSmoke } from "../../js/particle-system.js";
-import { spawnWallSparks } from "../../js/vfx.js";
+import { getActLevel, campaignMap, getAct, ENEMY_TYPES } from "../data/index.js";
+import { Enemy, Player } from "../entities/index.js";
+import { updateParticles, spawnSmoke } from "../rendering/particle-system.js";
+import { spawnWallSparks } from "../rendering/vfx.js";
 import { particlePool } from "../utils/particle-pool.js";
 import { prefetchIdleEnemy, prefetchEnemyModel } from "../rendering/svg-art/sprites/enemies.js";
 import { isModernArt } from "../rendering/art-style.js";

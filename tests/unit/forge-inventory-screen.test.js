@@ -104,7 +104,7 @@ describe("the inventory screen", () => {
   });
 });
 
-import { inventoryLayout } from "../../js/layout.js";
+import { inventoryLayout } from "../../src/ui/layout.js";
 
 describe("clicking and dragging in the screen", () => {
   const W = 1280, H = 720;

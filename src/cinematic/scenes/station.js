@@ -34,7 +34,7 @@
  */
 import { beatsToSec } from "../timeline.js";
 import { TUTORIAL_MAP } from "../../data/levels/tutorial.js";
-import { Enemy, Pickup, Prop } from "../../../js/entities.js";
+import { Enemy, Pickup, Prop } from "../../entities/index.js";
 import { ENEMY_TYPES } from "../../data/enemies.js";
 import { validatePropPosition } from "../../systems/spawner.js";
 import { installStagedLevel, prewarmStyle, updateAmbience } from "../../systems/showcase.js";
