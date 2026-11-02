@@ -11,7 +11,9 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints. A production build is committed to `dist/`, so you can also serve that directory over HTTP. Opening `index.html` straight from disk will not work.
+Then open the URL Vite prints. Opening `index.html` straight from disk will not work.
+
+The live game at https://shugknight24.github.io/clockwork_carnage/ is GitHub Pages serving `master` as it is (the source, unbundled), so whatever merges to `master` is live within minutes. CI runs on every pull request; merge only green ones. The version on the title and pause screens is set by `npm run release:playtest`, which cuts a `v0.9.0-playtest.N` release branch for a playtest build. The dev tools (`window.ccDebug`, `ccTest`, `?bench`) load only under the Vite dev server, never on the live site.
 
 ## Features
 

@@ -1,4 +1,5 @@
-import { Game, GameState, GAME_VERSION } from "./game.js";
+import { Game, GameState } from "./game.js";
+import { buildLabel } from "../src/build-info.js";
 import { TouchControls } from "./touch.js";
 import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
@@ -22,10 +23,12 @@ import { createAttract, titleBusy, startAttract, attractFrameCap } from "../src/
 
 const primaryTouch = isPrimaryTouchDevice();
 if (primaryTouch) lockPageZoom();
-const debugParam = new URLSearchParams(window.location.search).has("debug");
 // ?bench runs the scripted benchmark (js/testing/bench.js) once the bridge loads.
 const benchParam = new URLSearchParams(window.location.search).has("bench");
-const devToolsEnabled = (import.meta.env?.DEV ?? false) || debugParam || benchParam;
+// The cheat bridge, harness and bench load on the dev server only. The live
+// site serves this file unbundled, where import.meta.env is undefined, and a
+// built one has DEV false: no URL parameter turns them on for players.
+const devToolsEnabled = import.meta.env?.DEV ?? false;
 
 const gameCanvas = document.getElementById("gameCanvas");
 const hudCanvas = document.getElementById("hudCanvas");
@@ -85,7 +88,7 @@ initAnalytics();
 
 // Set version label on title screen
 const versionLabel = document.getElementById("versionLabel");
-if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
+if (versionLabel) versionLabel.textContent = buildLabel();
 
 // The start prompt's keyboard / pad / touch wording is picked by CSS on
 // html[data-input] (src/ui/input-glyphs.js).
@@ -848,10 +851,10 @@ window.addEventListener("beforeunload", (e) => {
 });
 window.__ccBeforeUnloadRegistered = true;
 
-// Expose profiler snapshot for test harness / telemetry
-window.ccProfiler = () => game.profiler.getSnapshot();
-
 if (devToolsEnabled) {
+  // Profiler snapshot for the test harness / telemetry.
+  window.ccProfiler = () => game.profiler.getSnapshot();
+
   // Expose test runner on window for console access.
   // Unbundled (GitHub Pages) has no import.meta.env; js/testing/ sits next to this module.
   const testingRoot = import.meta.env?.BASE_URL

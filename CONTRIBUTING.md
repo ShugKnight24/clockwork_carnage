@@ -65,7 +65,7 @@ npm install
 npm run dev     # Vite dev server on http://localhost:3000
 ```
 
-A production build is committed to `dist/` and refreshed in explicit "build: refresh dist bundle" commits. To rebuild it:
+GitHub Pages serves `master`'s source tree unbundled, so nothing build-related is committed. `npm run build` writes a bundle to the gitignored `dist/`; CI builds it on every PR to catch build errors.
 
 ```bash
 npm run build
@@ -86,7 +86,7 @@ npm run build                            # the vite build must succeed
 
 `npx playwright test` with no arguments runs all 24 specs, which takes considerably longer. CI (`.github/workflows/ci.yml`) runs four stages on push: syntax-check, unit-tests, build, smoke-test.
 
-**Caveat:** `scripts/` is gitignored, so the npm scripts that shell into it — `assets:manifest`, `assets:generate`, `assets:build`, `review`, `review:strict` — cannot run from a clean clone. Neither can `simulate`, which needs the gitignored `simulations/`.
+**Caveat:** `scripts/` is gitignored apart from `bench.mjs`, `release-playtest.mjs`, `brand/` and `reel/`. The asset generator, manifest builder, review and simulation runners are local tools: run them with `node scripts/<name>.mjs` where you have them; they have no npm script, because a clean clone can't run them.
 
 **WebGL2 in CI:** plain headless Chromium has no WebGL2, so `playwright.config.js` launches Chromium with `--use-gl=angle --enable-gpu`. Without those flags the Forge (and the WebGL2 hybrid renderer) can't initialize and its specs fail.
 
@@ -96,7 +96,6 @@ npm run build                            # the vite build must succeed
 index.html          — Vite entry; boots js/main.js and the title web components
 style.css           — DOM/menu styling
 vite.config.js      — build config and vitest config
-dist/               — committed production build
 
 js/                 — app shell and entry point (23 top-level modules)
   main.js           — boot, frame loop, dev-tool wiring
