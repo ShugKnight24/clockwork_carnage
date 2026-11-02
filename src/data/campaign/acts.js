@@ -7,11 +7,12 @@
  *
  * Phase 2 of the story restructure (docs/superpowers/specs/
  * 2026-09-22-campaign-story-restructure-design.md, §16.2): four acts, 29
- * levels. Act I plays eight of the nine station maps. Acts II-IV stand on
- * placeholder maps until their own are built, so each placeholder keeps the
- * station map's seed and rotation; only the story, roster and squad are the
- * act's. This module imports no maps, so light modules can read it;
- * src/data/levels/campaign.js turns a level entry into a playable map.
+ * levels. Act I plays eight of the nine station maps. Acts II-IV play maps of
+ * their own (src/data/levels/act2-maps.js, act3-maps.js, act4-maps.js): Act
+ * III's are remixes built on their source station map's entry, each naming
+ * its own map, env, rotation and seed. This module imports no maps, so light
+ * modules can read it; src/data/levels/campaign.js turns a level entry into
+ * a playable map.
  *
  * Act fields:
  *   palette    ENV_PALETTES id for the base look
