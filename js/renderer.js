@@ -3,7 +3,7 @@ import { WALL_COLORS } from "./data.js";
 import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, ensureEnvBands, REAL_AMBIENT, averageColor, legacyUpperBand, tintUpperBand } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
 import { rgbaBytes } from "../src/rendering/webgl/wall-pass.js";
-import { CITY_GLASS, prepareCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
+import { CITY_GLASS, prepareCityView, warmCityView, glazeLegacyGlass, drawCityView } from "../src/rendering/env/city-view.js";
 import { guardBake } from "../src/rendering/env/paint.js";
 import { BAND_UNTINTED } from "../src/rendering/env/wall-art.js";
 
@@ -367,13 +367,7 @@ export class Renderer {
    */
   prewarmWallPass(act, level = null, count = Infinity) {
     if (!isModernArt() || !this.useWebGL || !this.gpuWalls || !this.glRenderer) return true;
-    const a = act || 1;
-    const lv = level ?? null;
-    const brutal = this._visualStyle === 1;
-    const realistic = isRealisticArt();
-    const env = [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(
-      (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic,
-    );
+    const env = this._envFor(act, level);
     if (env) averageUncapped(env);
     const wp = env && this.glRenderer.wallPass();
     const done = !wp || wp.prepareEnv(env, count);
@@ -381,6 +375,42 @@ export class Renderer {
     // frame, the deck's upload and mipmaps were ~350 ms on an iPhone.
     if (done && env) this.glRenderer.uploadModernDeck(env.deck.floor, env.deck.ceil);
     return done;
+  }
+
+  /** The env built for `act` and `level` in the current finish (drawn, kept or prewarmed), if any. */
+  _envFor(act, level = null) {
+    const a = act || 1;
+    const lv = level ?? null;
+    const brutal = this._visualStyle === 1;
+    const realistic = isRealisticArt();
+    return [this._modernEnv, this._altModernEnv, this._prewarmedEnv].find(
+      (e) => e && e.act === a && e.level === lv && e.brutal === brutal && e.realistic === realistic,
+    );
+  }
+
+  /**
+   * Paint the city behind a map's glass (its own walls `ids`) a piece a
+   * call, then glaze it into the prewarmed env, before prewarmWallPass
+   * uploads it. Left to the first frame, prepareCityView added the tiles in
+   * play and the whole wall set went up again in one frame (~330 ms on an
+   * iPhone at the station). Call until true; true at once without glass.
+   */
+  prewarmCityView(act, level = null, ids = []) {
+    const env = isModernArt() ? this._envFor(act, level) : null;
+    if (!env || env.cityView || !ids.some((id) => CITY_GLASS[id] === 1)) return true;
+    if (!guardBake(warmCityView, true)) return false;
+    // With its glass not painted yet, the level's first frame glazes it as before.
+    guardBake(() => prepareCityView(env, ids), false);
+    return true;
+  }
+
+  /**
+   * Realistic's lamp field (lightAt) for a prewarmed env, built now: its
+   * pixel read otherwise waits on the GPU in the first lit frame of play.
+   */
+  prewarmLampField(act, level = null) {
+    const env = isModernArt() ? this._envFor(act, level) : null;
+    if (env?.realistic && env.lampField === undefined) env.lampField = buildLampField(env.deck?.ceil) || null;
   }
 
   /**
