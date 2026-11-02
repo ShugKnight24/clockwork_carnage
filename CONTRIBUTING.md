@@ -112,7 +112,7 @@ js/                 — app shell and entry point (17 top-level modules)
 
 src/                — the bulk of the code (129 modules, ~57,700 lines)
   constants.js      — shared tuning values
-  core/             — save system and persistence
+  core/             — save system, character fields and normalisation
   data/             — weapons, enemies, walls, dialogue, cosmetics, achievements, levels/
   entities/         — entity classes (Player, Enemy, Pickup, Prop, Projectile)
   settings/         — settings registry: definitions and defaults

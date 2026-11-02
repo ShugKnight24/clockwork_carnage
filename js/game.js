@@ -163,7 +163,6 @@ import { GameState } from "../src/types.js";
 import { forwardProps } from "../src/utils/forward-props.js";
 import { CUTSCENE_KEYS } from "../src/data/cutscene-keys.js";
 import { HudEditor } from "../src/ui/hud-editor.js";
-import * as Persistence from "../src/core/persistence.js";
 import {
   gameUnlockContext,
   grantOwned,
@@ -1156,25 +1155,29 @@ export class Game {
     this.audio.voicesOn = !!this.settings.voices;
   }
 
-  // Save / Load
-  // ── Save/Load (delegated to SaveSystem) ──────────────────
+  // ── Save / Load (src/core/save-system.js) ──────────────────
   saveSettings() {
     // A compare hold shows the previous value live; what persists is still
     // the chosen one, so a reload or crash mid-hold cannot keep "before".
     const deck = this.settingsDeck;
     const key = deck?.compareKey;
-    if (!key) return Persistence.saveSettings(this);
+    if (!key) return this._writeSettings();
     const shown = this.settings[key];
     this.settings[key] = deck.compareValue;
     try {
-      Persistence.saveSettings(this);
+      this._writeSettings();
     } finally {
       this.settings[key] = shown;
     }
   }
 
+  _writeSettings() {
+    Save.saveSettings(this.settings);
+    this.input.saveKeybinds();
+  }
+
   loadSettings() {
-    Persistence.loadSettings(this);
+    Save.loadSettings(this.settings);
   }
 
   applyGamepadSettings() {
@@ -1235,22 +1238,22 @@ export class Game {
   }
 
   _applyMobileMigration() {
-    Persistence.applyMobileMigration(this.isTouchDevice, this.settings, () =>
+    Save.applyMobileMigration(this.isTouchDevice, this.settings, () =>
       this.saveSettings(),
     );
-    Persistence.applyDefaultsMigration(this.isTouchDevice, this.settings, () => this.saveSettings());
+    Save.applyDefaultsMigration(this.isTouchDevice, this.settings, () => this.saveSettings());
   }
 
   loadDevFlags() {
-    this.alwaysShowTutorial = Persistence.loadDevFlags();
+    this.alwaysShowTutorial = Save.loadDevFlags();
   }
 
   saveCharacter() {
-    Persistence.saveCharacter(this);
+    Save.saveCharacter(this.character);
   }
 
   loadCharacter() {
-    Persistence.loadCharacter(this);
+    Save.loadCharacter(this.character);
     // Strip any locked, unowned picks (a rule tightened, or the unlock store
     // was cleared) before the build is drawn or played with.
     Object.assign(this.character, sanitizeLocked(this.character, gameUnlockContext(this, { fresh: true })));
@@ -1261,14 +1264,14 @@ export class Game {
 
   setAlwaysTutorial(on) {
     this.alwaysShowTutorial = on;
-    Persistence.setAlwaysTutorial(on);
+    Save.setAlwaysTutorial(on);
   }
 
   saveAchievements() {
-    Persistence.saveAchievements(this);
+    this.achievementSystem.save();
   }
   loadAchievements() {
-    Persistence.loadAchievements(this);
+    this.achievementSystem.load();
   }
   unlockAchievement(id) {
     this.achievementSystem.unlockAchievement(id);
@@ -1369,40 +1372,49 @@ export class Game {
   }
 
   saveArena() {
-    Persistence.saveArena(this);
+    Save.saveArena(this.arenaRound, this.player, this.upgradeLevels, this.settings.difficulty);
   }
 
   // TODO: Reconsider current arena loading. Better system or no loading at all? This will get tricky to track if we add different maps, procedural generation, additional random upgrades. Too much *randomness* to track reliably
   loadArena() {
-    return Persistence.loadArena(this);
+    const data = Save.loadArenaData();
+    if (!data) return false;
+    this.mode = "arena";
+    this.arenaRound = data.round;
+    this.player.reset();
+    this.player.deserialize(data);
+    this.upgradeLevels = data.upgradeLevels || {};
+    this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
+    this.startArenaRound();
+    return true;
   }
 
   clearArenaSave() {
-    Persistence.clearArenaSave(this);
+    Save.clearArenaSave();
   }
 
   saveCampaign() {
-    Persistence.saveCampaign(this);
+    this.campaign.save();
   }
 
   loadCampaignSave() {
-    return Persistence.loadCampaignSave(this);
+    return this.campaign.load();
   }
 
   clearCampaignSave() {
-    Persistence.clearCampaignSave(this);
+    this.campaign.clearSave();
   }
 
   /** Enter New Game Plus — keep weapons & score, reset to Act 1, bump cycle */
   startNgPlus() {
-    Persistence.startNgPlus(this);
+    this.campaign.startNgPlus();
   }
 
   hasSave() {
-    return Persistence.hasSave();
+    return Save.hasSave();
   }
   getSaveInfo() {
-    return Persistence.getSaveInfo();
+    return Save.getSaveInfo();
   }
 
   // --- Asset Editor Hooks ---
