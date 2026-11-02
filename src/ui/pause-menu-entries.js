@@ -2,6 +2,7 @@
  * The pause menu's rows, shared by the Legacy (js/game.js) and Modern
  * renderers. With a pad in use only the rows a pad can reach are listed,
  * with its buttons; quitting from a pad asks first (Game._padPauseMenu).
+ * Touch has its own buttons (js/layout.js pauseLayout).
  */
 import { activeDevice } from "./input-glyphs.js";
 
@@ -22,6 +23,8 @@ export function pauseMenuEntries(game, resumeKey) {
       entries: [
         { pad: "confirm", label: "Resume", primary: true },
         { pad: "deploy", label: "Settings" },
+        { pad: "nextTab", label: "Copy / save session" },
+        { pad: "prevTab", label: "Report bug" },
         { pad: "randomize", label: "Quit to title", danger: true },
       ],
     };
@@ -35,6 +38,8 @@ export function pauseMenuEntries(game, resumeKey) {
     { key: "L", label: "ARIA log" },
   ];
   if (game.mode === "campaign") entries.push({ key: "F", label: "Save game" });
+  // The playtest log (src/systems/playtest-export.js).
+  entries.push({ key: "J", label: "Copy / save session" }, { key: "F8", label: "Report bug" });
   entries.push({ key: "Q", label: "Quit to title", danger: true });
   return { title: "PAUSED", entries };
 }

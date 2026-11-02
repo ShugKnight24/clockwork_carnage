@@ -51,6 +51,8 @@ const STICK_DEADZONE = 0.2;
 const STICK_SNAP = 0.25;
 import { directorInput } from "../src/cinematic/director.js";
 import { toggleCard } from "../src/ui/tutorial-ui.js";
+import { reportBug, shareSession } from "../src/systems/playtest-export.js";
+import { gameOverButtonAt, handleGameOverClick } from "../src/systems/input-click-dispatch.js";
 
 export class TouchControls {
   static init(game) {
@@ -360,6 +362,10 @@ export class TouchControls {
       g.state === "levelComplete"
     ) {
       if (e.changedTouches.length > 0) {
+        // The game-over buttons act on the tap's end (onTouchEnd), where iOS
+        // allows the clipboard and downloads; a tap anywhere else goes on.
+        const t = e.changedTouches[0];
+        if (g.state === "gameOver" && gameOverButtonAt(g, t.clientX, t.clientY) >= 0) return;
         g.handleKeyPress("Enter");
       }
       return;
@@ -586,6 +592,10 @@ export class TouchControls {
     e.preventDefault();
     this.ensureGyro();
     if (this.game.state === "paused" && !this.game.showAriaLog && e.changedTouches[0] && this.pauseScreenTap(e.changedTouches[0])) return;
+    if (this.game.state === "gameOver" && e.changedTouches[0]) {
+      const t = e.changedTouches[0];
+      if (gameOverButtonAt(this.game, t.clientX, t.clientY) >= 0) return handleGameOverClick(this.game, t);
+    }
 
     if (this.game.state === "cinematic") {
       if (e.touches.length === 0) {
@@ -873,8 +883,9 @@ export class TouchControls {
     const x = touch.clientX;
     const y = touch.clientY;
     const layout = pauseLayout(w, h, this.game.mode, this.screenButtonOpts());
-    // Full screen acts on the tap's end (onTouchEnd): iOS refuses it from touchstart.
-    if (hitRect(layout.screenBtn, x, y)) return;
+    // Full screen, Session and Report bug act on the tap's end (onTouchEnd):
+    // iOS refuses full screen, the clipboard and downloads from touchstart.
+    if (hitRect(layout.screenBtn, x, y) || hitRect(layout.sessionBtn, x, y) || hitRect(layout.bugBtn, x, y)) return;
 
     for (const btn of layout.buttons) {
       if (
@@ -1447,6 +1458,9 @@ export class TouchControls {
         const sv = layout.saveBtn;
         drawButton(ctx, sv.x, sv.y, sv.w, sv.h, "Save", "idle", UI.green, { idleAccent: UI.green, idleColor: UI.green, size: 12 });
       }
+      for (const [b, label] of [[layout.sessionBtn, "Session"], [layout.bugBtn, "Report bug"]]) {
+        drawButton(ctx, b.x, b.y, b.w, b.h, label, "idle", UI.steelHi, { idleColor: UI.text, size: 12 });
+      }
       return;
     }
 
@@ -1480,6 +1494,15 @@ export class TouchControls {
       ctx.fillStyle = "#fff";
       ctx.fillText("SAVE", s.x + s.w / 2, s.y + s.h / 2);
     }
+    for (const b of [layout.sessionBtn, layout.bugBtn]) {
+      ctx.fillStyle = "#335577";
+      ctx.beginPath();
+      ctx.roundRect(b.x, b.y, b.w, b.h, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2);
+    }
     if (layout.screenBtn) {
       const b = layout.screenBtn;
       ctx.fillStyle = "#335577";
@@ -1506,9 +1529,11 @@ export class TouchControls {
     return { right };
   }
 
-  /** A tap that ends on the pause menu's full-screen button. */
+  /** A tap that ends on the pause menu's full-screen, Session or Report bug button. */
   pauseScreenTap(touch) {
     const layout = pauseLayout(this.zones.w, this.zones.h, this.game.mode, this.screenButtonOpts());
+    if (hitRect(layout.sessionBtn, touch.clientX, touch.clientY)) return shareSession(this.game), true;
+    if (hitRect(layout.bugBtn, touch.clientX, touch.clientY)) return reportBug(this.game), true;
     if (!hitRect(layout.screenBtn, touch.clientX, touch.clientY)) return false;
     if (!this.canFullscreen) {
       alert(

@@ -36,21 +36,20 @@ export function pauseLayout(w, h, mode, { screen = null, right = 0 } = {}) {
     index: i,
   }));
 
+  // A second row: Save (campaign), then the playtest log's session export
+  // and bug report.
   const isCampaign = mode === "campaign";
-  const saveBtn = isCampaign
-    ? {
-        label: "SAVE",
-        x: (w - 100) / 2,
-        y: btnY + btnH + 10,
-        w: 100,
-        h: 40,
-      }
-    : null;
+  const rowLabels = [isCampaign && "SAVE", "SESSION", "REPORT BUG"].filter(Boolean);
+  const rowW = Math.min(compact ? 96 : 110, Math.floor((w - 20 - (rowLabels.length - 1) * gap) / rowLabels.length));
+  const rowX = (w - (rowLabels.length * rowW + (rowLabels.length - 1) * gap)) / 2;
+  const row = rowLabels.map((label, i) => ({ label, x: rowX + i * (rowW + gap), y: btnY + btnH + 10, w: rowW, h: 40 }));
+  const saveBtn = isCampaign ? row[0] : null;
+  const [sessionBtn, bugBtn] = row.slice(isCampaign ? 1 : 0);
 
   // Top-right, clear of the menu: a phone's browser bars eat the screen.
   const screenBtn = screen ? { label: screen, x: w - right - 12 - 150, y: 12, w: 150, h: compact ? 36 : 40 } : null;
 
-  return { btnY, btnH, btnW, gap, buttons, saveBtn, screenBtn, compact };
+  return { btnY, btnH, btnW, gap, buttons, saveBtn, sessionBtn, bugBtn, screenBtn, compact };
 }
 
 /** True when (x, y) is inside a {x, y, w, h} rect. */

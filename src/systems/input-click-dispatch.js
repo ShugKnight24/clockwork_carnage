@@ -7,6 +7,8 @@
 // Callers: game._handle*Click() methods delegate here.
 
 import { GameState } from "../types.js";
+import { noteQuit } from "./playtest-log.js";
+import { shareSession } from "./playtest-export.js";
 import {
   CREATOR_CATEGORIES,
   getCreatorLayout,
@@ -134,43 +136,48 @@ export function handleVictoryClick(game, e) {
   });
 }
 
+/** Which game-over button (0 Restart, 1 Quit, 2 Share, 3 Session) is under a pointer, or -1. */
+export function gameOverButtonAt(game, clientX, clientY) {
+  const b = game._gameOverBtns;
+  if (!b) return -1;
+  const rect = game.canvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const { btnBaseX, btnY, btnW, btnH, btnGap, count = 3 } = b;
+  if (y < btnY || y > btnY + btnH) return -1;
+  for (let i = 0; i < count; i++) {
+    const bx = btnBaseX + i * (btnW + btnGap);
+    if (x >= bx && x <= bx + btnW) return i;
+  }
+  return -1;
+}
+
 export function handleGameOverClick(game, e) {
   if (game.transitioning) return;
-  const rect = game.canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-
-  const b = game._gameOverBtns;
-  if (!b) return;
-  const { btnBaseX, btnY, btnW, btnH, btnGap } = b;
-
-  if (y >= btnY && y <= btnY + btnH) {
-    for (let i = 0; i < 3; i++) {
-      const bx = btnBaseX + i * (btnW + btnGap);
-      if (x >= bx && x <= bx + btnW) {
-        if (i === 0) {
-          // RESTART
-          game.audio.menuConfirm();
-          game.fadeTransition(() => {
-            if (game.mode === "arena") game.startArena();
-            else if (game.mode === "meltdown") game.startMeltdown();
-            else if (game.mode === "campaign") game.campaign.retryLevel();
-          });
-        } else if (i === 1) {
-          // QUIT — return to title
-          game.audio.menuConfirm();
-          game.fadeTransition(() => {
-            game.state = GameState.TITLE;
-            game.audio.stopMusic();
-            game.audio.startTrack("menu");
-            game.audio.startAmbient("menu");
-          });
-        } else if (i === 2) {
-          // SHARE
-          game._shareCurrentResult();
-        }
-        return;
-      }
-    }
+  const i = gameOverButtonAt(game, e.clientX, e.clientY);
+  if (i === 0) {
+    // RESTART
+    game.audio.menuConfirm();
+    game.fadeTransition(() => {
+      if (game.mode === "arena") game.startArena();
+      else if (game.mode === "meltdown") game.startMeltdown();
+      else if (game.mode === "campaign") game.campaign.retryLevel();
+    });
+  } else if (i === 1) {
+    // QUIT — return to title
+    noteQuit(game, "game_over");
+    game.audio.menuConfirm();
+    game.fadeTransition(() => {
+      game.state = GameState.TITLE;
+      game.audio.stopMusic();
+      game.audio.startTrack("menu");
+      game.audio.startAmbient("menu");
+    });
+  } else if (i === 2) {
+    // SHARE
+    game._shareCurrentResult();
+  } else if (i === 3) {
+    // SESSION — the playtest log, copied and saved
+    shareSession(game);
   }
 }

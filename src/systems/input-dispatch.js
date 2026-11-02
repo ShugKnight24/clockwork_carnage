@@ -14,10 +14,18 @@ import { getIndex, withIndex, togglePlacement } from "../core/character-fields.j
 import { archiveLayout, archiveEntries, ARCHIVE_TABS, FILMS_TAB } from "../ui/archive-screen.js";
 import { playFilm } from "../cinematic/films.js";
 import { directorInput } from "../cinematic/director.js";
+import { noteQuit } from "./playtest-log.js";
+import { reportBug, shareSession } from "./playtest-export.js";
 
 export function dispatchKeyPress(game, code, e) {
   // Nested Spaghetti 😂🤦‍♂️
   // TODO: Abstract into StateManager
+
+  // F8 files a bug report from anywhere: a screenshot and a state snapshot.
+  if (code === "F8") {
+    if (!e?.repeat) reportBug(game);
+    return;
+  }
 
   // A reel takes every key as its skip (the lore video's as a hold). It must
   // not also reach main.js's title/menu listener: a skip back to the menu
@@ -394,6 +402,7 @@ export function dispatchKeyPress(game, code, e) {
         game.exitBuilderPlayTest();
         return;
       }
+      noteQuit(game, "pause");
       if (game.builder && game.pausedFromState === GameState.BUILDER) {
         game.builder.saveMap();
         game.builder.stop();
@@ -449,6 +458,7 @@ export function dispatchKeyPress(game, code, e) {
       game.saveCampaign();
       game.pauseSaveFlash = performance.now();
     }
+    if (code === "KeyJ" && !e?.repeat) shareSession(game);
     return;
   }
 
@@ -663,6 +673,7 @@ export function dispatchKeyPress(game, code, e) {
     }
     if (code === "Enter" || code === "Space") {
       if (game.transitioning) return;
+      if (game.state === GameState.GAME_OVER) noteQuit(game, "game_over");
       game.audio.menuConfirm();
       game.fadeTransition(() => {
         game.state = GameState.TITLE;
@@ -683,6 +694,7 @@ export function dispatchKeyPress(game, code, e) {
     if (code === "KeyS") {
       game._shareCurrentResult();
     }
+    if (code === "KeyJ" && !e?.repeat) shareSession(game);
     return;
   }
 
