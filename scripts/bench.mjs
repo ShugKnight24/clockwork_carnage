@@ -5,8 +5,7 @@
  * and the GPU is usually what a slow machine is short of.
  *
  *   npm run bench                           local dev server (CC_TEST_PORT, default 5173)
- *   npm run bench -- --live                 the GitHub Pages build
- *   npm run bench -- --url <url>            any deployment
+ *   npm run bench -- --url <url>            another dev server (the live site has no bench)
  *   npm run bench -- --art 2 --fixed        Modern, render scale held at 1
  *   npm run bench -- --chrome               the installed Google Chrome, not Playwright's Chromium
  *   npm run bench -- --angle vulkan         Chrome's graphics backend on Windows: d3d11 (default), vulkan, gl
@@ -20,7 +19,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import path from "node:path";
 
-const LIVE = "https://shugknight24.github.io/clockwork_carnage/";
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -29,7 +27,7 @@ const opt = (name) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 
-const base = opt("url") ?? (flag("live") ? LIVE : `http://localhost:${process.env.CC_TEST_PORT ?? 5173}/`);
+const base = opt("url") ?? `http://localhost:${process.env.CC_TEST_PORT ?? 5173}/`;
 const url = new URL(base);
 url.searchParams.set("bench", "");
 if (flag("fixed")) url.searchParams.set("fixed", "");

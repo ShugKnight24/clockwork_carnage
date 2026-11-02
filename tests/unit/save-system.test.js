@@ -18,6 +18,9 @@ import {
   markIntroMemorySeen,
   loadDevFlags,
   setAlwaysTutorial,
+  savePrologueCheckpoint,
+  loadPrologueCheckpoint,
+  clearPrologueCheckpoint,
 } from "../../src/core/save-system.js";
 
 // Mock localStorage
@@ -108,6 +111,17 @@ describe("Campaign Save", () => {
     clearCampaignSave();
     expect(loadCampaignData()).toBeNull();
   });
+
+  it("stores the level's content hash", () => {
+    saveCampaign(3, 2, 1, mockPlayer, "hard", [], [], [], "abc123");
+    expect(loadCampaignData().contentHash).toBe("abc123");
+  });
+
+  it("clears a save that is not JSON", () => {
+    store.cc_campaign_save = '{"version":2,"level":';
+    expect(loadCampaignData()).toBeNull();
+    expect(store.cc_campaign_save).toBeUndefined();
+  });
 });
 
 describe("hasSave / getSaveInfo", () => {
@@ -124,6 +138,35 @@ describe("hasSave / getSaveInfo", () => {
     expect(info).toHaveLength(1);
     expect(info[0].mode).toBe("arena");
     expect(info[0].round).toBe(3);
+  });
+
+  it("a broken arena save does not hide the campaign save", () => {
+    store.cc_arena_save = "{not json";
+    saveCampaign(3, 2, 1, { x: 1, y: 1, angle: 0, serialize: () => ({ score: 5 }) }, "normal", [], [], []);
+    const info = getSaveInfo();
+    expect(info.map((i) => i.mode)).toEqual(["campaign"]);
+    expect(store.cc_arena_save).toBeUndefined();
+  });
+});
+
+describe("Prologue checkpoint", () => {
+  const cp = { step: 9, x: 20.5, y: 30.5, angle: 1, weapons: [0], currentWeapon: 0, pickupsOpen: false, beat: "TRIAL · WEAPONS" };
+
+  it("round-trips and shows as a Continue", () => {
+    savePrologueCheckpoint(cp);
+    expect(loadPrologueCheckpoint()).toMatchObject(cp);
+    expect(getSaveInfo()).toEqual([{ mode: "prologue", step: 9, beat: "TRIAL · WEAPONS" }]);
+    clearPrologueCheckpoint();
+    expect(loadPrologueCheckpoint()).toBeNull();
+  });
+
+  it("clears one it cannot use", () => {
+    savePrologueCheckpoint({ ...cp, x: null });
+    expect(loadPrologueCheckpoint()).toBeNull();
+    expect(store.cc_prologue_checkpoint).toBeUndefined();
+    store.cc_prologue_checkpoint = "{oops";
+    expect(loadPrologueCheckpoint()).toBeNull();
+    expect(store.cc_prologue_checkpoint).toBeUndefined();
   });
 });
 

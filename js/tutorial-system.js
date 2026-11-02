@@ -55,6 +55,7 @@ import { LAYER } from "../src/data/levels/map-helpers.js";
 import { prefetchEnemyModel } from "../src/rendering/svg-art/sprites/enemies.js";
 import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 import { warmPropSet } from "../src/rendering/props.js";
+import * as Save from "../src/core/save-system.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -2168,22 +2169,32 @@ export class TutorialSystem {
    * only awaits on the very first entry. Callers that cannot await (menu click,
    * playtest harness) see tutorial state applied in the same tick thereafter.
    */
-  start() {
+  start({ resume = false } = {}) {
     const g = this.game;
     g.mode = "tutorial";
     g.ariaComms?.flush();
     // She is met in the locker room, once the suit is on.
     if (g.ariaComms) g.ariaComms.introduced = false;
     g.player.reset();
+    // Continue picks up at the saved beat; a new run starts from the locker room.
+    const cp = resume ? Save.loadPrologueCheckpoint() : null;
+    if (!cp) Save.clearPrologueCheckpoint();
     if (!g.cutsceneEngine) {
-      return g._ensureCutsceneEngine().then(() => this._begin());
+      return g._ensureCutsceneEngine().then(() => this._begin(cp));
     }
-    this._begin();
+    this._begin(cp);
     return Promise.resolve();
   }
 
-  _begin() {
+  _begin(resumeAt = null) {
     const g = this.game;
+    if (resumeAt) {
+      // The opening scene was seen on the way to the checkpoint.
+      g.ariaEnabled = true;
+      this.initLevel();
+      this._resumeAt(resumeAt);
+      return;
+    }
     if (g.hasCutsceneScript("clocking_in")) {
       const warm = this._prewarmStation(g);
       g.startCutscene("clocking_in", () => {
@@ -3255,6 +3266,37 @@ export class TutorialSystem {
       currentWeapon: p.currentWeapon,
       pickupsOpen: this.pickupsOpen,
     };
+    // Kept across a closed tab too, unless this is the resume walking past it.
+    if (!this._resuming) Save.savePrologueCheckpoint({ ...this.checkpoint, beat: this.beat.title });
+  }
+
+  /**
+   * A Continue mid-prologue: each step before the saved one completes as if
+   * its goal were met (skipStep), so doors, the suit, the squad and the
+   * trials are as that beat finds them; then the cadet stands where they did.
+   * Trials taken in another order are passed on the way; they count as done.
+   */
+  _resumeAt(cp) {
+    const g = this.game;
+    const p = g.player;
+    this._resuming = true;
+    for (let n = 0; this.step !== cp.step && this.step < TUTORIAL_SANDBOX_STEP && n < PROLOGUE_STEPS.length * 2; n++) {
+      this.skipStep();
+    }
+    this._resuming = false;
+    if (g.cutsceneEngine?.isActive) g.cutsceneEngine.end();
+    g.state = GameState.PLAYING;
+    // What the skipped steps had to say is history; the beat's own lines play.
+    this.script = [];
+    if (g.ariaComms) g.ariaComms.message = null;
+    this.pickupsOpen = cp.pickupsOpen;
+    p.x = cp.x;
+    p.y = cp.y;
+    p.angle = cp.angle;
+    p.weapons = [...cp.weapons];
+    p.currentWeapon = cp.currentWeapon;
+    this.checkpoint = { step: this.step, x: cp.x, y: cp.y, angle: cp.angle, weapons: [...cp.weapons], currentWeapon: cp.currentWeapon, pickupsOpen: cp.pickupsOpen };
+    if (this.def?.lines) this.say(this.def.lines);
   }
 
   /**
@@ -4003,6 +4045,7 @@ export class TutorialSystem {
 
   _finish() {
     const g = this.game;
+    Save.clearPrologueCheckpoint();
     g.achievementStats.tutorialComplete = true;
     g.checkAchievements();
     this.originPlayed = true;
