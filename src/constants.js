@@ -9,9 +9,6 @@
 // GAME CONFIGURATION
 // ============================================================================
 
-/** Current game version */
-export const GAME_VERSION = "0.8.1";
-
 /** Maximum number of players in multiplayer */
 export const MAX_PLAYERS = 8;
 

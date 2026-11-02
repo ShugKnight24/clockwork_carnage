@@ -1,4 +1,5 @@
-import { Game, GameState, GAME_VERSION } from "./game.js";
+import { Game, GameState } from "./game.js";
+import { buildLabel } from "../src/build-info.js";
 import { TouchControls } from "./touch.js";
 import { initAnalytics, trackEvent } from "./analytics.js";
 import { AdaptiveQuality } from "../src/utils/perf.js";
@@ -85,7 +86,7 @@ initAnalytics();
 
 // Set version label on title screen
 const versionLabel = document.getElementById("versionLabel");
-if (versionLabel) versionLabel.textContent = `v${GAME_VERSION}`;
+if (versionLabel) versionLabel.textContent = buildLabel();
 
 // The start prompt's keyboard / pad / touch wording is picked by CSS on
 // html[data-input] (src/ui/input-glyphs.js).

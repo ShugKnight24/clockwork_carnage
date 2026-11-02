@@ -7,6 +7,7 @@ import { setSpriteBitmapCap, PHONE_SPRITE_PX } from "../src/rendering/svg-art/sp
 import { setCastCharacter } from "../src/rendering/svg-art/index.js";
 import { setSkinCharacter } from "../src/data/weapon-skins.js";
 import { renderModernPauseScreen } from "../src/ui/pause-menu-modern.js";
+import { buildLabel } from "../src/build-info.js";
 import { AssetEditor } from "./editor.js";
 import { InputManager } from "./input-manager.js";
 import { GamepadManager } from "./gamepad.js";
@@ -147,7 +148,6 @@ import {
 import { SpatialGrid } from "../src/utils/spatial-grid.js";
 import { decay } from "../src/utils/math.js";
 
-export { GAME_VERSION } from "../src/constants.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { LevelBeats } from "../src/systems/level-beats.js";
 
@@ -3520,10 +3520,24 @@ export class Game {
   }
 
   renderPauseScreen(ctx, w, h) {
-    if (isModernArt()) {
-      renderModernPauseScreen(this, ctx, w, h);
-      return;
-    }
+    if (isModernArt()) renderModernPauseScreen(this, ctx, w, h);
+    else this._renderLegacyPauseScreen(ctx, w, h);
+    if (!this.showAriaLog) this._drawBuildLabel(ctx, w, h);
+  }
+
+  /** The build, bottom-left on pause: a playtester's report names what they played. */
+  _drawBuildLabel(ctx, w, h) {
+    const sa = this.touchControls?.safeArea ?? { left: 0, bottom: 0 };
+    ctx.save();
+    ctx.font = "600 11px monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "rgba(185,200,214,0.55)";
+    ctx.fillText(buildLabel(), 12 + (sa.left || 0), h - 10 - (sa.bottom || 0));
+    ctx.restore();
+  }
+
+  _renderLegacyPauseScreen(ctx, w, h) {
     const compact = this.isTouchDevice && isCompactPhone(h);
     ctx.fillStyle = "rgba(0,0,0,0.82)";
     ctx.fillRect(0, 0, w, h);

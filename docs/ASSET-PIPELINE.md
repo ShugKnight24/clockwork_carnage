@@ -61,8 +61,8 @@ touched these folders.
 ## Regenerating the manifest
 
 ```bash
-npm run assets:generate   # scripts/generate-sprites.mjs
-npm run assets:manifest   # scripts/build-assets.mjs → assets/manifest.json
+node scripts/generate-sprites.mjs   # local tool (scripts/ is gitignored)
+node scripts/build-assets.mjs       # → assets/manifest.json
 npm run assets:build      # both, in order
 ```
 
