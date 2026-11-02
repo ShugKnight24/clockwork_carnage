@@ -325,6 +325,19 @@ describe("ChronoHazards runtime", () => {
     expect(game.projectiles.length).toBe(n);
   });
 
+  it("fires the Foundry's sentry again on a retry after a teach silenced it", () => {
+    const powers = { caughtTotal: 5, isInvulnerable: () => false };
+    const first = levelGame(2, 6, { chronoPowers: powers });
+    first.hz.update(first.game, 0.016);
+    expect(first.hz.teach.done).toBe(true);
+    // Retry Level: the same entry loaded again, nothing caught yet.
+    powers.caughtTotal = 0;
+    const { game, hz } = levelGame(2, 6, { chronoPowers: powers });
+    hz.update(game, 1);
+    expect(hz.hazards[0].stopped).toBeFalsy();
+    expect(game.projectiles.length).toBeGreaterThan(0);
+  });
+
   it("hands the Precinct sentry's burst to the echo while it stands", () => {
     const powers = { echo: null, isInvulnerable: () => false };
     const { game, hz } = levelGame(2, 5, { chronoPowers: powers });

@@ -347,7 +347,10 @@ export class ChronoHazards {
     if (!piece) return;
     this.piece = piece;
     const ngPlus = game.campaign?.ngPlusCycle ?? 0;
-    this.hazards = (piece.hazards ?? []).map((h) => ngPlusHazard(h, ngPlus));
+    // Copies: a teach's stopOnDone marks its hazard stopped, and on an
+    // unturned level outside NG+ the hazard would be the authored spec, so a
+    // retry would load the Foundry's sentry already silent.
+    this.hazards = (piece.hazards ?? []).map((h) => ({ ...ngPlusHazard(h, ngPlus) }));
     const grid = game.map.grid;
     for (const [c, r] of piece.seals ?? []) if (grid[r]?.[c] === 0) grid[r][c] = SEAL_TILE;
     for (const [c, r] of piece.open ?? []) if (grid[r]?.[c] != null) grid[r][c] = 0;
