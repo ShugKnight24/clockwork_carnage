@@ -1607,8 +1607,9 @@ export class Game {
   }
 
   // ── Tutorial system ──────────────────────────────────────────────
-  startTutorial() {
-    return this.tutorial.start();
+  /** `resume`: pick up at the prologue's saved checkpoint, if there is one. */
+  startTutorial({ resume = false } = {}) {
+    return this.tutorial.start({ resume });
   }
 
   initTutorialLevel() {
