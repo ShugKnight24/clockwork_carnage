@@ -260,6 +260,7 @@ export class VoxelAISystem {
     proj.dirZ = Math.sin(pitch);
     proj.pitch = pitch;
     proj.color = def.color1;
+    proj.from = e.enemyType;
     projectiles?.push(proj);
     entities?.push(proj);
   }

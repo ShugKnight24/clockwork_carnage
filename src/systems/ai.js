@@ -837,6 +837,7 @@ export class AISystem {
               "enemy",
             );
             proj.color = e.def.color1;
+            proj.from = e.enemyType;
             projectiles.push(proj);
             entities.push(proj);
             if (e.def.replay) recordShot(e, proj);
@@ -1257,6 +1258,7 @@ export class AISystem {
       const quill = new Projectile(e.x + Math.cos(a) * 0.6, e.y + Math.sin(a) * 0.6, Math.cos(a), Math.sin(a), e.def.quills.damage, q.speed, "enemy");
       quill.color = "#ffd79a";
       quill._quill = true;
+      quill.from = e.enemyType;
       projectiles.push(quill);
       entities.push(quill);
     }

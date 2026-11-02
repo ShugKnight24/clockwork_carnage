@@ -77,6 +77,7 @@ export const SECTION_OF = {
   hudStyle: at("access", "HUD"),
   editCustomHud: at("access", "HUD"),
   editAgent: at("gameplay", "Agent"),
+  analyticsConsent: at("gameplay", "Privacy"),
   hudScale: at("access", "HUD"),
   staminaBarSize: at("access", "HUD"),
   showPortrait: at("access", "HUD"),
@@ -90,7 +91,7 @@ const GROUP_ORDER = {
   video: ["Look", "Quality", "Effects", "Diagnostics"],
   audio: ["Volume"],
   controls: ["Mouse", "Keyboard", "Controller", "Touch", "Forge"],
-  gameplay: ["Agent", "Challenge", "Story", "Interface"],
+  gameplay: ["Agent", "Challenge", "Story", "Interface", "Privacy"],
   access: ["Readability", "HUD"],
   quick: [],
 };

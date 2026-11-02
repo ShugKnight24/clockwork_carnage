@@ -8,7 +8,7 @@ describe("pause menu entries", () => {
   it("keyboard lists every screen with its key", () => {
     const { title, entries } = pauseMenuEntries({ inputDevice: "keyboard", mode: "campaign" }, "ESC");
     expect(title).toBe("PAUSED");
-    expect(entries.map((e) => e.key)).toEqual(["ESC", "S", "A", "B", "T", "L", "F", "Q"]);
+    expect(entries.map((e) => e.key)).toEqual(["ESC", "S", "A", "B", "T", "L", "F", "J", "F8", "Q"]);
   });
 
   it("a pad lists only what it can reach, with its buttons", () => {
@@ -16,6 +16,8 @@ describe("pause menu entries", () => {
     expect(entries.map((e) => [e.pad, e.label])).toEqual([
       ["confirm", "Resume"],
       ["deploy", "Settings"],
+      ["nextTab", "Copy / save session"],
+      ["prevTab", "Report bug"],
       ["randomize", "Quit to title"],
     ]);
   });
