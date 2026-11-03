@@ -91,9 +91,8 @@ test.describe("State Transitions", () => {
     await loadGame(page);
     await enterModeSelect(page);
     await page.click("#btnBuilder");
-    await page.waitForTimeout(500);
-    const state = await debug(page, "getState");
-    expect(state).toBe("builder");
+    // startBuilder lazy-loads the Forge first; WebKit can take over 500 ms.
+    await waitForState(page, "builder");
   });
 
   test("can open character creator", async ({ page }) => {

@@ -23,7 +23,9 @@ scripts/*
 # Playwright / automation engine — output only. The specs, the debug bridge,
 # the config and package.json are tracked so a clone can install and run them.
 playwright-report/
+playwright-report-pages/
 test-results/
+test-results-pages/
 screenshots/
 .playwright/
 
