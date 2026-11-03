@@ -138,11 +138,18 @@ async function fakePad(page, id = "Xbox Wireless Controller (STANDARD GAMEPAD Ve
   }, id);
 }
 
+// Two frames as well as the time: the pad is polled once a frame, and on a
+// runner with no GPU 80 ms can pass without one.
+const twoFrames = (page) =>
+  page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
 async function tapPad(page, i, hold = 80) {
   await page.evaluate((b) => window.__padSet(b, true), i);
   await page.waitForTimeout(hold);
+  await twoFrames(page);
   await page.evaluate((b) => window.__padSet(b, false), i);
   await page.waitForTimeout(80);
+  await twoFrames(page);
 }
 
 async function openFromMenu(page) {

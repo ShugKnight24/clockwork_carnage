@@ -690,6 +690,23 @@ export function createDebugBridge(game) {
       });
     },
 
+    /**
+     * Wait until game time has advanced `ms`. A frame advances it by at most
+     * 33 ms, so on a slow machine (a CI runner draws a few frames a second)
+     * this is how long the game has actually played, where a wall-clock wait
+     * can end before a single frame has run.
+     */
+    async waitGameTime(ms) {
+      const until = (game.time || 0) + ms;
+      return new Promise((resolve) => {
+        function tick() {
+          if ((game.time || 0) >= until) return resolve(game.time);
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      });
+    },
+
     /** Wait until game reaches a specific state (max timeout ms) */
     async waitForState(targetState, timeoutMs = 5000) {
       const start = Date.now();

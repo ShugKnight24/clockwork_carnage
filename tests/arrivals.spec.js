@@ -6,13 +6,13 @@
  * style (screenshots in screenshots/frozen-*.png).
  */
 import { test, expect } from "@playwright/test";
-import { loadGame, debug } from "./helpers.js";
+import { loadGame, debug, play } from "./helpers.js";
 
 /** A campaign level with the player facing down a clear stretch of floor, no enemies in it. */
 async function clearedLevel(page, level = 0, act = 1) {
   await loadGame(page);
   await debug(page, "startCampaign", level, act);
-  await page.waitForTimeout(800);
+  await play(page, 800);
   await page.evaluate(() => {
     const g = window.ccDebug.game;
     const p = g.player;
@@ -116,7 +116,7 @@ test("a campaign hunter pack comes through tears instead of appearing", async ({
   expect(r.pack).toBeGreaterThan(0);
   expect(r.added).toBe(0);
   expect(r.tears).toBe(r.pack);
-  await page.waitForTimeout(900);
+  await play(page, 900);
   await page.screenshot({ path: "screenshots/arrival-hunter-tears.png" });
 });
 
@@ -166,7 +166,7 @@ test("a frozen person is drawn drained toward blue-grey in every art style", asy
     const frozen = await warmth();
     await page.screenshot({ path: `screenshots/frozen-${name}.png` });
     await page.evaluate(() => window.__frozen.thaw());
-    await page.waitForTimeout(300);
+    await play(page, 300);
     const live = await warmth();
     await page.evaluate(() => window.__frozen.freeze());
     test.info().annotations.push({ type: "warmth", description: `${name}: frozen ${frozen.toFixed(1)}, live ${live.toFixed(1)}` });

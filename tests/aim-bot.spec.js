@@ -55,7 +55,7 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       // then place the dummy using the FOV the renderer is actually drawing
       // with. Assuming the fully-zoomed value and firing 80ms later put the
       // dummy on the wrong ray whenever there was a horizontal offset.
-      await new Promise((r) => setTimeout(r, 600));
+      await window.ccDebug.waitGameTime(600);
 
       const player = window.ccDebug.getPlayer();
       const fov = window.ccDebug.getAimFov();
@@ -70,10 +70,12 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       window.ccDebug.setPlayer({ aimOffsetY });
       const spawn = window.ccDebug.spawn("beast", tx, ty);
 
+      // Game time, not wall time: on a runner drawing a few frames a
+      // second, 80 ms of wall clock can pass without a frame to fire in.
       window.ccDebug.fire(true);
-      await new Promise((r) => setTimeout(r, 80));
+      await window.ccDebug.waitGameTime(80);
       window.ccDebug.fire(false);
-      await new Promise((r) => setTimeout(r, 250));
+      await window.ccDebug.waitGameTime(250);
 
       const ents = window.ccDebug.getEntities();
       // killAll clears arena spawns; only our beast remains.

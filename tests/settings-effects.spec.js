@@ -64,7 +64,10 @@ async function setup(browser, artStyle) {
     ccDebug.godMode(true);
     g.player.health = g.player.maxHealth = 100;
     g.player.hurtTime = 0;
-    g.update = function () {}; // freeze the simulation; the rAF loop and governor keep running
+    g.update = function () {}; // freeze the simulation; the rAF loop keeps running
+    // Hold the governor too: at a few fps (a runner with no GPU) it shrinks
+    // the frame and drops effects between a test's snapshots.
+    g.quality.adjust = () => false;
     window.__FIXT = g.time;
     window.__L = g.lights.length;
     window.__snaps = {};

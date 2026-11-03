@@ -23,7 +23,9 @@ test("gameLoop schedules exactly one callback per frame", async ({ page }) => {
   });
   await loadGame(page);
   await debug(page, "startArena");
-  await page.waitForTimeout(2000);
+  // Count frames, not seconds: a runner with no GPU draws a few a second.
+  await page.waitForFunction(() => window.__raf.stamps.size > 10, null, { timeout: 30_000 });
+  await page.waitForTimeout(500);
 
   const { runs, frames } = await page.evaluate(() => ({
     runs: window.__raf.runs,
@@ -35,7 +37,8 @@ test("gameLoop schedules exactly one callback per frame", async ({ page }) => {
 });
 
 test("a 30 fps cap holds without starving the render scale", async ({ page }) => {
-  await loadGame(page);
+  // The governor is what this checks, so it stays live.
+  await loadGame(page, { adaptiveQuality: true });
   await debug(page, "startArena");
   await debug(page, "godMode", true);
 
@@ -86,7 +89,9 @@ test("the loop recovers instead of halting after a burst of errors", async ({ pa
         return cb(ts);
       });
   });
-  await page.waitForTimeout(3000);
+  // Frames, not seconds: a runner with no GPU draws a few a second, though
+  // the 90 failing frames are cheap.
+  await page.waitForFunction(() => window.__frames > 120, null, { timeout: 45_000 }).catch(() => {});
 
   const after = await page.evaluate(() => ({
     frames: window.__frames,

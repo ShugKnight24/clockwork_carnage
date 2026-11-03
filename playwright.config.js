@@ -29,7 +29,10 @@ const visual = process.env.CC_VISUAL === "1";
 export default defineConfig({
   testDir: "./tests",
   testIgnore: IGNORED,
-  timeout: 60_000,
+  // A CI runner has no GPU and draws the game a few frames a second, and the
+  // specs wait on game time (helpers.js play), so the same test takes several
+  // times as long there.
+  timeout: process.env.CI ? 180_000 : 60_000,
   // One retry on CI absorbs a timing flake on a busy runner; the report
   // still marks the test flaky.
   retries: process.env.CI ? 1 : 0,
@@ -40,7 +43,13 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     // Plain headless Chromium has no WebGL at all, so the Forge (WebGL2) and
     // the renderer's GL hybrid path would never run under test.
-    launchOptions: { args: ["--use-gl=angle", "--enable-gpu"] },
+    // CC_SOFTWARE_GL=1 renders in software (SwiftShader), as a CI runner with
+    // no GPU does, to reproduce its frame rate locally.
+    launchOptions: {
+      args: process.env.CC_SOFTWARE_GL === "1"
+        ? ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+        : ["--use-gl=angle", "--enable-gpu"],
+    },
   },
   webServer: {
     command: `npx vite --port ${PORT} --strictPort`,
