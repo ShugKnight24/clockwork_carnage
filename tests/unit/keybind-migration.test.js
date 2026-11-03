@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { migrateKeybinds, DEFAULT_KEYBINDS, KEYBINDS_VERSION } from "../../js/input-manager.js";
+import { migrateKeybinds, DEFAULT_KEYBINDS, KEYBINDS_VERSION } from "../../src/systems/input-manager.js";
 
 describe("keybind migration", () => {
   it("keeps crouch off Ctrl by default: Ctrl+W would close the tab", () => {

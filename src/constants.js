@@ -6,13 +6,6 @@
  */
 
 // ============================================================================
-// GAME CONFIGURATION
-// ============================================================================
-
-/** Maximum number of players in multiplayer */
-export const MAX_PLAYERS = 8;
-
-// ============================================================================
 // TIMING & PERFORMANCE
 // ============================================================================
 
@@ -58,21 +51,12 @@ export const PLAYER_FALL_DAMAGE_PER_BLOCK = 5;
  *  smooths the reticle back as the player runs forward. */
 export const PLAYER_AIM_RECENTER = 0.6;
 
-/** Collision detection margin */
-export const COLLISION_MARGIN = 0.3;
-
 // ============================================================================
 // COMBAT & DAMAGE
 // ============================================================================
 
 /** Player maximum health points */
 export const PLAYER_MAX_HP = 100;
-
-/** Bullet damage per hit */
-export const BULLET_DAMAGE = 15;
-
-/** Bullet speed in units per second */
-export const BULLET_SPEED = 20;
 
 /** Enemy hit capsules are matched to rendered sprite width, not tiny AI body
  * radius. Most enemies render as ~1 world-unit wide billboards, so 0.5 means
@@ -114,9 +98,6 @@ export const ENEMY_MELEE_WHIFF_SLACK = 1.15;
 // RENDERING & GRAPHICS
 // ============================================================================
 
-/** Maximum raycast distance in builder mode */
-export const MAX_RAYCAST_DIST = 10;
-
 /** Viewport height threshold for compact mobile layout */
 export const COMPACT_PHONE_HEIGHT = 420;
 
@@ -130,23 +111,6 @@ export const COMPACT_PHONE_HEIGHT = 420;
  * completion menu takes over.
  */
 export const TUTORIAL_SANDBOX_STEP = 47; // PROLOGUE_STEPS.length (src/data/prologue.js)
-
-// ============================================================================
-// BUILDER MODE
-// ============================================================================
-
-/** Default map size for builder */
-export const DEFAULT_MAP_SIZE = 32;
-
-/** Number of height layers in builder */
-export const NUM_LAYERS = 5;
-
-// ============================================================================
-// NETWORK/MULTIPLAYER
-// ============================================================================
-
-/** Arena size in grid units */
-export const ARENA_SIZE = 40;
 
 // ============================================================================
 // STORAGE KEYS

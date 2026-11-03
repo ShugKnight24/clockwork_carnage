@@ -20,7 +20,7 @@ export const STEADY_MS = 3;
 /** Milliseconds a frame while the ground around the camera is still arriving. */
 export const LOADING_MS = 10;
 /** The draw radius on the high tiers: the 160 blocks the Forge always drew. */
-export const MAX_DRAW_RADIUS = 160;
+const MAX_DRAW_RADIUS = 160;
 /** Blocks over which the edge of the draw disc fades to full fog (decision #6). */
 export const FOG_FADE = 16;
 

@@ -19,7 +19,6 @@ import {
   pt,
   lerp,
   mirror,
-  clamp,
   shape,
   line,
   part,
@@ -71,22 +70,15 @@ import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { FRAME_SHAPE, frameLayers } from "./frames.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
+import { clamp } from "../../utils/math.js";
+import { hexRgb, rgbHex, mixHexClamped } from "../../utils/color.js";
 
 // ---------------------------------------------------------------------------
 // Colour helpers
 // ---------------------------------------------------------------------------
 
-const hexRgb = (h) => {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-};
-const rgbHex = (r) => `#${r.map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("")}`;
 /** Blend two hex colours; t = 0 → a, 1 → b. */
-export const mix = (a, b, t) => {
-  const x = hexRgb(a);
-  const y = hexRgb(b);
-  return rgbHex(x.map((v, i) => v + (y[i] - v) * t));
-};
+export const mix = mixHexClamped;
 const desat = (h, t) => {
   const [r, g, b] = hexRgb(h);
   const l = r * 0.3 + g * 0.59 + b * 0.11;

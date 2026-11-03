@@ -7,7 +7,7 @@
 import { World, colKey } from "../world/world.js";
 import { Inventory } from "./inventory.js";
 import { Skills } from "./skills.js";
-import { bestTool, TOOLS } from "./tools.js";
+import { bestTool } from "./tools.js";
 import { canMine, breakTime, dropsFor, xpFor, bonusDrop } from "./gather.js";
 import { itemById, blockForItem } from "./items.js";
 import { craft as craftRecipe, canCraft } from "./crafting.js";

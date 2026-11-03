@@ -9,20 +9,13 @@
  * drawn over it.
  */
 
+import { lcg as rng } from "../../../utils/rng.js";
+
 const f = (n) => Math.round(n * 10) / 10;
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
 const INK = "#04060b";
 const BOX = [0, 0, 1600, 900];
-
-/** Deterministic PRNG so stars and debris never shift between builds. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 const polar = (cx, cy, r, a) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
 const pt = ([x, y]) => `${f(x)} ${f(y)}`;

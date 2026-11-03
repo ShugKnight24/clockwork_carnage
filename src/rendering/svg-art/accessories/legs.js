@@ -2,13 +2,11 @@
  * Legs slot. Pads and pouches sit on the legs (`front`), turned to the leg by
  * the knee and thigh anchors' `rot` (local +y runs down the leg).
  */
+
+import { mixHex as mix } from "../../../utils/color.js";
+
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
-const mix = (a, b, t) => {
-  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-};
 const rect = (x, y, w, h, rx, fill, sw = 0.9) =>
   `<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" rx="${f(rx)}" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>`;
 const seam = (d, color, w = 0.6) => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>`;

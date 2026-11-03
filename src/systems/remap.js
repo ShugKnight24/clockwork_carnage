@@ -5,7 +5,7 @@
  * conflict the player resolves by swapping.
  */
 import { PAD, REMAPPABLE_PAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS } from "./pad-actions.js";
-import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { DEFAULT_KEYBINDS } from "./input-manager.js";
 
 /** localStorage key for controller overrides (keyboard keeps cc_keybinds). */
 export const STORAGE_KEY_PADBINDS = "cc_padbinds";

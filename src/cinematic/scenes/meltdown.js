@@ -23,7 +23,7 @@ import { beatsToSec, secToBeats } from "../timeline.js";
 import { mulberry32, seedFor } from "../seeded.js";
 import { borrowCombat, simulate, withRandom, EVENTS, warmEnemies, idle } from "./campaign.js";
 import { swayWeapon } from "../../systems/showcase.js";
-import { Player } from "../../../js/entities.js";
+import { Player } from "../../entities/index.js";
 import { isPassable } from "../../systems/physics.js";
 import { particlePool } from "../../utils/particle-pool.js";
 import { generateModernEnv } from "../../rendering/textures.js";

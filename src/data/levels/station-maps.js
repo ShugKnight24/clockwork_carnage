@@ -16,9 +16,7 @@ import {
   door,
   room,
   corridor,
-  coverGrid,
   lowWall,
-  lowTile,
   LAYER,
 } from "./map-helpers.js";
 import { dressStation } from "./station-dressing.js";

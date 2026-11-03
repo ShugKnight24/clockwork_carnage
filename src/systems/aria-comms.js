@@ -3,7 +3,7 @@
 
 import { ARIA_COMMS } from "../data/dialogue.js";
 import { voiceKeyFor } from "../audio/voice.js";
-import { isCompactPhone } from "../../js/layout.js";
+import { isCompactPhone } from "../ui/layout.js";
 import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
 import { drawSvgModelAt } from "../rendering/svg-art/index.js";
 
@@ -159,6 +159,7 @@ import {
 } from "../ui/modern-ui-kit.js";
 import * as skin from "../ui/hud-skin.js";
 import { drawCommsPortrait, isRadioLine } from "../ui/comms-portraits.js";
+import { SpriteCache } from "../rendering/sprite-cache.js";
 
 export class AriaCommsSystem {
   constructor(game = null) {
@@ -1234,8 +1235,8 @@ function speakerTone(speaker) {
   return SQUAD_TAB_COLORS[speaker] || UI.cream;
 }
 
-const _commsSprites = new Map();
-const MAX_COMMS_SPRITES = 64;
+// Was 64 sprites; they average ~190 KB at 2x DPR (the card plate ~620 KB).
+const _commsSprites = new SpriteCache(64 * 192 * 1024);
 
 function commsSprite(key, w, h, pad, dpr, paint) {
   const k = `${key}|${w}|${h}|${dpr}`;
@@ -1248,9 +1249,7 @@ function commsSprite(key, w, h, pad, dpr, paint) {
   g.scale(dpr, dpr);
   g.translate(pad, pad);
   paint(g, w, h);
-  if (_commsSprites.size >= MAX_COMMS_SPRITES) _commsSprites.delete(_commsSprites.keys().next().value);
-  _commsSprites.set(k, c);
-  return c;
+  return _commsSprites.set(k, c);
 }
 
 function cutPath(g, x, y, w, h, k) {
@@ -1380,11 +1379,6 @@ function drawVoiceBars(ctx, x, midY, t, color, amp) {
     ctx.fillStyle = color;
     ctx.fillRect(bx, by, 2, bh);
   }
-}
-
-function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 const _truncCache = new Map();

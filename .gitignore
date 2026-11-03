@@ -23,7 +23,9 @@ scripts/*
 # Playwright / automation engine — output only. The specs, the debug bridge,
 # the config and package.json are tracked so a clone can install and run them.
 playwright-report/
+playwright-report-pages/
 test-results/
+test-results-pages/
 screenshots/
 .playwright/
 
@@ -44,8 +46,10 @@ js/editor/
 # Untracked game prototypes (experimental, not part of Clockwork Carnage)
 prototypes/
 
-# Local dev tools and temporary files
+# Local dev tools and temporary files. tests/tools/ holds tracked test
+# tooling (npm run validate:maps, the size budget) and is the exception.
 tools/
+!tests/tools/
 tmp_grid.txt
 
 # Documentation artifact (should be untracked)

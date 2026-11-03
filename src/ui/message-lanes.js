@@ -16,9 +16,9 @@
 import { touchZones, BUTTON_KEYS, phoneMinimapSize, phoneVitalsLeft, PHONE_VITALS_H } from "./touch-layout.js";
 
 /** Chip lane: one unlock / achievement chip. */
-export const CHIP_W = 300;
+const CHIP_W = 300;
 export const CHIP_H = 52;
-export const CHIP_W_COMPACT = 240;
+const CHIP_W_COMPACT = 240;
 export const CHIP_H_COMPACT = 30;
 
 /** Headline lane: the widest teach card and its tallest (3 hint lines + narration). */

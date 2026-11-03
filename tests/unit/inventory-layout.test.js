@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { inventoryLayout, resolveInventoryHit } from "../../js/layout.js";
+import { inventoryLayout, resolveInventoryHit } from "../../src/ui/layout.js";
 
 const L = () => inventoryLayout(1280, 720);
 

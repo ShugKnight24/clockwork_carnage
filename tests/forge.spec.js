@@ -1380,7 +1380,7 @@ test.describe("Voxel Forge", () => {
     await loadGame(page);
     await page.evaluate(async () => {
       const g = window.ccDebug.game;
-      const { SETTINGS_REGISTRY } = await import("/js/settings-registry.js");
+      const { SETTINGS_REGISTRY } = await import("/src/settings/registry.js");
       g.settings.renderScale = 50;
       SETTINGS_REGISTRY.find((d) => d.key === "renderScale")?.onChange?.(g);
     });
@@ -1396,7 +1396,7 @@ test.describe("Voxel Forge", () => {
 
     const info = await page.evaluate(async () => {
       const g = window.ccDebug.game, b = g.builder;
-      const { inventoryLayout } = await import("/js/layout.js");
+      const { inventoryLayout } = await import("/src/ui/layout.js");
       const l = inventoryLayout(b.hudSize.w, b.hudSize.h, b.survival.inventory.slots.length);
       const c = l.cells.find((x) => x.index === 12);
       const rect = g.canvas.getBoundingClientRect();
@@ -1444,7 +1444,7 @@ test.describe("Voxel Forge", () => {
 
     const pts = await page.evaluate(async () => {
       const g = window.ccDebug.game, b = g.builder;
-      const { inventoryLayout } = await import("/js/layout.js");
+      const { inventoryLayout } = await import("/src/ui/layout.js");
       const l = inventoryLayout(b.hudSize.w, b.hudSize.h, b.survival.inventory.slots.length);
       const rect = g.canvas.getBoundingClientRect();
       const at = (i) => {

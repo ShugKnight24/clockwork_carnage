@@ -20,7 +20,7 @@
 
 import { FONT } from "./design-tokens.js";
 
-export const CS_FONT = {
+const CS_FONT = {
   // Comic lettering: rounded hand-drawn faces that read as lettering in caps.
   letter: '"Comic Neue", "Chalkboard SE", "Comic Sans MS", "Marker Felt", "Trebuchet MS", sans-serif',
   // Sound effects and splash titles: heavy condensed display.
@@ -216,7 +216,7 @@ export function inkFor(color, paper) {
 // ─── Shapes ─────────────────────────────────────────────────────────────────
 
 /** Speech balloon body: an oval-cornered box hugging the text. */
-export function balloonPath(g, x, y, w, h) {
+function balloonPath(g, x, y, w, h) {
   const r = Math.min(h / 2, w / 2, Math.max(10, h * 0.48));
   g.roundRect(x, y, w, h, r);
 }
@@ -225,7 +225,7 @@ export function balloonPath(g, x, y, w, h) {
  * Tail wedge from the balloon edge toward (tx, ty). The base sits inside the
  * balloon so the union outline stays clean.
  */
-export function tailPath(g, bx, by, bw, bh, tx, ty, base) {
+function tailPath(g, bx, by, bw, bh, tx, ty, base) {
   const cx = bx + bw / 2;
   const cy = by + bh / 2;
   // Base anchored a third of the way toward the target side of the balloon.

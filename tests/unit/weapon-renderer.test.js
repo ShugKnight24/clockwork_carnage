@@ -39,10 +39,6 @@ const baseOpts = (overrides = {}) => ({
 });
 
 describe("drawWeapon", () => {
-  it("is an exported function", () => {
-    expect(typeof drawWeapon).toBe("function");
-  });
-
   it("renders without throwing for each weapon id", () => {
     for (let id = 0; id < 8; id++) {
       const ctx = mockCtx();

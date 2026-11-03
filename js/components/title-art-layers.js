@@ -10,8 +10,8 @@
 
 import { onArtStyleChange, isModernArt, isRealisticArt } from "../../src/rendering/art-style.js";
 
-export const STAGE_W = 700;
-export const STAGE_H = 400;
+const STAGE_W = 700;
+const STAGE_H = 400;
 const TAU = Math.PI * 2;
 
 const f = (n) => Math.round(n * 1000) / 1000;
@@ -24,7 +24,7 @@ const osc = (name, prop, rest, hi, lo) =>
   `@keyframes ${name}{0%,50%,100%{${prop}:${rest};animation-timing-function:${OUT}}` +
   `25%{${prop}:${hi};animation-timing-function:${IN}}75%{${prop}:${lo};animation-timing-function:${IN}}}`;
 
-export const STAGE_CSS = `
+const STAGE_CSS = `
 :host {
   display: block;
   position: absolute;

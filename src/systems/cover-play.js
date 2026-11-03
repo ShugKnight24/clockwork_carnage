@@ -61,7 +61,7 @@ const ease = (t) => t * t * (3 - 2 * t);
 const wrapAngle = (a) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 
 /** Snap onto face `f` (from findCover / coverDashTarget). */
-export function takeCover(game, f, { viaDash = false } = {}) {
+function takeCover(game, f, { viaDash = false } = {}) {
   const p = game.player;
   p.cover = {
     face: f,
@@ -246,7 +246,7 @@ export function updateCover(game, dt) {
 }
 
 /** Firing from cover without the sights up: blind fire, if the cover is in the shot's way. */
-export const isBlindFiring = (p) => !!p?.cover && !p.isAiming;
+const isBlindFiring = (p) => !!p?.cover && !p.isAiming;
 
 /** How near the cover must stop a shot for it to be fired blind (cells). */
 const BLIND_REACH = 1.6;

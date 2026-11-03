@@ -1,6 +1,6 @@
 import { renderStatsCard, statsCardHeight } from './stats-card.js';
 import { drawScanlines } from './scanlines.js';
-import { isCompactPhone } from '../../js/layout.js';
+import { isCompactPhone } from './layout.js';
 import { isModernArt } from '../rendering/art-style.js';
 import {
   UI, uiFont, drawBackdrop, drawPanel, drawTitle, drawCaption, drawButton,

@@ -13,7 +13,7 @@ import {
   WEAPONS,
 } from "../data/index.js";
 import { PLAYER_AIM_LIMIT_X, PLAYER_AIM_LIMIT_Y } from "../constants.js";
-import { SETTINGS_REGISTRY } from "../../js/settings-registry.js";
+import { SETTINGS_REGISTRY } from "../settings/registry.js";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "./character-normalize.js";
 
 const SAVE_VERSION = 1;

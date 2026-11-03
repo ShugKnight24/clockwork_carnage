@@ -7,7 +7,6 @@ import { partyKey } from "../src/rendering/party.js";
 import { autoAdvanceAt, countWords, pageHoldMs, pageWaits } from "../src/systems/cutscene-pacing.js";
 import { activeDevice, drawPrompt, glyph } from "../src/ui/input-glyphs.js";
 import {
-  CS_FONT,
   INK,
   PAPER_BALLOON,
   PAPER_CAPTION,
@@ -22,6 +21,7 @@ import {
   setTracking,
   wrapText,
 } from "../src/ui/cutscene-text.js";
+import { lcg } from "../src/utils/rng.js";
 
 // A party frame draws only the members it names (`party: ["lyra", "you"]`),
 // or, naming nobody, whoever is with you in this slot; both renderers read
@@ -114,13 +114,7 @@ const FB_MAX_BACKDROPS = 6; // flattened backdrops shared across pages
 const FB_MAX_PX = 2600; // bake resolution cap (lettering stays on the crisp text layer)
 
 /** Seeded 0..1 generator, so paper and inks are the same every bake. */
-function fbRand(seed) {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
+const fbRand = (seed) => lcg(seed >>> 0 || 1);
 
 // Paper stock as a repeating tile: newsprint fibres and specks for Comic
 // (multiplied over the inks), fine film grain for Modern.
@@ -4628,140 +4622,6 @@ export class CutsceneEngine {
           ctx.stroke();
           ctx.restore();
         }
-        break;
-      }
-      case "command_center": {
-        // Tactical briefing background
-        const ccGrad = ctx.createLinearGradient(0, 0, 0, h);
-        ccGrad.addColorStop(0, "#000a14");
-        ccGrad.addColorStop(0.5, "#001020");
-        ccGrad.addColorStop(1, "#000810");
-        ctx.fillStyle = ccGrad;
-        ctx.fillRect(0, 0, w, h);
-
-        // Holographic grid floor (perspective)
-        const vpX = w / 2;
-        const vpY = h * 0.45;
-        const gridBottom = h * 0.95;
-        ctx.strokeStyle = "rgba(0,200,255,0.06)";
-        ctx.lineWidth = 1;
-        // Converging vertical lines
-        for (let i = -8; i <= 8; i++) {
-          const bx = vpX + i * (w * 0.08);
-          ctx.beginPath();
-          ctx.moveTo(vpX + i * 2, vpY);
-          ctx.lineTo(bx, gridBottom);
-          ctx.stroke();
-        }
-        // Horizontal lines
-        for (let j = 0; j < 8; j++) {
-          const frac = j / 8;
-          const gy = vpY + (gridBottom - vpY) * (frac * frac);
-          const spread = frac * w * 0.65;
-          ctx.beginPath();
-          ctx.moveTo(vpX - spread, gy);
-          ctx.lineTo(vpX + spread, gy);
-          ctx.stroke();
-        }
-
-        // Data columns — scrolling rectangles
-        const colXs = [0.18, 0.35, 0.65, 0.82, 0.5];
-        for (let c = 0; c < colXs.length; c++) {
-          const cx = w * colXs[c];
-          ctx.fillStyle = "rgba(0,180,255,0.03)";
-          ctx.fillRect(cx - 8, h * 0.2, 16, h * 0.55);
-          for (let j = 0; j < 12; j++) {
-            const dy = ((j * 30 + t * (40 + c * 15)) % (h * 0.55)) + h * 0.2;
-            const da = 0.08 + 0.06 * Math.sin(j * 1.7 + c);
-            ctx.fillStyle = `rgba(0,200,255,${da})`;
-            ctx.fillRect(cx - 5, dy, 10, 3 + (j % 3) * 2);
-          }
-        }
-
-        // Status indicators — colored dots at top
-        const statusColors = [
-          [0, 220, 80], [0, 220, 80], [255, 180, 0],
-          [0, 220, 80], [255, 60, 40], [0, 220, 80],
-          [255, 180, 0], [0, 220, 80],
-        ];
-        for (let i = 0; i < statusColors.length; i++) {
-          const sx = w * (0.2 + i * 0.085);
-          const sy = h * 0.06;
-          const [sr, sg, sb] = statusColors[i];
-          const blink = i === 4 || i === 6 ? Math.sin(t * (3 + i) + i) > 0 : true;
-          if (blink) {
-            ctx.fillStyle = `rgba(${sr},${sg},${sb},0.6)`;
-            ctx.beginPath();
-            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
-        // Radar sweep
-        const radarCx = w / 2;
-        const radarCy = h * 0.45;
-        const radarR = Math.min(w, h) * 0.12;
-        const sweepAngle = t * 1.2;
-        ctx.strokeStyle = "rgba(0,220,255,0.1)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(radarCx, radarCy, radarR, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.strokeStyle = "rgba(0,220,255,0.25)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(radarCx, radarCy);
-        ctx.lineTo(
-          radarCx + Math.cos(sweepAngle) * radarR,
-          radarCy + Math.sin(sweepAngle) * radarR,
-        );
-        ctx.stroke();
-        // Sweep trail
-        for (let s = 1; s <= 6; s++) {
-          const trailA = sweepAngle - s * 0.08;
-          ctx.strokeStyle = `rgba(0,220,255,${0.15 - s * 0.02})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(radarCx, radarCy);
-          ctx.lineTo(
-            radarCx + Math.cos(trailA) * radarR,
-            radarCy + Math.sin(trailA) * radarR,
-          );
-          ctx.stroke();
-        }
-
-        // Tactical display border with corner brackets
-        const bPad = 20;
-        const bLen = 30;
-        ctx.strokeStyle = "rgba(0,200,255,0.15)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(bPad, bPad, w - bPad * 2, h - bPad * 2);
-        ctx.strokeStyle = "rgba(0,220,255,0.35)";
-        ctx.lineWidth = 2;
-        // Top-left
-        ctx.beginPath();
-        ctx.moveTo(bPad, bPad + bLen);
-        ctx.lineTo(bPad, bPad);
-        ctx.lineTo(bPad + bLen, bPad);
-        ctx.stroke();
-        // Top-right
-        ctx.beginPath();
-        ctx.moveTo(w - bPad - bLen, bPad);
-        ctx.lineTo(w - bPad, bPad);
-        ctx.lineTo(w - bPad, bPad + bLen);
-        ctx.stroke();
-        // Bottom-left
-        ctx.beginPath();
-        ctx.moveTo(bPad, h - bPad - bLen);
-        ctx.lineTo(bPad, h - bPad);
-        ctx.lineTo(bPad + bLen, h - bPad);
-        ctx.stroke();
-        // Bottom-right
-        ctx.beginPath();
-        ctx.moveTo(w - bPad - bLen, h - bPad);
-        ctx.lineTo(w - bPad, h - bPad);
-        ctx.lineTo(w - bPad, h - bPad - bLen);
-        ctx.stroke();
         break;
       }
       default: {

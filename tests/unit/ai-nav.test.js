@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { buildNavField, navAngle, navSteps, leadPoint, NavFields } from "../../src/systems/ai-nav.js";
 import { AISystem, callOut } from "../../src/systems/ai.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 

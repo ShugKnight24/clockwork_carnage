@@ -7,7 +7,7 @@
  */
 
 /** Tone: [delay, "tone", freq, dur, wave, gain]. Noise: [delay, "noise", dur, gain, filterHz, filterType]. */
-export const CHRONO_SOUNDS = {
+const CHRONO_SOUNDS = {
   // The governed shift: a soft falling chime.
   shift: [[0, "tone", 660, 0.25, "sine", 0.12], [0.05, "tone", 440, 0.35, "sine", 0.1]],
   // The loud one, from Act II: the same chime over a low bell he can hear.

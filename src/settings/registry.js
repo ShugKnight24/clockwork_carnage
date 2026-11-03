@@ -5,11 +5,11 @@
  */
 
 // Re-exported for existing importers; the value lives in src/constants.js.
-export { COMPACT_PHONE_HEIGHT } from "../src/constants.js";
+export { COMPACT_PHONE_HEIGHT } from "../constants.js";
 // art-style.js guards its localStorage/document access, so tests can still
 // import this registry without a browser.
-import { setArtStyle } from "../src/rendering/art-style.js";
-import { effectCapReason } from "../src/utils/perf.js";
+import { setArtStyle } from "../rendering/art-style.js";
+import { effectCapReason } from "../utils/perf.js";
 
 /**
  * Values a fresh profile starts with. Game copies this, then touch-device

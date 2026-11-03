@@ -16,9 +16,9 @@ import {
   campaignMap,
   UPGRADES,
   ENEMY_TYPES,
-} from "../data.js";
+} from "../../src/data/index.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
-import { Enemy } from "../entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { effectiveAimFov } from "../../src/systems/aim.js";
 import { bestTool } from "../../src/rpg/tools.js";
 import { streamerFor } from "../../src/world/world-streamer.js";
@@ -684,6 +684,23 @@ export function createDebugBridge(game) {
         let count = 0;
         function tick() {
           if (++count >= n) return resolve();
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      });
+    },
+
+    /**
+     * Wait until game time has advanced `ms`. A frame advances it by at most
+     * 33 ms, so on a slow machine (a CI runner draws a few frames a second)
+     * this is how long the game has actually played, where a wall-clock wait
+     * can end before a single frame has run.
+     */
+    async waitGameTime(ms) {
+      const until = (game.time || 0) + ms;
+      return new Promise((resolve) => {
+        function tick() {
+          if ((game.time || 0) >= until) return resolve(game.time);
           requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);

@@ -2,8 +2,11 @@ import { describe, it, expect } from "vitest";
 import { AISystem, inFrontArc, SHIELD_REACT_MS, SHIELD_BRACE_SECONDS, SHIELD_BRACE_TURN_RATE, FLANK_WINDOW_MS } from "../../src/systems/ai.js";
 import { calculateEnemyDamage } from "../../src/systems/combat.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { FORMS } from "../../src/systems/paradox-forms.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 const openMap = () => ({ width: 30, height: 30, grid: Array.from({ length: 30 }, () => new Array(30).fill(0)) });

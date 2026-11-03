@@ -23,7 +23,7 @@ const W = ATRIUM_WALLS;
 /** The bridge's missing section: floor you can only cross mid-dash. */
 export const ATRIUM_GAP = { x: 73, y0: 41, y1: 42 };
 /** The bridge, west landing to east. */
-export const ATRIUM_BRIDGE = { y0: 41, y1: 42, x0: 64, x1: 82 };
+const ATRIUM_BRIDGE = { y0: 41, y1: 42, x0: 64, x1: 82 };
 
 const DAY = [236, 244, 255];
 

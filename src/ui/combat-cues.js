@@ -22,7 +22,7 @@ export function drawCombatCues(game, ctx, w, h, barH = 0) {
 }
 
 /** Legacy: a red band on the view's edge toward each attacker (0 rad ahead = top). */
-export function drawLegacyDamageArcs(ctx, w, viewH, cues) {
+function drawLegacyDamageArcs(ctx, w, viewH, cues) {
   if (!cues.length) return;
   const cx = w / 2;
   const cy = viewH / 2;

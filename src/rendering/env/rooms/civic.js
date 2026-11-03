@@ -22,7 +22,7 @@
  * city-view.js draws the city there by depth (rooms/civic-city.js).
  */
 import { CIVIC_WALLS as W } from "../../../data/levels/rooms/civic.js";
-import { T, lin, rad, plate, rivet, led, sink, raise, relief, grey, lightStrip } from "../paint.js";
+import { T, lin, rad, plate, rivet, led, sink, relief, grey, lightStrip } from "../paint.js";
 import { say } from "./corridor.js";
 import { onScreen, text, lit, bust } from "./east-kit.js";
 

@@ -4,7 +4,7 @@
  * hit's magazine hits harder until it is spent.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { Player } from "../../js/entities.js";
+import { Player } from "../../src/entities/index.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { fireWeapon } from "../../src/systems/combat-orchestrator.js";
 import { reloadPress, updateReloads, isReloading } from "../../src/systems/reload.js";

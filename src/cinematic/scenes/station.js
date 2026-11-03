@@ -34,7 +34,7 @@
  */
 import { beatsToSec } from "../timeline.js";
 import { TUTORIAL_MAP } from "../../data/levels/tutorial.js";
-import { Enemy, Pickup, Prop } from "../../../js/entities.js";
+import { Enemy, Pickup, Prop } from "../../entities/index.js";
 import { ENEMY_TYPES } from "../../data/enemies.js";
 import { validatePropPosition } from "../../systems/spawner.js";
 import { installStagedLevel, prewarmStyle, updateAmbience } from "../../systems/showcase.js";
@@ -250,7 +250,7 @@ function placeCamera(game, st, local) {
  * [x, y, angle, pitch] at shot time `local`: one Catmull-Rom curve through the keys,
  * the shot's time eased by `ease` over the whole move.
  */
-export function sampleGlide(reel, cam, local) {
+function sampleGlide(reel, cam, local) {
   const keys = cam?.keys;
   if (!keys?.length) return null;
   const k = unwrapKeys(keys);

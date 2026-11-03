@@ -260,9 +260,20 @@ body {
   background: rgba(0, 200, 255, 0.18);
   border-color: #00ffcc;
   color: #00ffcc;
-  transform: translateX(5px);
   outline: 2px solid #00ffcc;
   outline-offset: 2px;
+}
+
+/* The nudge follows a real pointer only: on touch, :hover sticks to the last
+   tapped plate, and a plate sliding out from under the finger re-hovers. */
+#modeSelect .mode-btn:focus-visible {
+  transform: translateX(5px);
+}
+
+@media (hover: hover) {
+  #modeSelect .mode-btn:hover {
+    transform: translateX(5px);
+  }
 }
 
 #modeSelect .mode-btn .key-hint {
@@ -1136,12 +1147,22 @@ html[data-input="gamepad"] #modeSelect .mode-btn .key-hint {
   color: #ffffff;
   background: var(--cc-steel-hi);
   outline: none;
-  transform: translateX(4px);
   box-shadow:
     inset 0 1px 0 rgba(185, 210, 232, 0.42),
     inset 5px 0 0 var(--cc-cyan),
     inset 0 0 0 2px rgba(34, 230, 255, 0.6),
     inset 0 0 26px rgba(34, 230, 255, 0.14);
+}
+
+/* Pointer-only nudge, as in the base rule. */
+:root[data-art-style="modern"] #modeSelect .mode-btn:focus-visible {
+  transform: translateX(4px);
+}
+
+@media (hover: hover) {
+  :root[data-art-style="modern"] #modeSelect .mode-btn:hover {
+    transform: translateX(4px);
+  }
 }
 
 :root[data-art-style="modern"] #modeSelect .mode-btn:hover::before,

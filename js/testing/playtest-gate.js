@@ -1,5 +1,5 @@
 import { GameState } from "../game.js";
-import { ACTS, isLastAct, UPGRADES } from "../data.js";
+import { ACTS, isLastAct, UPGRADES } from "../../src/data/index.js";
 import { isBossEnemy } from "../../src/systems/combat.js";
 import { powersFor } from "../../src/systems/chrono-powers.js";
 import { collectAllPowerCells } from "../../src/systems/exit-cells.js";
@@ -464,7 +464,7 @@ export function createPlaytestGate(game, tools) {
   return { run };
 }
 
-export function snapshotGame(game) {
+function snapshotGame(game) {
   const player = game.player || {};
   return {
     state: game.state,
@@ -499,7 +499,7 @@ export function snapshotGame(game) {
   };
 }
 
-export function detectProblemState(snap) {
+function detectProblemState(snap) {
   if (!VALID_STATES.has(snap.state)) return `invalid state ${snap.state}`;
   for (const [key, value] of Object.entries(snap.player)) {
     if (typeof value === "number" && !Number.isFinite(value)) return `non-finite player.${key}`;
@@ -529,6 +529,7 @@ function hashSeed(value) {
   return hash >>> 0;
 }
 
+// Mulberry32 (src/utils/rng.js) stepped in place, so the state lives on the run.
 function nextRandom(run) {
   run.seed = Math.imul(run.seed + 0x6d2b79f5, 1);
   let t = run.seed;

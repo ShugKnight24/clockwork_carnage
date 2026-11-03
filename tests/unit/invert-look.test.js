@@ -5,7 +5,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { GamepadManager } from "../../js/gamepad.js";
 import { applyAimDelta } from "../../src/systems/aim.js";
-import { DEFAULT_SETTINGS, SETTINGS_REGISTRY, gamepadSettingsFrom } from "../../js/settings-registry.js";
+import { DEFAULT_SETTINGS, SETTINGS_REGISTRY, gamepadSettingsFrom } from "../../src/settings/registry.js";
 
 const stdPad = (axes) => ({
   index: 0, id: "Xbox Controller (STANDARD GAMEPAD)", mapping: "standard", connected: true, timestamp: 1,

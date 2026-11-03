@@ -3,13 +3,11 @@
  * under the arms and rifle (`front`). Fallen, the slumped left arm lies across
  * the chest, so everything stays under it (`front`).
  */
+
+import { mixHex as mix } from "../../../utils/color.js";
+
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
-const mix = (a, b, t) => {
-  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-};
 const BRASS = "#d9a441";
 const shape = (d, fill, sw = 1) => `<path d="${d}" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`;
 const seam = (d, color, w = 0.6) => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>`;

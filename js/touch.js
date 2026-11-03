@@ -10,15 +10,15 @@
  * Only activates on touch-capable devices.
  */
 
-import { UPGRADES, WEAPONS } from "./data.js";
+import { UPGRADES, WEAPONS } from "../src/data/index.js";
 import { isModernArt } from "../src/rendering/art-style.js";
-import { COMPACT_PHONE_HEIGHT } from "./settings-registry.js";
+import { COMPACT_PHONE_HEIGHT } from "../src/settings/registry.js";
 import {
   pauseLayout,
   hitRect,
   upgradeLayout,
   tutorialMenuLayout,
-} from "./layout.js";
+} from "../src/ui/layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { setCentredAim } from "../src/systems/aim.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";

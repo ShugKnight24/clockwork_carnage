@@ -6,7 +6,7 @@
 
 import { ACHIEVEMENTS, ACHIEVEMENT_ICON_SVGS } from "../data/index.js";
 import * as Save from "../core/save-system.js";
-import { drawStatsScreen } from "../../js/stats-screen.js";
+import { drawStatsScreen } from "../ui/stats-screen.js";
 
 export class AchievementSystem {
   constructor() {

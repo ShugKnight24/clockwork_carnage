@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AdaptiveQuality, effectCeilings, effectCapReason } from "../../src/utils/perf.js";
-import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../../js/settings-registry.js";
+import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../../src/settings/registry.js";
 
 describe("quality preset post-FX ceilings", () => {
   it("copies bloom, chromatic aberration and grain from the preset", () => {
@@ -77,7 +77,8 @@ describe("governor respects the player's caps", () => {
     // As game.applyPerformanceSettings does: player toggle AND preset ceiling.
     const ceil = effectCeilings({ graphicsPreset: 2, batterySaver: false });
     q.applyPreset("low");
-    q.applyCustom({ enableFloorTexture: true && ceil.enableFloorTexture, enableVignette: true && ceil.enableVignette });
+    const toggledOn = true;
+    q.applyCustom({ enableFloorTexture: toggledOn && ceil.enableFloorTexture, enableVignette: toggledOn && ceil.enableVignette });
     expect([q.enableFloorTexture, q.enableVignette]).toEqual([false, false]);
   });
 

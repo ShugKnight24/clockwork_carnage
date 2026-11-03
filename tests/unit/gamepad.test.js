@@ -10,7 +10,7 @@ import {
   radialDeadzone,
   describeGamepadStatus,
 } from "../../js/gamepad.js";
-import { SETTINGS_REGISTRY, bindGamepadStatus, settingDisplayItem } from "../../js/settings-registry.js";
+import { SETTINGS_REGISTRY, bindGamepadStatus, settingDisplayItem } from "../../src/settings/registry.js";
 import { SECTION_OF } from "../../src/ui/settings-sections.js";
 
 const btn = (pressed = false, value = pressed ? 1 : 0) => ({ pressed, value });

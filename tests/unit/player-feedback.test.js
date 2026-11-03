@@ -17,7 +17,7 @@ import { updateProjectiles } from "../../src/systems/projectile-update.js";
 import { zoneAimHeight } from "../../src/systems/combat.js";
 import { exitIsOpen } from "../../src/systems/exit-cells.js";
 import { WEAPONS } from "../../src/data/weapons.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 
 afterEach(() => vi.restoreAllMocks());
 

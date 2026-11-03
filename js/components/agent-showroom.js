@@ -29,6 +29,7 @@ import {
 import * as Skins from "../../src/data/weapon-skins.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
+import { clamp } from "../../src/utils/math.js";
 
 /**
  * Modern-mode agent customizer: a full-screen "hero showroom" shown while the
@@ -221,7 +222,6 @@ const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", ac
 /** Field equality for flat indices and the nested badge / accessory records. */
 const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const TIER = ["", "I", "II", "III"];
 
 /** Stat lines for a loadout, mirroring Game.applyLoadoutBonuses. */

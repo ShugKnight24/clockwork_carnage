@@ -23,7 +23,7 @@ import {
 } from "../world/voxel-physics.js";
 import { beginWindup, enemyTimeRate, turnShield } from "./ai.js";
 import { AIR, isWater } from "../world/blocks.js";
-import { Projectile } from "../../js/entities.js";
+import { Projectile } from "../entities/index.js";
 import { ENEMY_MELEE_WHIFF_SLACK } from "../constants.js";
 
 /** Fallback footprint for a def that carries no hitbox (combat.js agrees). */

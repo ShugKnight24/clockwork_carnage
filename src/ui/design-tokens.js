@@ -46,7 +46,7 @@ export const FONT = {
 };
 
 /** Type scale in CSS px (canvas sizes match at 1× HUD scale). */
-export const TYPE = {
+const TYPE = {
   micro: 9, // caption footers, keycap legends on phones
   keycap: 10,
   label: 11, // tile names, stat labels
@@ -68,7 +68,7 @@ export const INK = {
 };
 
 /** Chamfer (cut corner) sizes and corner-bracket geometry (px). */
-export const SHAPE = {
+const SHAPE = {
   chamferSm: 7, // chips, feature cards, keys
   chamfer: 12, // buttons, mission plates, tiles
   chamferLg: 20, // menu panels
@@ -118,7 +118,7 @@ export const KEYCAP = [
 export const TITLE = { fillTop: "#ffffff", fillBottom: "#9fb4c7", split: 0.55 };
 
 /** Motion. */
-export const MOTION = {
+const MOTION = {
   fast: 150, // hover/press
   base: 200, // panel swaps, toggles
   slow: 260, // sheets, camera moves
@@ -128,9 +128,6 @@ export const MOTION = {
 const gradient = (c) => `linear-gradient(180deg, ${c.top} 0%, ${c.bottom} 100%)`;
 const panelGradient = (p) => `linear-gradient(180deg, ${p[0]} 0%, ${p[1]} 45%, ${p[2]} 100%)`;
 const kebab = (s) => s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
-
-/** Chamfer polygon for clip-path (top-left and bottom-right cut). */
-export const chamferClip = (px) => `polygon(${px}px 0, 100% 0, 100% calc(100% - ${px}px), calc(100% - ${px}px) 100%, 0 100%, 0 ${px}px)`;
 
 /** All tokens as CSS custom property declarations (no selector). */
 export function tokenDeclarations() {

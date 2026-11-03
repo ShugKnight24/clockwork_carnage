@@ -1,4 +1,3 @@
-import { WALL_COLORS } from "./data.js";
 
 import { generateWallTextures, generateFloorCeilTextures, generateModernEnv, ensureEnvWalls, ensureEnvBands, REAL_AMBIENT, averageColor, legacyUpperBand, tintUpperBand } from "../src/rendering/textures.js";
 import { EnvMap, AO_RADIUS, AO_FLOOR, GLOW_RADIUS } from "../src/rendering/env/env-map.js";
@@ -24,7 +23,6 @@ const glowAt = (d) => {
 };
 import { ENEMY_RENDERERS } from "../src/rendering/enemies/index.js";
 import {
-  drawPickup,
   drawHealthPickup,
   drawAmmoPickup,
   drawWeaponPickup,
@@ -121,10 +119,6 @@ const _byDistanceDesc = (a, b) => _spriteDistBuf[b] - _spriteDistBuf[a];
 const TP_CAM_BACK = 2.4;
 const TP_CAM_SIDE = 0.6;
 
-// TODO: Improve variety w/ textures
-// TODO: These are all procedurally generated at runtime... lol... Could be optimized by pre-generating and caching, or by using actual image files for more complex textures
-// TODO: Asset Pipeline for the above or is this overkill
-// TODO: Refine assets and improve variety
 /**
  * Cap colours for walls a prewarm painted without them (prewarmEnv), read
  * back in one go: the first readback waits on the GPU, the rest are ~1 ms.

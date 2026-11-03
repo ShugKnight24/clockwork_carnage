@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { AISystem, attackWindupMs } from "../../src/systems/ai.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import {
   ENEMY_MELEE_WINDUP_MS,
   ENEMY_RANGED_WINDUP_MS,
 } from "../../src/constants.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 

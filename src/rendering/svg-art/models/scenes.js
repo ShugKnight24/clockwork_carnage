@@ -1,5 +1,8 @@
 /** SVG scene art and backgrounds. See ../index.js for the format. */
 
+import { lerp } from "../../../utils/math.js";
+import { parkMiller as rng } from "../../../utils/rng.js";
+
 // ── Shared helpers ──────────────────────────────────────────────────────────
 
 const INK = "#04060b";
@@ -8,16 +11,6 @@ const pts = (list) => list.map(([x, y]) => `${n1(x)},${n1(y)}`).join(" ");
 const poly = (list, attrs) => `<polygon points="${pts(list)}" ${attrs}/>`;
 const seg = ([x1, y1], [x2, y2], attrs) =>
   `<line x1="${n1(x1)}" y1="${n1(y1)}" x2="${n1(x2)}" y2="${n1(y2)}" ${attrs}/>`;
-const lerp = (a, b, k) => a + (b - a) * k;
-
-/** Deterministic PRNG so backgrounds rasterise identically every load. */
-function rng(seed) {
-  let s = seed;
-  return () => {
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
 
 /** One-point perspective: world (X, Y, z) → screen, vanishing point (vx, vy). */
 const camera = (vx, vy, f) => (X, Y, z) => [vx + (X * f) / z, vy + (Y * f) / z];

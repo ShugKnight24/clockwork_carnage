@@ -13,13 +13,14 @@
  */
 
 import { COLOR, FONT, PANEL, CAPTION, KEYCAP, TITLE } from "./design-tokens.js";
+import { SpriteCache } from "../rendering/sprite-cache.js";
 
 /** Palette (shared with the DOM menus through design-tokens.js). */
 export const UI = COLOR;
 
 // System font stacks only (no web fonts ship with the game).
-export const FONT_DISPLAY = FONT.display;
-export const FONT_MONO = FONT.mono;
+const FONT_DISPLAY = FONT.display;
+const FONT_MONO = FONT.mono;
 
 const _fontCache = new Map();
 /** Cached font string, e.g. uiFont(14) → `700 14px Bahnschrift, …`. */
@@ -36,8 +37,9 @@ export function uiFont(px, weight = 700, mono = false) {
 
 // ─── Sprite cache ───────────────────────────────────────────────────────────
 
-const _sprites = new Map();
-const MAX_SPRITES = 220;
+// Was 220 sprites. At 2x DPR the arena's run from ~60 KB (median) to a few
+// MB (full-width banners); 128 KB each keeps the old count for typical ones.
+const _sprites = new SpriteCache(220 * 128 * 1024);
 
 /** Device pixel ratio baked into a context's transform (HUD canvas uses dpr). */
 export function pixelRatio(ctx) {
@@ -61,9 +63,7 @@ function sprite(key, w, h, pad, dpr, paint) {
   g.scale(dpr, dpr);
   g.translate(pad, pad);
   paint(g, w, h);
-  if (_sprites.size >= MAX_SPRITES) _sprites.delete(_sprites.keys().next().value);
-  _sprites.set(k, c);
-  return c;
+  return _sprites.set(k, c);
 }
 
 function blit(ctx, c, x, y, w, h, pad) {
@@ -84,7 +84,7 @@ export function blitSprite(ctx, c, x, y, w, h, pad = 0) {
 }
 
 /** Chamfered rectangle: top-left and bottom-right corners cut at 45°. */
-export function chamferPath(g, x, y, w, h, c) {
+function chamferPath(g, x, y, w, h, c) {
   const k = Math.max(0, Math.min(c, w / 2, h / 2));
   g.beginPath();
   g.moveTo(x + k, y);
@@ -593,9 +593,4 @@ export function inkText(ctx, text, x, y, fill, inkWidth = 3) {
   ctx.strokeText(text, x, y);
   ctx.fillStyle = fill;
   ctx.fillText(text, x, y);
-}
-
-/** Drop every cached sprite (e.g. after a DPR change). */
-export function clearUiKitCache() {
-  _sprites.clear();
 }

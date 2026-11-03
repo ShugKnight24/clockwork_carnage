@@ -374,6 +374,7 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
     } else if (h.type === "stasis") {
       // Debris and water, hanging where the collapse left them.
       const [c1, r1, c2, r2] = h.rect;
+      // Park–Miller, but scaled by s / (2^31 - 1), not utils/rng.js's (s - 1) / (2^31 - 2).
       let seed = 1234567;
       const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
       for (let i = 0; i < (h.motes ?? 32); i++) {

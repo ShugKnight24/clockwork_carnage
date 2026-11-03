@@ -15,6 +15,9 @@
  * Output units are viewmodel units: 4 px at 720p, origin at screen centre.
  */
 
+import { mixHex } from "../../../utils/color.js";
+import { clamp01 } from "../../../utils/math.js";
+
 export const INK = "#04060b";
 
 export const f = (n) => Math.round(n * 10) / 10;
@@ -26,7 +29,7 @@ const norm = (a) => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
-export const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 // Key light upper-left and slightly behind the camera; rim light behind-right.
 const KEY = norm([-0.55, 0.78, -0.3]);
@@ -34,16 +37,7 @@ const RIM = norm([0.8, 0.2, 0.55]);
 // The key light's direction on screen (y down), for the worn-edge catch.
 const KEY_2D = [-0.55, -0.83];
 
-function hex(c) {
-  const n = parseInt(c.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-export function mix(a, b, t) {
-  const A = hex(a);
-  const B = hex(b);
-  const k = Math.max(0, Math.min(1, t));
-  return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, "0")).join("");
-}
+export const mix = (a, b, t) => mixHex(a, b, clamp01(t));
 function ramp(tones, v) {
   const x = Math.max(0, Math.min(1, v)) * (tones.length - 1);
   const i = Math.min(tones.length - 2, Math.floor(x));

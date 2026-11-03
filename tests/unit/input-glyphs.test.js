@@ -13,8 +13,8 @@ import {
 } from "../../src/ui/input-glyphs.js";
 import { GamepadManager } from "../../js/gamepad.js";
 import { Game, GameState } from "../../js/game.js";
-import { Player } from "../../js/entities.js";
-import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { Player } from "../../src/entities/index.js";
+import { DEFAULT_KEYBINDS } from "../../src/systems/input-manager.js";
 import { tutorialStepCopy } from "../../src/ui/tutorial-ui.js";
 import { prologueStepIndex } from "../../src/data/prologue.js";
 import { powerKeys } from "../../src/ui/chrono-hud.js";

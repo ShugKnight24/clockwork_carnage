@@ -22,16 +22,16 @@
  * Receives a `game` reference for the shared state (player, entities, audio,
  * map, comms).
  */
-import { TUTORIAL_MAP } from "./data.js";
+import { TUTORIAL_MAP } from "../src/data/index.js";
 import { STATION_WALLS } from "../src/data/walls.js";
-import { Enemy, Pickup, Prop, Projectile } from "./entities.js";
+import { Enemy, Pickup, Prop, Projectile } from "../src/entities/index.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, TRIAL_GRADES, gradeTrial, lineDuration, trialStart } from "../src/data/prologue.js";
 import { ARIA_COMMS } from "../src/data/dialogue.js";
 import { drawLine } from "../src/systems/aria-comms.js";
-import { spawnEnergyBurst } from "./particle-system.js";
+import { spawnEnergyBurst } from "../src/rendering/particle-system.js";
 import { VENT_CHRONO } from "../src/systems/chrono-hazards.js";
 import { playChronoSound } from "../src/audio/chrono-sounds.js";
 import { aimAnglesForGame } from "../src/systems/aim.js";
@@ -57,6 +57,7 @@ import { ART_LEGACY, getArtStyle } from "../src/rendering/art-style.js";
 import { warmPropSet } from "../src/rendering/props.js";
 import { notePrologueStep } from "../src/systems/playtest-log.js";
 import * as Save from "../src/core/save-system.js";
+import { hasIdleCallback } from "../src/utils/schedule.js";
 
 const SPEAKER_STYLE = {
   ARIA: { color: "#00ffdd", voice: "aria" },
@@ -2247,7 +2248,7 @@ export class TutorialSystem {
     // (a pixel read froze the comic 1.1 s; the first frames in the station
     // waited on every 3D blit). Reading one pixel back makes each bake pay
     // its own cost inside the slice that queued it.
-    const queued = typeof requestIdleCallback !== "function";
+    const queued = !hasIdleCallback();
     // There a person's layer costs 100-200 ms of GPU, ~180 of them, however
     // they are spread (paced through play, every frame hitched). So they go
     // under the comic, only at the near size (the far one is a cheap GPU
@@ -2268,7 +2269,7 @@ export class TutorialSystem {
     // a fixed timeRemaining() kept the loop below baking every wall in one
     // slice, a ~4 s freeze in the opening comic on an iPhone.
     const idle = (fn) =>
-      typeof requestIdleCallback === "function"
+      hasIdleCallback()
         ? requestIdleCallback(fn, { timeout: 100 })
         : setTimeout(() => {
             // 12 of every 16 ms: the opening's panels are mostly still, and
@@ -2771,7 +2772,7 @@ export class TutorialSystem {
     const ctx = g.renderer?.ctx;
     const viewH = g.renderer?.height;
     if (!ctx || !viewH || getArtStyle() === ART_LEGACY || typeof requestAnimationFrame !== "function") return;
-    if (typeof requestIdleCallback !== "function") return;
+    if (!hasIdleCallback()) return;
     const halfHeights = [viewH / 2.4, viewH / 5];
     const until = performance.now() + 8000;
     const step = () => {
@@ -4174,6 +4175,3 @@ function trialComment(trial, r) {
   if (good) return `${name}: ${r.grade}. Don't let it go to your head.`;
   return `${name}: ${r.grade}. It's on the sheet now, Cadet. Next.`;
 }
-
-/** Step logic ids, for the tests: every prologue step must have logic. */
-export const PROLOGUE_LOGIC_IDS = Object.keys(LOGIC);

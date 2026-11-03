@@ -138,11 +138,18 @@ async function fakePad(page, id = "Xbox Wireless Controller (STANDARD GAMEPAD Ve
   }, id);
 }
 
+// Two frames as well as the time: the pad is polled once a frame, and on a
+// runner with no GPU 80 ms can pass without one.
+const twoFrames = (page) =>
+  page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
 async function tapPad(page, i, hold = 80) {
   await page.evaluate((b) => window.__padSet(b, true), i);
   await page.waitForTimeout(hold);
+  await twoFrames(page);
   await page.evaluate((b) => window.__padSet(b, false), i);
   await page.waitForTimeout(80);
+  await twoFrames(page);
 }
 
 async function openFromMenu(page) {
@@ -201,7 +208,7 @@ test("a row changed from its default is marked, with an accessible description",
   await page.keyboard.press("KeyE"); // Video
   const row = deck(page).locator('[data-key="enableFilmGrain"]');
   const was = await setting(page, "enableFilmGrain");
-  const dflt = await page.evaluate(async () => (await import("/js/settings-registry.js")).DEFAULT_SETTINGS.enableFilmGrain);
+  const dflt = await page.evaluate(async () => (await import("/src/settings/registry.js")).DEFAULT_SETTINGS.enableFilmGrain);
   expect(was).toBe(dflt);
   await expect(row).not.toHaveClass(/\bchanged\b/);
   await expect(row).not.toHaveAttribute("aria-description", /./);
@@ -434,7 +441,7 @@ test("rapid art-style switching from pause with enemies in view never breaks the
   for (const [to, gap] of [[1, 600], [0, 700], [2, 500], [1, 600], [2, 700]]) {
     await page.evaluate(async (v) => {
       const g = window.ccDebug.game;
-      const def = (await import("/js/settings-registry.js")).SETTINGS_REGISTRY.find((d) => d.key === "artStyle");
+      const def = (await import("/src/settings/registry.js")).SETTINGS_REGISTRY.find((d) => d.key === "artStyle");
       g.settings.artStyle = v;
       def.onChange?.(g);
     }, to);
@@ -470,7 +477,7 @@ test("controller only: RB to Video, d-pad to a toggle, A flips, Y compares, X re
   await page.waitForTimeout(120);
   expect(await setting(page, "showPerformanceOverlay")).toBe(!before);
   await tapPad(page, 2); // X resets the row
-  expect(await setting(page, "showPerformanceOverlay")).toBe(await page.evaluate(async () => (await import("/js/settings-registry.js")).DEFAULT_SETTINGS.showPerformanceOverlay));
+  expect(await setting(page, "showPerformanceOverlay")).toBe(await page.evaluate(async () => (await import("/src/settings/registry.js")).DEFAULT_SETTINGS.showPerformanceOverlay));
   await tapPad(page, 1); // B
   expect(await state(page)).toBe("modeSelect");
   await expect(page.locator("#modeSelect")).toBeVisible();

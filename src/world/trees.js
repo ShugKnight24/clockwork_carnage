@@ -106,7 +106,7 @@ export function treeShape(species, h, emit) {
 // ─── Saplings in a live world ───────────────────────────────
 
 /** Ground a sapling may be planted on and grow from: grass or dirt. */
-export const SAPLING_SOIL = new Set([10, 11]);
+const SAPLING_SOIL = new Set([10, 11]);
 
 /**
  * Which tree a sapling becomes. There is no generator to ask in a live world
@@ -147,7 +147,7 @@ export function growSapling(world, x, y, z, hash) {
 }
 
 /** Chance that a sapling picked by a random tick grows on that tick. */
-export const GROW_CHANCE = 0.35;
+const GROW_CHANCE = 0.35;
 
 /**
  * One random tick over the columns within `radius` of the player's column:

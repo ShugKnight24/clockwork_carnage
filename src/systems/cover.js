@@ -18,17 +18,17 @@ import { wallHeight, isPassable, hasLineOfSight, EYE_Z } from "./physics.js";
 /** How far in front of the face the player's centre sits once snapped. */
 export const COVER_OFFSET = 0.32;
 /** How far away a face can be and still be taken (tiles, along the view). */
-export const COVER_REACH = 1.3;
+const COVER_REACH = 1.3;
 /** Below this a block is a step, not cover: a crouch behind it hides nothing. */
-export const COVER_MIN_HEIGHT = 0.35;
+const COVER_MIN_HEIGHT = 0.35;
 /** The player's centre stays this far inside the ends of a run. */
-export const COVER_EDGE_MARGIN = 0.3;
+const COVER_EDGE_MARGIN = 0.3;
 /** Within this of a run's end, aiming leans out round it. */
-export const COVER_EDGE_NEAR = 0.3;
+const COVER_EDGE_NEAR = 0.3;
 /** How far past the end of high cover a lean takes the eye. */
-export const COVER_LEAN = 0.7;
+const COVER_LEAN = 0.7;
 /** Cover-to-cover: the furthest face a slide will carry you to. */
-export const COVER_DASH_RANGE = 4.5;
+const COVER_DASH_RANGE = 4.5;
 /** Blind fire scatters this many times wider than the weapon's hip cone... */
 export const BLIND_FIRE_SPREAD_MULT = 2;
 /** ...and never tighter than this (radians), even for a precise rifle. */
@@ -55,7 +55,7 @@ export function coverClass(map, cx, cy) {
  * @returns {{ cx, cy, nx, ny, dist, x, y } | null} the cell, the normal of the
  *   side the ray entered by, and where it met that side
  */
-export function castToFace(map, x, y, dirX, dirY, maxDist, skip = null) {
+function castToFace(map, x, y, dirX, dirY, maxDist, skip = null) {
   let mapX = Math.floor(x);
   let mapY = Math.floor(y);
   const ddx = Math.abs(1 / (Math.abs(dirX) < 1e-9 ? 1e-9 : dirX));
@@ -144,17 +144,17 @@ export function facePoint(f, s) {
 }
 
 /** A world point's coordinate along a face. */
-export function tangentOf(f, x, y) {
+function tangentOf(f, x, y) {
   return f.alongX ? x : y;
 }
 
 /** How far a point is in front of a face's plane (negative: behind it). */
-export function signedDepth(f, x, y) {
+function signedDepth(f, x, y) {
   return f.alongX ? (y - f.face) * f.ny : (x - f.face) * f.nx;
 }
 
 /** Same run on the same side? */
-export function sameFace(a, b) {
+function sameFace(a, b) {
   return !!a && !!b && a.nx === b.nx && a.ny === b.ny && a.face === b.face && a.kLo === b.kLo && a.kHi === b.kHi;
 }
 
@@ -172,7 +172,7 @@ export const clampS = (f, s) => Math.max(f.sMin, Math.min(f.sMax, s));
  * Can a body of radius `margin` walk the straight line from (x0, y0) to
  * (x1, y1)? Sampled every tenth of a tile.
  */
-export function pathClear(map, x0, y0, x1, y1, margin = 0.2) {
+function pathClear(map, x0, y0, x1, y1, margin = 0.2) {
   const d = Math.hypot(x1 - x0, y1 - y0);
   const steps = Math.max(1, Math.ceil(d / 0.1));
   for (let i = 0; i <= steps; i++) {

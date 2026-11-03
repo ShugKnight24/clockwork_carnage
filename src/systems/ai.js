@@ -34,7 +34,7 @@
 // • `attackRate` in enemy defs: MILLISECONDS (e.g. 1000 = 1s between shots).
 // ────────────────────────────────────────────────────────────────────────────
 import { isPassable, hasLineOfSight, EYE_Z, playerEyeZ } from "./physics.js";
-import { Enemy, Projectile } from "../../js/entities.js";
+import { Enemy, Projectile } from "../entities/index.js";
 import { updateForm2, recordShot } from "./boss-form2.js";
 import { updateBossForm, tickBossForm } from "./paradox-forms.js";
 import { NavFields, navAngle, navSteps, leadPoint } from "./ai-nav.js";

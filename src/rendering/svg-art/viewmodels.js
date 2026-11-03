@@ -18,6 +18,7 @@ import { WEAPON_MODELS, MATERIALS } from "./viewmodel/weapons.js";
 import { activeFinish, finishKey } from "../../data/weapon-skins.js";
 import { smoothDamp } from "../../systems/aim.js";
 import { isRealisticArt } from "../art-style.js";
+import { clamp01, lerp } from "../../utils/math.js";
 
 const DEFS =
   `<filter id="vmBloom" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.3"/></filter>` +
@@ -227,9 +228,7 @@ const ADS_SCALE = 0.58;
  */
 const ADS_DROP = 0.2;
 
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const smoothstep = (t) => t * t * (3 - 2 * t);
-const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
  * Swing the hip art toward the ADS pose, applied by fraction s: the grip

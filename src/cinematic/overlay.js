@@ -19,6 +19,8 @@
 
 import { COLOR, FONT, CAPTION } from "../ui/design-tokens.js";
 import * as kit from "../ui/modern-ui-kit.js";
+import { clamp } from "../utils/math.js";
+import { wrapWords } from "../utils/text.js";
 
 const BAR_ASPECT = 2.39;
 const SLIDE_MS = 0.25; // caption slide in/out (s)
@@ -26,9 +28,8 @@ const SLIDE_PX = 24;
 const PUNCH_S = 0.2; // logo/title scale punch 1.08 → 1
 const CARD_OPEN_S = 0.22;
 // Narration never wraps past this; overlayLayout reserves a band this tall.
-export const NARRATION_LINES = 2;
+const NARRATION_LINES = 2;
 
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 // ─── Layout (pure) ──────────────────────────────────────────────────────────
@@ -188,18 +189,7 @@ function inkedText(g, text, x, y, fill, ink, lw) {
 
 /** Greedy word wrap at bake time. */
 function wrap(fontStr, text, maxW, spacing = 0) {
-  const words = String(text).split(/\s+/);
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && textWidth(fontStr, next, spacing) > maxW) {
-      lines.push(line);
-      line = word;
-    } else line = next;
-  }
-  if (line) lines.push(line);
-  return lines;
+  return wrapWords(String(text).split(/\s+/), (s) => textWidth(fontStr, s, spacing), maxW);
 }
 
 // ─── Captions (bottom-left) ────────────────────────────────────────────────

@@ -3,7 +3,7 @@
  * screens that still exist: set the value, let the row react (its onChange
  * re-applies graphics, audio, pad settings…), then persist.
  */
-import { DEFAULT_SETTINGS, applySettingStep } from "../../js/settings-registry.js";
+import { DEFAULT_SETTINGS, applySettingStep } from "../settings/registry.js";
 
 export function applySettingValue(game, def, value) {
   // Action rows run a command; they have no stored value to write.

@@ -25,7 +25,7 @@
  * `recordShot` for every round the boss fires; the game calls
  * `counterShiftScale` on the player's movement and `canShift` before a shift.
  */
-import { Projectile } from "../../js/entities.js";
+import { Projectile } from "../entities/index.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 
 export const FORM2 = {

@@ -14,17 +14,17 @@
  * (src/systems/reload.js).
  */
 
+import { clamp01 } from "../utils/math.js";
+
 /** Damage multiplier for a magazine loaded by a hit. */
 export const BOOST = 1.15;
 /** Extra ms a jammed reload takes. */
 export const JAM_MS = 600;
 /** The perfect zone is this share of the sweet zone, at its leading edge. */
-export const PERFECT_SHARE = 0.35;
+const PERFECT_SHARE = 0.35;
 /** A weapon with no tuning of its own. */
 const DEFAULT_ZONE = [0.5, 0.15];
 const DEFAULT_RELOAD_MS = 1600;
-
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 /** A fresh tracker. `stats` counts outcomes for lessons and progress (never reset by a reload). */
 export function createActiveReload() {

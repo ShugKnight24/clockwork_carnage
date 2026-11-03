@@ -20,7 +20,7 @@ import { playerEyeZ3D } from "../world/voxel-physics.js";
 import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
 import { FINISHES } from "../data/weapon-skins.js";
 import { WEAPONS } from "../data/weapons.js";
-import { Projectile, Enemy, Pickup } from "../../js/entities.js";
+import { Projectile, Enemy, Pickup } from "../entities/index.js";
 import { aimAnglesForGame, currentSpread } from "./aim.js";
 import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";

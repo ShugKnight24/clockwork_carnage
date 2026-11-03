@@ -8,7 +8,6 @@
  */
 
 const TELEMETRY_KEY = "cc_telemetry";
-const SESSION_KEY = "cc_telemetry_session";
 
 export class TelemetryCollector {
   constructor(game) {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AISystem, quillFan } from "../../src/systems/ai.js";
 import { windupLine } from "../../src/systems/chrono-powers.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { buildEnemyModel } from "../../src/rendering/svg-art/sprites/enemies.js";
 import { ENEMY_RENDERERS } from "../../src/rendering/enemies/index.js";
@@ -12,6 +12,9 @@ import { MODELS as HOUND_ART } from "../../src/rendering/svg-art/models/hound.js
 import { drawCutsceneArt } from "../../src/rendering/cutscene-art.js";
 import { setArtStyle, getArtStyle, ART_LEGACY } from "../../src/rendering/art-style.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 // The Hound, suit C-0016 (spec §6): always visible, solid only while you
 // shift, and every attack it has comes with a tell you can read and still

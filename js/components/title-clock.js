@@ -1,4 +1,5 @@
 import { attachArtSwitch, modelHtml } from "./title-art-layers.js";
+import { lcg as rng } from "../../src/utils/rng.js";
 
 const template = document.createElement("template");
 template.innerHTML = `
@@ -662,15 +663,6 @@ const INK = "#04060b";
 const f = (n) => Math.round(n * 10) / 10;
 const polar = (r, deg) => [f(Math.cos((deg - 90) * (Math.PI / 180)) * r), f(Math.sin((deg - 90) * (Math.PI / 180)) * r)];
 
-/** Deterministic PRNG so sparks and shards never shift between loads. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
 const CLOCK_DEFS = `
 <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
   <stop offset="0" stop-color="#ffe7a8"/><stop offset=".22" stop-color="#d6a64e"/>
@@ -949,8 +941,6 @@ function sparks(seed, n) {
   return glowCopy(m, "b1");
 }
 
-const G = (cx, cy, m) => `<g transform="translate(${cx} ${cy})">${m}</g>`;
-
 function modernClock() {
   const p = portalLayers();
   const box = [-180, -180, 360, 360];
@@ -1021,7 +1011,7 @@ async function realClock() {
   return model;
 }
 
-export class TitleClock extends HTMLElement {
+class TitleClock extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });

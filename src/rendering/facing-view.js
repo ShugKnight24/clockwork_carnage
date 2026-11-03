@@ -30,14 +30,12 @@
  * its side" and "my shots land" agree.
  */
 
-export const FRONT_DEG = 22.5;
+const FRONT_DEG = 22.5;
 export const FLANK_DEG = 60;
-export const BACK_DEG = 125;
-export const HOLD_DEG = 3;
+const BACK_DEG = 125;
+const HOLD_DEG = 3;
 /** Screen-sideways share of its facing under which the near/far side holds. */
 const SIDE_HOLD = 0.06;
-
-export const FACING_VIEWS = ["front", "threeNear", "threeFar", "side", "back"];
 
 const RAD = 180 / Math.PI;
 

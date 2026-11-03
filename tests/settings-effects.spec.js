@@ -55,7 +55,7 @@ async function setup(browser, artStyle) {
   await page.goto("/?debug");
   await page.waitForFunction(() => window.ccDebug, null, { timeout: 30_000 });
   await page.evaluate(async () => {
-    window.__R = await import("/js/settings-registry.js");
+    window.__R = await import("/src/settings/registry.js");
     ccDebug.startCampaign(0, 1);
   });
   await page.waitForTimeout(3500);
@@ -64,7 +64,10 @@ async function setup(browser, artStyle) {
     ccDebug.godMode(true);
     g.player.health = g.player.maxHealth = 100;
     g.player.hurtTime = 0;
-    g.update = function () {}; // freeze the simulation; the rAF loop and governor keep running
+    g.update = function () {}; // freeze the simulation; the rAF loop keeps running
+    // Hold the governor too: at a few fps (a runner with no GPU) it shrinks
+    // the frame and drops effects between a test's snapshots.
+    g.quality.adjust = () => false;
     window.__FIXT = g.time;
     window.__L = g.lights.length;
     window.__snaps = {};
@@ -128,9 +131,15 @@ async function setup(browser, artStyle) {
   return { ctx, page };
 }
 
-/** Beyond-noise test for one diff: both measures clear the floor. */
+/**
+ * Beyond-noise test for one diff: both measures clear the floor, or the
+ * mean shift alone is far past it. Software GL draws Comic bloom as a soft
+ * whole-frame lift: mean shift ~1.1 against noise ~0.005, yet under 0.2% of
+ * pixels move by more than 10.
+ */
 function changed(d, noise) {
   if (d.resized) return true;
+  if (d.mad > Math.max(0.5, noise.mad * 50)) return true;
   return d.pct > Math.max(0.2, noise.pct * 5) && d.mad > Math.max(0.1, noise.mad * 5);
 }
 

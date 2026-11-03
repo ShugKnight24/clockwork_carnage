@@ -15,7 +15,7 @@
 const OPEN = 0;
 
 /** How long a field stays trusted (seconds of game time): doors open, walls shift. */
-export const FIELD_TTL = 0.5;
+const FIELD_TTL = 0.5;
 
 /**
  * Steps from every cell to (tx, ty) over open floor (-1: unreachable), with

@@ -10,20 +10,20 @@
 import { SECTIONS, SECTION_OF, rowsForSection, QUICK_CARDS, ART_CARDS } from "../../src/ui/settings-sections.js";
 import { applySettingValue, stepSetting, resetSetting } from "../../src/ui/settings-apply.js";
 import { createDeckState, deckKey, deckKeyUp, CAPTURE_MS } from "../../src/ui/settings-deck-model.js";
-import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../settings-registry.js";
+import { SETTINGS_REGISTRY, DEFAULT_SETTINGS, settingDisplayItem } from "../../src/settings/registry.js";
 import { activeDevice, renderDomGlyphs, GLYPH_CSS, glyph, glyphHTML, buttonGlyph, keyLabel, padFamily } from "../../src/ui/input-glyphs.js";
 import { PAD, PAD_LABELS, GAMEPAD_ACTIONS, DEFAULT_GAMEPAD_ACTIONS, REMAPPABLE_PAD_ACTIONS } from "../../src/systems/pad-actions.js";
 import { planBind, applyBind, previewBind, resetBindings, savePadBinds, REMAPPABLE_KEY_ACTIONS, STORAGE_KEY_PADBINDS } from "../../src/systems/remap.js";
-import { DEFAULT_KEYBINDS } from "../input-manager.js";
+import { DEFAULT_KEYBINDS } from "../../src/systems/input-manager.js";
 import { COLOR, tokensCss } from "../../src/ui/design-tokens.js";
 import { onArtStyleChange } from "../../src/rendering/art-style.js";
+import { clamp } from "../../src/utils/math.js";
 
 // px: narrower portrait windows get the bottom sheet. A landscape phone keeps
 // the side panel; a sheet on a 375px-tall screen left about one row.
 const SHEET_BELOW = 700;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const defOf = (key) => SETTINGS_REGISTRY.find((d) => d.key === key);
 const decimals = (step) => (String(step).split(".")[1] || "").length;
 

@@ -4,13 +4,17 @@
  * cover, and the lone pillar at (22, 50) is high cover.
  */
 import { test, expect } from "@playwright/test";
-import { loadGame, debug } from "./helpers.js";
+import { loadGame, debug, play } from "./helpers.js";
+
+// Each test plays seconds of a full campaign level: two to three minutes of
+// wall time on a GPU-less runner, against a 180 s timeout.
+test.beforeEach(() => test.slow());
 
 /** Level 1 with the room to ourselves: its enemies switched off, uncounted. */
 async function quietLevel(page) {
   await loadGame(page);
   await debug(page, "startCampaign", 0);
-  await page.waitForTimeout(600);
+  await play(page, 600);
   await page.evaluate(() => {
     const g = window.ccDebug.game;
     for (const e of g.entities) if (e.type === "enemy") e.active = false;
@@ -37,9 +41,9 @@ async function coverAtCounter(page, x = 29.5) {
     d.game.player.aimOffsetX = 0;
     d.game.player.aimOffsetY = 0;
   }, x);
-  await page.waitForTimeout(150);
+  await play(page, 150);
   await page.evaluate(() => window.ccDebug.pressKey("KeyG"));
-  await page.waitForTimeout(500);
+  await play(page, 500);
 }
 
 test("takes cover against low cover and against a wall", async ({ page }) => {
@@ -58,7 +62,7 @@ test("takes cover against low cover and against a wall", async ({ page }) => {
 
   // The same key again steps out and stands back up.
   await debug(page, "pressKey", "KeyG");
-  await page.waitForTimeout(800);
+  await play(page, 800);
   p = await player(page);
   expect(p.inCover).toBe(false);
   expect(p.crouch).toBeLessThan(0.05);
@@ -69,9 +73,9 @@ test("takes cover against low cover and against a wall", async ({ page }) => {
     d.teleport(23.9, 50.5);
     d.game.player.angle = Math.PI;
   });
-  await page.waitForTimeout(150);
+  await play(page, 150);
   await debug(page, "pressKey", "KeyG");
-  await page.waitForTimeout(500);
+  await play(page, 500);
   p = await player(page);
   expect(p.inCover).toBe(true);
   expect(p.low).toBe(false);
@@ -81,7 +85,7 @@ test("takes cover against low cover and against a wall", async ({ page }) => {
 
   // Aiming at its end leans out past it.
   await page.evaluate(() => { window.ccDebug.game.player.isAiming = true; });
-  await page.waitForTimeout(500);
+  await play(page, 500);
   p = await player(page);
   expect(p.peeking).toBe(true);
   expect(p.y).toBeLessThan(50);
@@ -102,7 +106,7 @@ test("peeks over low cover and kills a target", async ({ page }) => {
     t.state = "idle";
     g.player.isAiming = true;
   });
-  await page.waitForTimeout(500);
+  await play(page, 500);
   expect((await player(page)).peeking).toBe(true);
   // Put the reticle on it, as a player would: from the standing eye a level
   // shot passes over a drone this low.
@@ -121,7 +125,7 @@ test("peeks over low cover and kills a target", async ({ page }) => {
     p.aimOffsetY = (barH / (2 * h) - tanPitch) / ((h - barH) / h);
   });
   await page.evaluate(() => window.ccDebug.fire(true));
-  await page.waitForFunction(() => window.ccDebug.game.coverStats.peekKills > 0, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.ccDebug.game.coverStats.peekKills > 0, null, { timeout: 30_000 });
   await page.evaluate(() => window.ccDebug.fire(false));
   const p = await player(page);
   expect(p.stats.peekKills).toBeGreaterThanOrEqual(1);
@@ -133,7 +137,7 @@ test("down behind cover a frontal shot is stopped; peeking takes it", async ({ p
   await coverAtCounter(page);
   const shoot = () =>
     page.evaluate(async () => {
-      const { Projectile } = await import("/js/entities.js");
+      const { Projectile } = await import("/src/entities/index.js");
       const g = window.ccDebug.game;
       // From the far side of the counter, straight at the player.
       const b = new Projectile(29.5, 46.5, 0, 1, 10, 8, "enemy");
@@ -143,14 +147,14 @@ test("down behind cover a frontal shot is stopped; peeking takes it", async ({ p
   const start = (await player(page)).health;
   expect((await player(page)).down).toBe(true);
   await shoot();
-  await page.waitForTimeout(900);
+  await play(page, 900);
   expect((await player(page)).health).toBe(start);
 
   await page.evaluate(() => { window.ccDebug.game.player.isAiming = true; });
-  await page.waitForTimeout(500);
+  await play(page, 500);
   expect((await player(page)).peeking).toBe(true);
   await shoot();
-  await page.waitForTimeout(900);
+  await play(page, 900);
   expect((await player(page)).health).toBeLessThan(start);
 });
 
@@ -160,14 +164,16 @@ test("a dash from cover slides to the next cover in view", async ({ page }) => {
   await coverAtCounter(page, 27.6);
   // Along the counter to its west end, then look at the pillar.
   await debug(page, "keyDown", "KeyA");
-  await page.waitForTimeout(400);
+  await play(page, 400);
   await debug(page, "keyUp", "KeyA");
   await page.evaluate(() => { window.ccDebug.game.player.angle = Math.PI; });
-  await page.waitForTimeout(100);
+  await play(page, 100);
   expect(await page.evaluate(() => !!window.ccDebug.game.player.coverDashTarget)).toBe(true);
   const before = (await player(page)).stats.coverDashes;
   await debug(page, "pressKey", "Space");
-  await page.waitForFunction(() => window.ccDebug.game.player.cover?.face.cx === 22, null, { timeout: 3000 });
+  // The slide takes well under a second of game time; the allowance is for a
+  // runner drawing a few frames a second.
+  await page.waitForFunction(() => window.ccDebug.game.player.cover?.face.cx === 22, null, { timeout: 30_000 });
   const p = await player(page);
   expect(p.stats.coverDashes).toBe(before + 1);
   expect(p.low).toBe(false);

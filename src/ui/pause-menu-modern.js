@@ -5,7 +5,7 @@
  * devices the buttons are drawn by js/touch.js, so only the title shows here.
  */
 
-import { isCompactPhone } from "../../js/layout.js";
+import { isCompactPhone } from "./layout.js";
 import {
   UI,
   uiFont,

@@ -32,12 +32,12 @@
  * shot's seeded PRNG, so live and recorded playback match.
  */
 import { beatsToSec } from "../timeline.js";
-import { getActLevel, getAct } from "../../../js/data.js";
+import { getActLevel, getAct } from "../../data/index.js";
 import {
   stageLevelScene, installStagedLevel, prewarmStyle, targetHeading, stepHeading, updateAmbience, swayWeapon, LOOP_SECONDS,
 } from "../../systems/showcase.js";
 import { samplePath } from "../../systems/showcase-path.js";
-import { Enemy } from "../../../js/entities.js";
+import { Enemy } from "../../entities/index.js";
 import { ENEMY_TYPES } from "../../data/enemies.js";
 import { AISystem, beginWindup } from "../../systems/ai.js";
 import { ChronoPowers } from "../../systems/chrono-powers.js";
@@ -52,6 +52,7 @@ import { isModernArt, isRealisticArt } from "../../rendering/art-style.js";
 import { prefetchViewmodel } from "../../rendering/svg-art/viewmodels.js";
 import { WEAPONS } from "../../data/weapons.js";
 import { CHARACTER_COLORS } from "../../data/cosmetics.js";
+import { whenIdle } from "../../utils/schedule.js";
 
 const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const fovOf = (game) => game.settings?.fov ?? 75;
@@ -330,10 +331,7 @@ function start(game, level, spec, rng, reel, handle, shot, envs = null) {
  * shot still gets its next level staged), not on frames.
  */
 export function idle() {
-  return new Promise((resolve) => {
-    if (typeof requestIdleCallback === "function") requestIdleCallback(() => resolve(), { timeout: 200 });
-    else setTimeout(resolve, 0);
-  });
+  return whenIdle(200);
 }
 
 // ─── The combat sandbox ───────────────────────────────────────────────────

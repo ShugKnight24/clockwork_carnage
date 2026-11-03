@@ -53,7 +53,7 @@ export function keyLabel(code) {
   return KEY_SHORT[code] || formatKeyCode(code).toUpperCase();
 }
 
-/** Keybind actions (js/input-manager.js DEFAULT_KEYBINDS names). */
+/** Keybind actions (src/systems/input-manager.js DEFAULT_KEYBINDS names). */
 const KEYBIND_ACTIONS = new Set([
   "interact", "reload", "sprint", "crouch", "dash", "chronoShift", "chronoRewind", "chronoLock", "pause", "toggleFPS", "cover",
 ]);

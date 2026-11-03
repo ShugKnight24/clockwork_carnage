@@ -21,6 +21,7 @@ import { DEFAULT_CHARACTER, CHARACTER_COLORS } from "../../data/cosmetics.js";
 import { layer } from "../../data/badges.js";
 import { AGENT_VIEW, buildAgentSvg, buildAgentParts } from "../../rendering/svg-art/agent-rig.js";
 import { getLayerImage } from "../../rendering/svg-art/raster.js";
+import { nextFrame } from "../../utils/schedule.js";
 
 const WARM_FRAMES = 45;
 
@@ -44,13 +45,6 @@ export const LOOKS = [
   { colorIndex: 4, armorIndex: 7, helmetIndex: 1, hairIndex: 8, visorIndex: 4, shoulderIndex: 5, badge: badge(layer("star", "cog", "amber", "gold"), ["chest", "shoulder"]) },
   { colorIndex: 3, armorIndex: 3, helmetIndex: 8, visorIndex: 2, shoulderIndex: 1, badge: badge(layer("rift", "hex", "violet", "blackened"), ["chest"]) },
 ];
-
-function nextFrame() {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(resolve, 0));
-    else setTimeout(resolve, 0);
-  });
-}
 
 /** The shot's looks: whole characters, the player's own first. */
 export function looksFor(character, spec) {

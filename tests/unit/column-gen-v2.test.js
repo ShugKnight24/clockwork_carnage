@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import {
   GEN_VERSION, GEN_V1, GEN_VERSIONS, generateColumn, sampleColumn, fillColumn, surfaceHeight, findSpawn, biomeAt,
 } from "../../src/world/column-gen.js";
@@ -8,26 +7,13 @@ import { SEA, BIOMES, MIN_TOP, MAX_TOP, regionAt } from "../../src/world/column-
 import { AIR, BEDROCK, WATER, LOG, LEAVES } from "../../src/world/blocks.js";
 import { DEFAULT_BOUNDS } from "../../src/world/world.js";
 import { generateWorld } from "../../src/world/world-gen.js";
+import { SAND, ROCK, ORE, GROUND, at, groundOf, sha, areaHeights, slopeStats } from "./column-gen-helpers.js";
 
-const GRASS = 11, DIRT = 10, SAND = 12, ROCK = 13, ORE = 14;
-const GROUND = new Set([BEDROCK, GRASS, DIRT, SAND, ROCK, ORE]);
 const v2 = (seed) => ({ kind: "terrain", seed, v: 2 });
-const at = (col, lx, ly, z) => col[(z << 8) | (ly << 4) | lx];
-/** The top of the ground, under any water and trees. */
-const groundOf = (col, lx, ly) => { let z = 0; while (z < 63 && GROUND.has(at(col, lx, ly, z + 1))) z++; return z; };
-const sha = (u8) => createHash("sha256").update(u8).digest("hex");
 const wet = (t) => t < SEA - 1; // a water cell sits at z = SEA - 1 over this ground
 
 /** Ground tops of an n × n area at (x0, y0) — multiples of 16 — through generateColumn. */
-function grounds(gen, x0, y0, n) {
-  const out = new Int16Array(n * n), cols = [];
-  for (let cy = 0; cy < n / 16; cy++) for (let cx = 0; cx < n / 16; cx++) {
-    const col = generateColumn(gen, (x0 >> 4) + cx, (y0 >> 4) + cy);
-    cols.push(col);
-    for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) out[(cy * 16 + ly) * n + cx * 16 + lx] = groundOf(col, lx, ly);
-  }
-  return out;
-}
+const grounds = (gen, x0, y0, n) => areaHeights(gen, x0, y0, n, groundOf);
 
 describe("generator versions", () => {
   it("makes new worlds with version 2 and keeps version 1 reproducible", () => {
@@ -213,17 +199,9 @@ describe("generator v2: land", () => {
     // the highlands.
     for (const [seed, x0, y0] of [[7, -256, -256], [42, 4096, -8192], [1234567, 9984, 9984]]) {
       const gen = v2(seed), n = 320, t = grounds(gen, x0, y0, n);
-      let pairs = 0, steep = 0, worst = 0, worstRocky = 0;
-      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
-        const i = y * n + x;
-        const hi = biomeAt(gen, x0 + x, y0 + y).weights[2] >= 0.5;
-        for (const j of [x + 1 < n ? i + 1 : -1, y + 1 < n ? i + n : -1]) {
-          if (j < 0) continue;
-          const d = Math.abs(t[j] - t[i]);
-          if (hi) { worstRocky = Math.max(worstRocky, d); continue; }
-          worst = Math.max(worst, d); pairs++; if (d > 1) steep++;
-        }
-      }
+      const hi = new Uint8Array(n * n);
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) hi[y * n + x] = biomeAt(gen, x0 + x, y0 + y).weights[2] >= 0.5 ? 1 : 0;
+      const { pairs, steep, worst, worstRocky } = slopeStats(t, n, (i) => hi[i]);
       expect(worstRocky, `seed ${seed}`).toBeLessThanOrEqual(4);
       expect(worst, `seed ${seed}`).toBeLessThanOrEqual(2);
       expect(steep / pairs, `seed ${seed}`).toBeLessThan(0.01);
@@ -231,16 +209,17 @@ describe("generator v2: land", () => {
   }, 60_000);
 
   it("stays within 12..47, with z = 48 and up open air", () => {
-    let lo = 99, hi = -1;
+    let lo = 99, hi = -1, solidAbove = 0;
     for (const seed of [7, 42]) {
       for (let k = 0; k < 40; k++) {
         const col = generateColumn(v2(seed), k * 37 - 700, k * 23 - 400);
         for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
           const g = groundOf(col, lx, ly); lo = Math.min(lo, g); hi = Math.max(hi, g);
-          for (let z = 48; z < 64; z++) expect(at(col, lx, ly, z)).toBe(AIR);
+          for (let z = 48; z < 64; z++) if (at(col, lx, ly, z) !== AIR) solidAbove++;
         }
       }
     }
+    expect(solidAbove).toBe(0);
     expect(MIN_TOP).toBe(12); expect(MAX_TOP).toBe(47);
     expect(lo).toBeGreaterThanOrEqual(MIN_TOP); expect(hi).toBeLessThanOrEqual(MAX_TOP);
     expect(lo).toBeLessThan(24); // there is deep sea
@@ -248,15 +227,17 @@ describe("generator v2: land", () => {
 
   it("layers bedrock, rock and ore under the dressing, as v1 does", () => {
     let ore = 0, rock = 0;
+    const bad = [];
     for (let c = 0; c < 40; c++) {
       const col = generateColumn(v2(17), c * 3 - 100, c * 5 - 100);
       for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
-        expect(at(col, lx, ly, 0)).toBe(BEDROCK);
+        if (at(col, lx, ly, 0) !== BEDROCK) bad.push(`no bedrock ${c} ${lx},${ly}`);
         const g = groundOf(col, lx, ly);
-        for (let z = 1; z <= g; z++) expect(GROUND.has(at(col, lx, ly, z))).toBe(true);
+        for (let z = 1; z <= g; z++) if (!GROUND.has(at(col, lx, ly, z))) bad.push(`hole ${c} ${lx},${ly},${z}`);
         for (let z = 3; z <= g - 5; z++) { const id = at(col, lx, ly, z); if (id === ORE) ore++; else if (id === ROCK) rock++; }
       }
     }
+    expect(bad).toEqual([]);
     expect(ore / (ore + rock)).toBeGreaterThan(0.015); expect(ore / (ore + rock)).toBeLessThan(0.025);
   });
 });
@@ -295,16 +276,18 @@ describe("generator v2 rules", () => {
 
   it("never puts a tree block where it could not stand", () => {
     // Logs and leaves only in air above the ground, never in the water.
+    const bad = [];
     for (const [seed, cx, cy] of [[7, 0, 0], [42, 12, -30], [99, -64, 64]]) {
       for (let k = 0; k < 9; k++) {
         const col = generateColumn(v2(seed), cx + (k % 3), cy + Math.floor(k / 3));
         for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
           const g = groundOf(col, lx, ly);
-          for (let z = 0; z <= g; z++) expect([LOG, LEAVES]).not.toContain(at(col, lx, ly, z));
-          for (let z = g + 1; z < SEA; z++) if (at(col, lx, ly, z) !== WATER) expect(g).toBeGreaterThanOrEqual(SEA - 1);
+          for (let z = 0; z <= g; z++) { const id = at(col, lx, ly, z); if (id === LOG || id === LEAVES) bad.push(`tree in ground ${seed} ${k} ${lx},${ly},${z}`); }
+          for (let z = g + 1; z < SEA; z++) if (at(col, lx, ly, z) !== WATER && g < SEA - 1) bad.push(`dry under the sea line ${seed} ${k} ${lx},${ly},${z}`);
         }
       }
     }
+    expect(bad).toEqual([]);
   });
 });
 

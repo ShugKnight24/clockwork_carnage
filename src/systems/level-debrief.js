@@ -5,6 +5,7 @@
  * the result.
  */
 import { FINISHES } from "../data/weapon-skins.js";
+import { clamp01 } from "../utils/math.js";
 
 /**
  * Par for a level, in seconds, from what has to be crossed and fought: a base
@@ -18,7 +19,7 @@ export function parSeconds({ openCells = 0, enemies = 0, powerCells = 0 } = {}) 
 }
 
 /** Lowest score for each letter, best first. */
-export const GRADE_BANDS = [
+const GRADE_BANDS = [
   ["S", 90],
   ["A", 78],
   ["B", 62],
@@ -37,7 +38,6 @@ export const GRADE_BANDS = [
  * @returns {{ letter: string, score: number, parts: { accuracy: number, time: number, damage: number, secrets: number } }}
  */
 export function gradeLevel(run) {
-  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
   const fired = run.shotsFired || 0;
   const acc = fired > 0 ? (run.shotsHit || 0) / fired : 1;
   const accuracy = 30 * clamp01(acc / 0.5);

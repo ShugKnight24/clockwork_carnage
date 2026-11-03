@@ -13,9 +13,9 @@ import {
   spawnSmoke,
   spawnDebris,
 } from "./particle-system.js";
-import { particlePool } from "../src/utils/particle-pool.js";
-import { isRealisticArt } from "../src/rendering/art-style.js";
-import { World } from "../src/world/world.js";
+import { particlePool } from "../utils/particle-pool.js";
+import { isRealisticArt } from "./art-style.js";
+import { World } from "../world/world.js";
 
 /**
  * Height a light sits at when the caller has nothing better: head height over

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PlayerUpdateSystem } from "../../src/systems/player-update.js";
 import { generateWorld } from "../../src/world/world-gen.js";
-import { Player } from "../../js/entities.js";
+import { Player } from "../../src/entities/index.js";
 
 // Hit-stop holds the rest of the update but calls look(), so the mouse keeps
 // turning the view instead of piling up into one jump.

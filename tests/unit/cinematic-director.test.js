@@ -3,6 +3,30 @@ import { describe, it, expect, vi } from "vitest";
 import { playReel, stopReel, updateDirector, directorInput, directorState, registerScene, stepFixed } from "../../src/cinematic/director.js";
 import { SHOWCASE_FIELDS } from "../../src/systems/showcase.js";
 
+// For "forge resources": a renderer that counts itself, so the reel's GL
+// contexts must all be gone after a skip. vi.mock is hoisted whatever its
+// placement, so it sits at the top level where it actually runs.
+const made = vi.hoisted(() => []);
+// Closed, the valley never finishes meshing (the reel holds on its opening black).
+const meshing = vi.hoisted(() => ({ done: true }));
+vi.mock("../../src/rendering/voxel/voxel-renderer.js", () => ({
+  VoxelRenderer: {
+    create() {
+      const vr = {
+        destroyed: 0,
+        gl: null,
+        canvas: {},
+        setStyle() {},
+        resize() {},
+        render: (cam, world) => (meshing.done && world.dirty.clear(), true),
+        destroy: () => vr.destroyed++,
+      };
+      made.push(vr);
+      return vr;
+    },
+  },
+}));
+
 function fakeGame() {
   return { state: "title", timeScale: 1, player: { chronoActive: false }, audio: { startTrack: vi.fn(), stopMusic: vi.fn(), musicSting: vi.fn(), speak: vi.fn(), setMuted: vi.fn() } };
 }
@@ -347,27 +371,6 @@ describe("warm", () => {
 });
 
 describe("forge resources", () => {
-  // A renderer that counts itself: the reel's GL contexts must all be gone after a skip.
-  const made = vi.hoisted(() => []);
-  // Closed, the valley never finishes meshing (the reel holds on its opening black).
-  const meshing = vi.hoisted(() => ({ done: true }));
-  vi.mock("../../src/rendering/voxel/voxel-renderer.js", () => ({
-    VoxelRenderer: {
-      create() {
-        const vr = {
-          destroyed: 0,
-          gl: null,
-          canvas: {},
-          setStyle() {},
-          resize() {},
-          render: (cam, world) => (meshing.done && world.dirty.clear(), true),
-          destroy: () => vr.destroyed++,
-        };
-        made.push(vr);
-        return vr;
-      },
-    },
-  }));
   const forgeGame = () => ({ ...fakeGame(), renderer: { width: 64, height: 40 } });
   const forgeReel = (first) => ({
     ...reel,

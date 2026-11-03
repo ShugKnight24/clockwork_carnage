@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { getActLevel, campaignMap } from "../../js/data.js";
+import { getActLevel, campaignMap } from "../../src/data/index.js";
 import { hasLineOfSight, samplePath } from "../../src/systems/showcase-path.js";
 import {
   showcaseAct,

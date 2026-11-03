@@ -1,8 +1,9 @@
 import { isModernArt } from "../src/rendering/art-style.js";
-import { isCompactPhone } from "./layout.js";
+import { isCompactPhone } from "../src/ui/layout.js";
 import { drawViewmodel, hasViewmodel } from "../src/rendering/svg-art/viewmodels.js";
 import { getAimBlend } from "../src/systems/aim.js";
 import { GameState } from "../src/types.js";
+import { lerp } from "../src/utils/math.js";
 
 /**
  * WeaponRenderer — draws all 8 procedural weapon models onto a Canvas context.
@@ -245,7 +246,6 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   // than covering the target.
   // `ads` is 0 at the hip, 1 fully aimed: the eased blend when the caller has one.
   const ads = adsBlend ?? (isAiming ? 1 : 0);
-  const lerp = (a, b, t) => a + (b - a) * t;
 
   const restOffsetX = lerp(0.112 * w, 0, ads);   // right-hand offset, centred on ADS
   const restCant = lerp(-0.11, 0, ads);          // inward cant, upright on ADS

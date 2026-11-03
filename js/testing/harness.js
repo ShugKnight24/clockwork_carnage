@@ -16,13 +16,12 @@ import { GameState } from "../game.js";
 import {
   WEAPONS,
   ENEMY_TYPES,
-  ARENA_MAP,
   ARENA_MAPS,
   campaignMaps,
   UPGRADES,
   ACHIEVEMENTS,
   TUTORIAL_MAP,
-} from "../data.js";
+} from "../../src/data/index.js";
 import { CUTSCENE_SCRIPTS } from "../../src/data/cutscene-scripts.js";
 import { createPlaytestGate } from "./playtest-gate.js";
 import { createCampaignSweep, summariseSweeps } from "./campaign-sweep.js";
@@ -37,44 +36,7 @@ import { TRACK_BARS, TRACK_TUNNEL, TRACK_PIT, LANES } from "../../src/data/level
 
 // ─── Harness core ──────────────────────────────────────────
 
-const MAX_TICKS = 60_000; // safety limit per test (~1000 simulated seconds at 60fps)
 const SIM_DT = 1000 / 60; // 16.67ms per tick
-
-// ─── Metrics collector ─────────────────────────────────────
-
-class BotMetrics {
-  constructor() {
-    this.records = {};
-  }
-  record(category, data) {
-    if (!this.records[category]) this.records[category] = [];
-    this.records[category].push(data);
-  }
-  get(category) {
-    return this.records[category] || [];
-  }
-  summary() {
-    const lines = [];
-    for (const [cat, entries] of Object.entries(this.records)) {
-      if (entries.length === 0) continue;
-      // Check if entries have numeric 'value' field
-      const nums = entries
-        .filter((e) => typeof e.value === "number")
-        .map((e) => e.value);
-      if (nums.length > 0) {
-        const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-        const min = Math.min(...nums);
-        const max = Math.max(...nums);
-        lines.push(
-          `  ${cat}: ${nums.length} entries, avg=${avg.toFixed(1)}, min=${min}, max=${max}`,
-        );
-      } else {
-        lines.push(`  ${cat}: ${entries.length} entries`);
-      }
-    }
-    return lines.join("\n");
-  }
-}
 
 /** Reset game to a clean baseline between bot runs */
 function resetGame(game) {

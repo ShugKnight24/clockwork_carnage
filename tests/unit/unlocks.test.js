@@ -19,7 +19,6 @@ import { SYMBOLS, FINISHES, BADGE_PRESETS, byId, indexOfId } from "../../src/dat
 import { ACTS } from "../../src/data/campaign/acts.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 import { cloneLook } from "../../src/core/character-fields.js";
-import { ACTS } from "../../src/data/campaign/acts.js";
 
 const idx = (table, id) => table.findIndex((x) => x.id === id);
 const GUN = idx(LOADOUT_CLASSES, "gunslinger");

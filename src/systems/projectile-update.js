@@ -4,7 +4,7 @@
  * Stateless: call updateProjectiles(ctx, dt) each frame.
  */
 import { projectileHitsEnemy } from "./combat.js";
-import { attachProjectileLight, syncProjectileLight } from "../../js/vfx.js";
+import { attachProjectileLight, syncProjectileLight } from "../rendering/vfx.js";
 import { isSolid } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { PLAYER, hasLineOfSight3D } from "../world/voxel-physics.js";

@@ -21,6 +21,8 @@
  */
 
 import { VOICES, voiceKeyFor } from "../audio/voice.js";
+import { SpriteCache } from "../rendering/sprite-cache.js";
+import { lcg as rng } from "../utils/rng.js";
 
 const INK = "#04060b";
 
@@ -887,30 +889,18 @@ export function isRadioLine(msg) {
 
 // ─── Sprite cache ──────────────────────────────────────────────────────────
 
-const _sprites = new Map();
-const MAX_SPRITES = 160;
+// Was 160 portraits; one is ~46 KB at 2x DPR.
+const _sprites = new SpriteCache(160 * 48 * 1024);
 const PAD = 2;
 
 function cached(key, w, h, dpr, paint) {
   let c = _sprites.get(key);
-  if (c) {
-    // Most recently used goes to the back of the eviction line.
-    _sprites.delete(key);
-    _sprites.set(key, c);
-    return c;
-  }
+  if (c) return c;
   c = document.createElement("canvas");
   c.width = Math.max(1, Math.ceil(w * dpr));
   c.height = Math.max(1, Math.ceil(h * dpr));
   paint(c.getContext("2d"), c);
-  if (_sprites.size >= MAX_SPRITES) _sprites.delete(_sprites.keys().next().value);
-  _sprites.set(key, c);
-  return c;
-}
-
-/** How many portrait bitmaps are cached (for tests and the perf overlay). */
-export function portraitCacheSize() {
-  return _sprites.size;
+  return _sprites.set(key, c);
 }
 
 function cutPath(g, x, y, w, h, k) {
@@ -985,15 +975,6 @@ function backdrop(g, style, tint, holo) {
     g.fillStyle = beam;
     g.fillRect(-2, 40, 104, 62);
   }
-}
-
-/** Seeded noise so grain and static never repaint differently. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
 }
 
 function finish(g, style, tint, holo, s, dpr) {
@@ -1240,13 +1221,6 @@ export function drawCommsPortrait(ctx, o) {
   }
   ctx.restore();
   ctx.globalAlpha = a0;
-}
-
-/** Paint every frame of a bust ahead of time (the plate never stalls on one). */
-export function warmCommsPortrait(speaker, style, size, tone, dpr = 1) {
-  const id = portraitIdFor(speaker);
-  const variant = id === "officer" ? hashOf(String(speaker)) % 997 : 0;
-  for (let f = 0; f < (CAST[id].blinks ? 4 : 3); f++) bustSprite(id, style, size, dpr, f, tone, variant);
 }
 
 /** Every bust id, for the contact sheet and tests. */

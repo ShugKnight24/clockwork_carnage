@@ -184,8 +184,6 @@ const ICONS = {
   },
 };
 
-export const hasSilhouette = (id) => id in ICONS;
-
 function polyPath(list, circles) {
   const p = new Path2D();
   for (const pts of list || []) {

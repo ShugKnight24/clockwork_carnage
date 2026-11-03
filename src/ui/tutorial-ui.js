@@ -3,7 +3,7 @@
 // All rendering is purely a function of state passed in; no globals besides
 // performance.now(). Shared backdrop / menu helpers are private to this file.
 
-import { tutorialMenuLayout } from "../../js/layout.js";
+import { tutorialMenuLayout } from "./layout.js";
 import { drawScanlines } from "./scanlines.js";
 import { isModernArt } from "../rendering/art-style.js";
 import {
@@ -19,8 +19,9 @@ import {
 } from "./modern-ui-kit.js";
 import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padLabelGlyph } from "./input-glyphs.js";
 import { PROLOGUE_STEPS, PROLOGUE_BEATS } from "../data/prologue.js";
-import { DEFAULT_KEYBINDS } from "../../js/input-manager.js";
+import { DEFAULT_KEYBINDS } from "../systems/input-manager.js";
 import { formatKeyCode } from "./key-labels.js";
+import { wrapWords } from "../utils/text.js";
 
 // ─── Tunable design tokens (single source of truth for tutorial UI) ───
 const ACCENT = "#00ffcc";
@@ -217,7 +218,7 @@ export function tutorialStepCopy(device, game = null) {
 const keyHint = (key, k) => (typeof key === "function" ? key(k) : key);
 
 /** A key code as a hint names it: "C", "SHIFT", "SPACE", "CTRL". */
-export function keyName(code) {
+function keyName(code) {
   return formatKeyCode(code || "").replace(/^[LR]-/, "").toUpperCase();
 }
 
@@ -385,20 +386,7 @@ function renderStepCard(ctx, w, h, step, fadeIn, pulse, stepNum, totalSteps, pla
 
 /** Greedy word-wrapper for canvas text. Returns an array of lines. */
 function wrapText(ctx, text, maxWidth) {
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const candidate = line ? line + " " + word : word;
-    if (ctx.measureText(candidate).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = candidate;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+  return wrapWords(text.split(" "), (s) => ctx.measureText(s).width, maxWidth);
 }
 
 /**
@@ -541,7 +529,7 @@ export function renderTeachCard(ctx, w, h, step, elapsed, fade = 1, lay = {}) {
 const NARRATION_TYPE_RATE = 60; // chars/s, ARIA's own plate rate
 
 /** Seconds a phone shows a card's hint before folding it to the title. */
-export const CARD_COLLAPSE_AFTER = 6;
+const CARD_COLLAPSE_AFTER = 6;
 
 /**
  * A folded comms line's presence (0..1: in over 0.3 s, out over its last
@@ -557,20 +545,7 @@ function narrationState(n) {
 
 /** Plain word wrap on a font (narration rows). */
 function wrapFont(font, text, maxW) {
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const cand = line ? `${line} ${word}` : word;
-    if (line && measureSpaced(font, cand) > maxW) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = cand;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+  return wrapWords(text.split(" "), (s) => measureSpaced(font, s), maxW);
 }
 
 /** Draw up to `chars` characters of wrapped lines, left-aligned from x. */

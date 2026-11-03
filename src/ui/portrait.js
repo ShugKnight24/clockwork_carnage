@@ -1,5 +1,6 @@
 import { isModernArt } from "../rendering/art-style.js";
 import { drawPortraitModern } from "./portrait-modern.js";
+import { mixHex as _mix } from "../utils/color.js";
 
 /**
  * Player portrait — 10-stage damage visualization.
@@ -750,18 +751,4 @@ export function drawPortrait(ctx, x, y, w, h, state) {
   ctx.arc(x + 8 * s, y + h - 10 * s, 2 * s, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-}
-
-/** Linear blend two #rrggbb hex colors. t=0 returns a, t=1 returns b. */
-function _mix(a, b, t) {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const bl = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${bl.toString(16).padStart(2, "0")}`;
 }

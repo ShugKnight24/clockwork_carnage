@@ -6,16 +6,17 @@
  * list of game fields (SHOWCASE_FIELDS) and puts them back exactly on stop.
  * The game does not update in SETTINGS, so enemy AI and damage never run.
  */
-import { getActLevel, campaignMap, getAct, ENEMY_TYPES } from "../../js/data.js";
-import { Enemy, Player } from "../../js/entities.js";
-import { updateParticles, spawnSmoke } from "../../js/particle-system.js";
-import { spawnWallSparks } from "../../js/vfx.js";
+import { getActLevel, campaignMap, getAct, ENEMY_TYPES } from "../data/index.js";
+import { Enemy, Player } from "../entities/index.js";
+import { updateParticles, spawnSmoke } from "../rendering/particle-system.js";
+import { spawnWallSparks } from "../rendering/vfx.js";
 import { particlePool } from "../utils/particle-pool.js";
 import { prefetchIdleEnemy, prefetchEnemyModel } from "../rendering/svg-art/sprites/enemies.js";
 import { isModernArt } from "../rendering/art-style.js";
 import { prefetchPropLook, propKey, warmPropSet } from "../rendering/props.js";
 import { createCampaignEntities } from "./spawner.js";
 import { buildShowcasePath, hasLineOfSight, samplePath } from "./showcase-path.js";
+import { nextFrame } from "../utils/schedule.js";
 
 export const LOOP_SECONDS = 40;
 
@@ -78,14 +79,6 @@ function enemiesFor(entry, map, path, act, fov) {
     e.angle = s.angle;
     e.showcase = true;
     return e;
-  });
-}
-
-/** Let a frame paint (the fade) and any queued Escape run before the next heavy step. */
-function nextFrame() {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => setTimeout(resolve, 0));
-    else setTimeout(resolve, 0);
   });
 }
 

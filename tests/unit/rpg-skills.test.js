@@ -1,13 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SKILLS, MAX_LEVEL, xpForLevel, levelFor, Skills } from "../../src/rpg/skills.js";
-
-describe("skill table", () => {
-  it("launches with mining and construction", () => {
-    expect(SKILLS.map((s) => s.id)).toEqual(["mining", "construction"]);
-    SKILLS.forEach((s) => expect(typeof s.name).toBe("string"));
-    expect(MAX_LEVEL).toBe(50);
-  });
-});
+import { MAX_LEVEL, xpForLevel, levelFor, Skills } from "../../src/rpg/skills.js";
 
 describe("xp curve", () => {
   it("starts at level 1 for zero xp and rises monotonically", () => {

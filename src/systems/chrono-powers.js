@@ -24,7 +24,7 @@
  */
 import { ACTS, getAct, getActLevel } from "../data/campaign/acts.js";
 import { ENEMY_TYPES } from "../data/enemies.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../entities/index.js";
 import { hasLineOfSight, isPassable } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 import { arrive, ARRIVALS } from "./arrival.js";
@@ -123,7 +123,7 @@ export function giftsFor(act, level, { ngPlus = 0, acts = ACTS } = {}) {
  * two: one more response allowed a level, a pack one bigger, and ten seconds
  * off the cooldown.
  */
-export const NG_PLUS_HUNT = { cycles: 2, cap: 1, pack: 1, cooldown: 10 };
+const NG_PLUS_HUNT = { cycles: 2, cap: 1, pack: 1, cooldown: 10 };
 
 /** Caps, pack size and cooldown for a difficulty and NG+ cycle. */
 export function huntRules(difficulty, ngPlus = 0) {

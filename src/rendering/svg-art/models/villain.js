@@ -15,17 +15,10 @@
  *      shattered clocks. The weakest-looking of the three.
  */
 
+import { lcg as rng } from "../../../utils/rng.js";
+
 const f = (n) => Math.round(n * 10) / 10;
 const INK = "#04060b";
-
-/** Deterministic PRNG so stars and debris never shift between builds. */
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 /** Toothed gear outline, optionally with an axle hole (fill-rule evenodd). */
 function gearPath(cx, cy, ro, ri, teeth, hole = 0) {

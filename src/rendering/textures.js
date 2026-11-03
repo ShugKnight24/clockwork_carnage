@@ -3,12 +3,12 @@
  * Extracted from Renderer.generateTextures() and Renderer._generateFloorCeilTextures().
  * Upgraded to 256x256 resolution for sharper visuals.
  */
-import { WALL_COLORS } from "../../js/data.js";
+import { WALL_COLORS } from "../data/index.js";
 import { buildWallSet, extendWallSet, hasWallPainter, paintWall, buildUpperBand } from "./env/wall-art.js";
 import { CEILING_Z } from "../systems/physics.js";
 import { buildDeckSet } from "./env/deck-art.js";
 import { guardBake } from "./env/paint.js";
-import { getEnvPalette, resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
+import { resolveEnvPalette, envSalt, glowColors, GLOW_STRENGTH, FOG_DENSITY } from "./env/palettes.js";
 
 const hashNoise = (x, y, seed = 0) => {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;

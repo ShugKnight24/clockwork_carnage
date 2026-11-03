@@ -8,7 +8,7 @@
  * which clamp `craftIndex` — is called as `forge._craftRows()` rather than
  * reimplemented, so there is no cycle back into the Forge.
  */
-import { ENEMY_TYPES } from "../../js/data.js";
+import { ENEMY_TYPES } from "../data/index.js";
 import { AIR, BLOCKS } from "../world/blocks.js";
 import { World } from "../world/world.js";
 import { SKILLS, MAX_LEVEL, xpForLevel } from "../rpg/skills.js";

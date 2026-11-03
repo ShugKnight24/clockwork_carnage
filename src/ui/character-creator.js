@@ -11,7 +11,7 @@ import {
   LOADOUT_CLASSES,
   BACKSTORIES,
   VOICE_PROFILES,
-} from "../../js/data.js";
+} from "../data/index.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
 import { getIndex, withIndex, lookKey } from "../core/character-fields.js";

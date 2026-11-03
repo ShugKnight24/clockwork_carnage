@@ -12,7 +12,7 @@ import {
   FROZEN_PROP_TYPES,
 } from "../../src/systems/stillness.js";
 import { Npc, setNpcWorld } from "../../js/npc.js";
-import { Prop } from "../../js/entities.js";
+import { Prop } from "../../src/entities/index.js";
 import { PlayerUpdateSystem } from "../../src/systems/player-update.js";
 
 function stopped(x = 5, y = 5) {

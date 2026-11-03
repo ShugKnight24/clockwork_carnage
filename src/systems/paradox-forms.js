@@ -33,7 +33,7 @@
  * sprite), `_spriteScale` (sprite and hit span), `_takenMul` (damage taken),
  * `_rateMul` (fire rate), `_bossHold` (seconds he stands still).
  */
-import { Projectile } from "../../js/entities.js";
+import { Projectile } from "../entities/index.js";
 import { isPassable } from "./physics.js";
 import { playChronoSound } from "../audio/chrono-sounds.js";
 import { recordShot } from "./boss-form2.js";
@@ -68,7 +68,7 @@ export const FORMS = {
 };
 
 /** Health fraction at which every form says its last line. */
-export const LOW_AT = 0.2;
+const LOW_AT = 0.2;
 
 /**
  * Wry and terse. The Shell blusters in capitals until it cracks; the Brute
@@ -96,7 +96,7 @@ export const TAUNTS = {
 };
 
 /** The form a boss is in: its def's `form`, 1 for anything else. */
-export const formOf = (e) => e.def?.form ?? 1;
+const formOf = (e) => e.def?.form ?? 1;
 
 /** Has the Shell's casing taken enough to crack, and not cracked yet? */
 export function shellCrackDue(e, spec = FORMS[1].shell) {

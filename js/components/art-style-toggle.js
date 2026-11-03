@@ -138,7 +138,7 @@ template.innerHTML = `
  * Title-screen Legacy / Comic / Modern art switch (ids 0 / 1 / 2). Drives the shared art-style module;
  * Game persists the choice through its onArtStyleChange subscription.
  */
-export class ArtStyleToggle extends HTMLElement {
+class ArtStyleToggle extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });

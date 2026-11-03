@@ -5,6 +5,8 @@
  * the upper left, a cool fill from the right, rim light on the right edge.
  */
 
+import { mixHex as mix } from "../../../../utils/color.js";
+
 export const INK = "#04060b";
 
 /** Round to one decimal so the markup stays compact. */
@@ -33,16 +35,8 @@ export function mir(d) {
   return d.replace(/-?\d*\.?\d+/g, (n) => (i++ % 2 === 0 ? String(r1(-parseFloat(n))) : n));
 }
 
-const hexRgb = (h) => {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-};
 /** Blend two hex colours; t = 0 → a, 1 → b. */
-export function mix(a, b, t) {
-  const x = hexRgb(a);
-  const y = hexRgb(b);
-  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
-}
+export { mix };
 
 /** Smooth tapered limb through [x, y, width] points, as a closed path. */
 export function limb(pts) {

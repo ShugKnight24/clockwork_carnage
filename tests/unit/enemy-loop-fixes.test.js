@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { AISystem, enemyTimeRate, inView, inFrontArc, blinkLanding, ACQUIRE_SECONDS, UNSEEN_WINDUP_MUL, UNSEEN_SWING_MUL, BEHIND_HOLD_MS, attackWindupMs } from "../../src/systems/ai.js";
-import { Enemy } from "../../js/entities.js";
+import { Enemy } from "../../src/entities/index.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
 import { resolveHitZone, zoneAimHeight, hitSpan, calculateEnemyDamage } from "../../src/systems/combat.js";
+import { seedMathRandom } from "./seeded-random.js";
+
+seedMathRandom();
 
 const DT = 1 / 60;
 const SHIFT = 0.3; // the world's time scale while the player shifts (game.js)

@@ -3,7 +3,7 @@
  * auto-reload an empty trigger asks for, the boost on the next magazine, and
  * what a hit is worth to Conditioning. The timing itself is pure
  * (src/systems/active-reload.js); the rounds are the player's
- * (js/entities.js loadedOf / refillMag / spendRounds).
+ * (src/entities/index.js loadedOf / refillMag / spendRounds).
  *
  * For lessons and progress: `game.activeReload.stats` counts reloads, hits,
  * perfects, jams and cancels, and `game.onActiveReload` (if set) is called
@@ -33,7 +33,7 @@ export function activeReloadOf(game) {
 const held = (game) => game.player?.getWeaponDef?.() ?? null;
 
 /** Start reloading the held gun, if a reload would add anything. */
-export function beginReload(game) {
+function beginReload(game) {
   const p = game.player;
   const wep = held(game);
   if (!wep || !p.canReload?.(wep.id)) return false;

@@ -19,6 +19,7 @@
  */
 
 import { SeededRNG } from "../utils/seeded-rng.js";
+import { clamp01 } from "../utils/math.js";
 
 // ── Voices ──────────────────────────────────────────────────────────────────
 
@@ -132,8 +133,6 @@ export const EMOTIONS = {
   menacing: { pitch: -2,   range: 0.7,  breath: 0.1,   tilt: -0.1,  legato: 0.08,  accent: 1.2, jitter: 0.8, vibrato: 1.2, gain: 1.05, fall: -3.5, pause: 1.3 },
 };
 
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-
 /** A voice with an emotion applied; this is what the planner and synth read. */
 export function resolveVoice(voice, emotion = null) {
   const e = EMOTIONS[emotion || voice.emotion || "neutral"] || EMOTIONS.neutral;
@@ -174,7 +173,7 @@ export function inferEmotion(text, fallback = "neutral") {
 // ── Planning ────────────────────────────────────────────────────────────────
 
 /** Average adult formants (Hz) for the vowel classes babble needs. */
-export const FORMANTS = {
+const FORMANTS = {
   A: [730, 1090, 2440],
   E: [530, 1840, 2480],
   I: [300, 2200, 2900],

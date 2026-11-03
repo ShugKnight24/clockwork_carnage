@@ -6,33 +6,39 @@ import { test, expect } from "@playwright/test";
 import { loadGame, debug } from "./helpers.js";
 
 test("gameLoop schedules exactly one callback per frame", async ({ page }) => {
+  // Count the frames gameLoop ran in (distinct rAF timestamps) against how
+  // often it ran. Other UI animates on rAF too, so all callbacks together
+  // are not the frame count.
   await page.addInitScript(() => {
     const raf = window.requestAnimationFrame.bind(window);
-    const probe = (window.__raf = { frames: 0, byName: {} });
+    const probe = (window.__raf = { runs: 0, stamps: new Set() });
     window.requestAnimationFrame = (cb) => {
-      const n = cb.name || "anon";
-      probe.byName[n] = (probe.byName[n] || 0) + 1;
+      if (cb.name !== "gameLoop") return raf(cb);
       return raf((ts) => {
-        probe.frames++;
+        probe.runs++;
+        probe.stamps.add(ts);
         return cb(ts);
       });
     };
   });
   await loadGame(page);
   await debug(page, "startArena");
-  await page.waitForTimeout(2000);
+  // Count frames, not seconds: a runner with no GPU draws a few a second.
+  await page.waitForFunction(() => window.__raf.stamps.size > 10, null, { timeout: 30_000 });
+  await page.waitForTimeout(500);
 
-  const { byName, frames } = await page.evaluate(() => ({
-    byName: window.__raf.byName,
-    frames: window.__raf.frames,
+  const { runs, frames } = await page.evaluate(() => ({
+    runs: window.__raf.runs,
+    frames: window.__raf.stamps.size,
   }));
-  // A duplicated chain would show roughly twice as many schedules as frames.
-  expect(byName.gameLoop).toBeGreaterThan(frames - 2);
-  expect(byName.gameLoop).toBeLessThanOrEqual(frames + 2);
+  // A duplicated chain would run gameLoop about twice per frame.
+  expect(frames).toBeGreaterThan(10);
+  expect(runs).toBeLessThanOrEqual(frames + 2);
 });
 
 test("a 30 fps cap holds without starving the render scale", async ({ page }) => {
-  await loadGame(page);
+  // The governor is what this checks, so it stays live.
+  await loadGame(page, { adaptiveQuality: true });
   await debug(page, "startArena");
   await debug(page, "godMode", true);
 
@@ -83,7 +89,9 @@ test("the loop recovers instead of halting after a burst of errors", async ({ pa
         return cb(ts);
       });
   });
-  await page.waitForTimeout(3000);
+  // Frames, not seconds: a runner with no GPU draws a few a second, though
+  // the 90 failing frames are cheap.
+  await page.waitForFunction(() => window.__frames > 120, null, { timeout: 45_000 }).catch(() => {});
 
   const after = await page.evaluate(() => ({
     frames: window.__frames,

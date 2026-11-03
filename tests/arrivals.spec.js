@@ -6,13 +6,13 @@
  * style (screenshots in screenshots/frozen-*.png).
  */
 import { test, expect } from "@playwright/test";
-import { loadGame, debug } from "./helpers.js";
+import { loadGame, debug, play } from "./helpers.js";
 
 /** A campaign level with the player facing down a clear stretch of floor, no enemies in it. */
 async function clearedLevel(page, level = 0, act = 1) {
   await loadGame(page);
   await debug(page, "startCampaign", level, act);
-  await page.waitForTimeout(800);
+  await play(page, 800);
   await page.evaluate(() => {
     const g = window.ccDebug.game;
     const p = g.player;
@@ -30,11 +30,14 @@ async function clearedLevel(page, level = 0, act = 1) {
 }
 
 test("an enemy arriving through a tear in view is not active or damaging during the telegraph", async ({ page }) => {
+  // ~5 s of game time sampled frame by frame: minutes of wall time on a
+  // GPU-less runner drawing ~1 fps.
+  test.slow();
   await clearedLevel(page);
   const run = await page.evaluate(async () => {
     const g = window.ccDebug.game;
     const { arrive, ARRIVALS, ARMED_AFTER } = await import("/src/systems/arrival.js");
-    const { Enemy } = await import("/js/entities.js");
+    const { Enemy } = await import("/src/entities/index.js");
     const p = g.player;
     // A melee enemy arriving right in front of the player, already hunting.
     const a = arrive(g, {
@@ -116,7 +119,7 @@ test("a campaign hunter pack comes through tears instead of appearing", async ({
   expect(r.pack).toBeGreaterThan(0);
   expect(r.added).toBe(0);
   expect(r.tears).toBe(r.pack);
-  await page.waitForTimeout(900);
+  await play(page, 900);
   await page.screenshot({ path: "screenshots/arrival-hunter-tears.png" });
 });
 
@@ -166,7 +169,7 @@ test("a frozen person is drawn drained toward blue-grey in every art style", asy
     const frozen = await warmth();
     await page.screenshot({ path: `screenshots/frozen-${name}.png` });
     await page.evaluate(() => window.__frozen.thaw());
-    await page.waitForTimeout(300);
+    await play(page, 300);
     const live = await warmth();
     await page.evaluate(() => window.__frozen.freeze());
     test.info().annotations.push({ type: "warmth", description: `${name}: frozen ${frozen.toFixed(1)}, live ${live.toFixed(1)}` });
