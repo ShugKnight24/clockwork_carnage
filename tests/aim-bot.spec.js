@@ -68,7 +68,12 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       const ty = player.y + Math.sin(yaw) * dist;
 
       window.ccDebug.setPlayer({ aimOffsetY });
+      // Clear the field again: the arena can bring in more while the FOV
+      // settles, and one of those in the line of fire takes the shot.
+      window.ccDebug.killAll();
       const spawn = window.ccDebug.spawn("beast", tx, ty);
+      // Our beast by reference, not the first beast in the list.
+      const dummy = game.entities[game.entities.length - 1];
 
       // Game time, not wall time: on a runner drawing a few frames a
       // second, 80 ms of wall clock can pass without a frame to fire in.
@@ -77,10 +82,12 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       window.ccDebug.fire(false);
       await window.ccDebug.waitGameTime(250);
 
-      const ents = window.ccDebug.getEntities();
-      // killAll clears arena spawns; only our beast remains.
-      const target = ents.positions.find((e) => e.type === "beast");
-      return { spawn, target, yaw, targetXY: { x: tx, y: ty } };
+      // What else was alive, for a miss to explain itself.
+      const others = game.entities
+        .filter((e) => e !== dummy && e.type === "enemy" && e.active)
+        .map((e) => ({ kind: e.enemyType, x: +e.x.toFixed(2), y: +e.y.toFixed(2), health: e.health }));
+      const target = { health: dummy.health, active: dummy.active, x: dummy.x, y: dummy.y };
+      return { spawn, target, others, yaw, targetXY: { x: tx, y: ty } };
     },
     { dist, aimOffsetX, ads },
   );
@@ -101,7 +108,7 @@ test.describe("Bot Aim Verification", () => {
           expect(r.target).toBeDefined();
           // Beast starts at 120 hp; pistol does ~15 dmg. After one shot,
           // a hit drops it well below the spawn value.
-          expect(r.target.health).toBeLessThan(r.spawn.health);
+          expect(r.target.health, JSON.stringify(r)).toBeLessThan(r.spawn.health);
         });
       }
     }
