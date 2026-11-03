@@ -30,6 +30,9 @@ async function clearedLevel(page, level = 0, act = 1) {
 }
 
 test("an enemy arriving through a tear in view is not active or damaging during the telegraph", async ({ page }) => {
+  // ~5 s of game time sampled frame by frame: minutes of wall time on a
+  // GPU-less runner drawing ~1 fps.
+  test.slow();
   await clearedLevel(page);
   const run = await page.evaluate(async () => {
     const g = window.ccDebug.game;

@@ -64,13 +64,13 @@ jobs:
           - group: deck
             specs: tests/settings-deck.spec.js tests/cover.spec.js tests/loop.spec.js tests/exit.spec.js tests/gear-drops.spec.js
           - group: bots
-            specs: tests/bots.spec.js tests/aim-bot.spec.js tests/arrivals.spec.js tests/crouch.spec.js
+            specs: tests/bots.spec.js tests/aim-bot.spec.js tests/crouch.spec.js
           - group: effects
             specs: tests/settings-effects.spec.js tests/customization.spec.js tests/classes.spec.js
           # Smoke and cold-start also run on WebKit as an iPhone 15 Pro held
           # sideways, and the Pages test serves the game the way Pages does.
           - group: boot
-            specs: tests/smoke.spec.js tests/cold-start.spec.js
+            specs: tests/smoke.spec.js tests/cold-start.spec.js tests/arrivals.spec.js
             pages: true
     steps:
       - uses: actions/checkout@v4

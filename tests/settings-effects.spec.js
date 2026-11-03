@@ -131,9 +131,15 @@ async function setup(browser, artStyle) {
   return { ctx, page };
 }
 
-/** Beyond-noise test for one diff: both measures clear the floor. */
+/**
+ * Beyond-noise test for one diff: both measures clear the floor, or the
+ * mean shift alone is far past it. Software GL draws Comic bloom as a soft
+ * whole-frame lift: mean shift ~1.1 against noise ~0.005, yet under 0.2% of
+ * pixels move by more than 10.
+ */
 function changed(d, noise) {
   if (d.resized) return true;
+  if (d.mad > Math.max(0.5, noise.mad * 50)) return true;
   return d.pct > Math.max(0.2, noise.pct * 5) && d.mad > Math.max(0.1, noise.mad * 5);
 }
 
