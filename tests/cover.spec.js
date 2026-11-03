@@ -6,6 +6,10 @@
 import { test, expect } from "@playwright/test";
 import { loadGame, debug, play } from "./helpers.js";
 
+// Each test plays seconds of a full campaign level: two to three minutes of
+// wall time on a GPU-less runner, against a 180 s timeout.
+test.beforeEach(() => test.slow());
+
 /** Level 1 with the room to ourselves: its enemies switched off, uncounted. */
 async function quietLevel(page) {
   await loadGame(page);

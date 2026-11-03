@@ -47,7 +47,7 @@ jobs:
       - name: Size budget
         run: npm run check:size
 
-  # The PR tier (npm run test:pr) split across five runners. All of it on one
+  # The PR tier (npm run test:pr) split across six runners. All of it on one
   # runner never finished: a 4-core runner with no GPU renders every frame in
   # software, and four browsers at once pushed the gameplay specs past their
   # 60 s timeout. Playwright's --shard cuts by file order, which put every
@@ -62,7 +62,7 @@ jobs:
       matrix:
         include:
           - group: deck
-            specs: tests/settings-deck.spec.js tests/cover.spec.js tests/loop.spec.js tests/exit.spec.js tests/gear-drops.spec.js
+            specs: tests/settings-deck.spec.js tests/loop.spec.js tests/exit.spec.js tests/gear-drops.spec.js
           - group: bots
             specs: tests/bots.spec.js tests/aim-bot.spec.js tests/crouch.spec.js
           - group: effects
@@ -76,6 +76,9 @@ jobs:
           # other spec it starves that spec's runner (WebKit clicks timed out).
           - group: arrivals
             specs: tests/arrivals.spec.js
+          # Cover plays a full campaign level per test, minutes each here.
+          - group: cover
+            specs: tests/cover.spec.js
     steps:
       - uses: actions/checkout@v4
 
