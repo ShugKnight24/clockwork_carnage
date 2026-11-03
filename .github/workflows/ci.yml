@@ -47,7 +47,7 @@ jobs:
       - name: Size budget
         run: npm run check:size
 
-  # The PR tier (npm run test:pr) split across four runners. All of it on one
+  # The PR tier (npm run test:pr) split across five runners. All of it on one
   # runner never finished: a 4-core runner with no GPU renders every frame in
   # software, and four browsers at once pushed the gameplay specs past their
   # 60 s timeout. Playwright's --shard cuts by file order, which put every
@@ -70,8 +70,12 @@ jobs:
           # Smoke and cold-start also run on WebKit as an iPhone 15 Pro held
           # sideways, and the Pages test serves the game the way Pages does.
           - group: boot
-            specs: tests/smoke.spec.js tests/cold-start.spec.js tests/arrivals.spec.js
+            specs: tests/smoke.spec.js tests/cold-start.spec.js
             pages: true
+          # Arrivals samples seconds of game time frame by frame; next to any
+          # other spec it starves that spec's runner (WebKit clicks timed out).
+          - group: arrivals
+            specs: tests/arrivals.spec.js
     steps:
       - uses: actions/checkout@v4
 
