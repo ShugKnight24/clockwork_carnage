@@ -22,7 +22,12 @@ async function setupArena(page) {
     window.ccDebug.startArena();
   });
   await waitForState(page, "playing", 10_000);
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
+    // The menu clicks left a mouse delta for the first frames of play to
+    // turn by. On a slow runner that turn landed after the angle below and
+    // swung the aim ray off the map. Let it land, then clear it.
+    await window.ccDebug.waitFrames(2);
+    window.ccDebug.clearInput();
     window.ccDebug.godMode(true);
     window.ccDebug.giveAllWeapons();
     window.ccDebug.killAll(); // clear arena spawn so we have a clean field
@@ -87,7 +92,8 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
         .filter((e) => e !== dummy && e.type === "enemy" && e.active)
         .map((e) => ({ kind: e.enemyType, x: +e.x.toFixed(2), y: +e.y.toFixed(2), health: e.health }));
       const target = { health: dummy.health, active: dummy.active, x: dummy.x, y: dummy.y };
-      return { spawn, target, others, yaw, targetXY: { x: tx, y: ty } };
+      const me = { x: player.x, y: player.y, angle: player.angle };
+      return { spawn, target, others, me, yaw, targetXY: { x: tx, y: ty } };
     },
     { dist, aimOffsetX, ads },
   );
