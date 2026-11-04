@@ -1,10 +1,13 @@
 name: Nightly
 
 # The slow tier: what is too long or too noisy for every PR. Each suite runs
-# whether or not the one before it failed, and every screenshot, report and
-# trace is uploaded either way, so a red night still shows what it saw.
+# on its own runner with its own timeout and uploads its own report, so a slow
+# or failing suite can't starve the others. A job that times out skips even
+# its always() steps, so with one job one slow suite lost every report.
 # Specs tagged @gpu are skipped: the runner has no GPU, renders WebGL in
-# software at a few frames a second, and they wait on per-frame work.
+# software at a few frames a second, and they wait on per-frame work. The perf
+# budget is left out for the same reason (its budgets were measured on an M1
+# Pro); `npm run test:nightly` still runs both locally.
 on:
   schedule:
     - cron: "17 4 * * *" # 04:17 UTC, off the top of the hour
@@ -15,11 +18,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  nightly:
+  suite:
+    name: nightly (${{ matrix.suite }})
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 60
     env:
       CI: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: gate
+            run: npx playwright test --project=chromium tests/playtest-gate.spec.js --output=test-results/gate
+          - suite: bots
+            run: npx playwright test --project=chromium tests/bots.spec.js --grep-invert @gpu --output=test-results/bots
+          - suite: specs
+            run: >
+              npx playwright test --project=chromium
+              tests/forge.spec.js tests/cinematic.spec.js tests/aria.spec.js
+              tests/weapon-fire.spec.js tests/mobile-layout.spec.js tests/suits.spec.js
+              --grep-invert @gpu --output=test-results/specs
+          - suite: visual
+            run: npm run test:visual -- --output=test-results/visual
+          # One worker: the sweep plays levels in order.
+          - suite: sweep
+            run: npm run test:sweep -- --output=test-results/sweep
     steps:
       - uses: actions/checkout@v7
 
@@ -47,88 +70,27 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium webkit
 
-      - name: Playtest gate
-        id: gate
-        run: npx playwright test --project=chromium tests/playtest-gate.spec.js --output=test-results/gate
-      - name: Keep the gate report
-        if: ${{ !cancelled() }}
-        run: mv playwright-report reports-gate || true
+      - name: Run ${{ matrix.suite }}
+        run: ${{ matrix.run }}
 
-      - name: Bots (every profile and suite)
-        id: bots
-        if: ${{ !cancelled() }}
-        run: npx playwright test --project=chromium tests/bots.spec.js --grep-invert @gpu --output=test-results/bots
-      - name: Keep the bots report
-        if: ${{ !cancelled() }}
-        run: mv playwright-report reports-bots || true
-
-      - name: Forge, cinematic and the remaining specs
-        id: specs
-        if: ${{ !cancelled() }}
-        run: >
-          npx playwright test --project=chromium
-          tests/forge.spec.js tests/cinematic.spec.js tests/aria.spec.js
-          tests/weapon-fire.spec.js tests/mobile-layout.spec.js tests/suits.spec.js
-          --grep-invert @gpu --output=test-results/specs
-      - name: Keep the specs report
-        if: ${{ !cancelled() }}
-        run: mv playwright-report reports-specs || true
-
-      - name: Visual specs (screenshots, level looks)
-        id: visual
-        if: ${{ !cancelled() }}
-        run: npm run test:visual -- --output=test-results/visual
-      - name: Keep the visual report
-        if: ${{ !cancelled() }}
-        run: mv playwright-report reports-visual || true
-
-      # One worker each: the sweep plays levels in order, and perf budgets
-      # measure frame time, which parallel browsers would distort.
-      - name: Campaign sweep (all 29 levels)
-        id: sweep
-        if: ${{ !cancelled() }}
-        run: npm run test:sweep -- --output=test-results/sweep
-      - name: Keep the sweep report
-        if: ${{ !cancelled() }}
-        run: mv playwright-report reports-sweep || true
-
-      - name: Perf budget
-        id: perf
-        if: ${{ !cancelled() }}
-        run: npm run test:perf -- --output=test-results/perf
-      - name: Keep the perf report
-        if: ${{ !cancelled() }}
-        run: mv playwright-report reports-perf || true
-
-      # always(), not !cancelled(): a cancelled night still uploads what it saw.
-      - name: Upload screenshots
+      - name: Upload report, traces and screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: nightly-screenshots
-          path: screenshots/
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload reports and traces
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: nightly-reports
+          name: nightly-${{ matrix.suite }}
           path: |
-            reports-*/
+            playwright-report/
             test-results/
+            screenshots/
           if-no-files-found: ignore
           retention-days: 14
 
-      # The suites above run past each other's failures; this makes the run
-      # red if any of them failed.
-      - name: Result
-        if: ${{ !cancelled() }}
-        run: |
-          echo "gate=${{ steps.gate.outcome }} bots=${{ steps.bots.outcome }} specs=${{ steps.specs.outcome }}"
-          echo "visual=${{ steps.visual.outcome }} sweep=${{ steps.sweep.outcome }} perf=${{ steps.perf.outcome }}"
-          for o in "${{ steps.gate.outcome }}" "${{ steps.bots.outcome }}" "${{ steps.specs.outcome }}" \
-                   "${{ steps.visual.outcome }}" "${{ steps.sweep.outcome }}" "${{ steps.perf.outcome }}"; do
-            [ "$o" = "success" ] || exit 1
-          done
+  # One check to read: red if any suite failed, timed out or was cancelled.
+  result:
+    needs: suite
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "suites: ${{ needs.suite.result }}"
+          [ "${{ needs.suite.result }}" = "success" ]
