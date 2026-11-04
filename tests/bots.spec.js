@@ -70,7 +70,7 @@ test.describe("Bot Profiles", () => {
     expect(result).toBe(true);
   });
 
-  test("performance benchmark suite passes", { tag: "@nightly" }, async ({ page }) => {
+  test("performance benchmark suite passes", { tag: ["@nightly", "@gpu"] }, async ({ page }) => {
     const result = await page.evaluate(() => window.ccTest.validate("perf"));
     expect(result).toBe(true);
   });
