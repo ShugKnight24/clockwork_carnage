@@ -174,7 +174,9 @@ export function createPlaytestGate(game, tools) {
     const id = game.tutorial.def?.id;
     if (id === "arrive" || id === "suitUp") game.tutorial.skipStep(); // the opening scene
     else if (id === "boot") stepAndWatch(run, ctx, player, 180, "tutorial boot");
-    else if (id === "look") withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 240, "look around");
+    // Keep the mouse moving, as a player looking around does: aim is hybrid,
+    // so one nudge only walks the reticle and may never turn the camera.
+    else if (id === "look") for (let i = 0; i < 24; i++) withInput(() => { game.mouse.dx = 40; }, run, ctx, player, 10, "look around");
     else if (id === "walk") t.walkTo(game, 25.0, 41.5, 400); // out of the locker room, by its door
     else if (step < TUTORIAL_SANDBOX_STEP) {
       game.player.chronoActive = false;
