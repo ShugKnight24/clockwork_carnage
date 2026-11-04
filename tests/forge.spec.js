@@ -470,7 +470,8 @@ test.describe("Voxel Forge", () => {
   });
 
   test("share URL round trip", async ({ page, browser }) => {
-    test.setTimeout(90_000);
+    // Two Forge boots; in software GL (the nightly runner) each takes most of a minute.
+    test.setTimeout(180_000);
     await loadGame(page);
     await debug(page, "startBuilder");
     await waitForForge(page);
@@ -512,8 +513,19 @@ test.describe("Voxel Forge", () => {
       await page2.goto(`/#${hash}`, { waitUntil: "networkidle" });
       await page2.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
       await waitForForge(page2, 30_000);
+      // The Forge draws before the import lands, and its slot is written after.
+      await page2.waitForFunction(
+        () => {
+          const g = window.ccDebug.game;
+          return g.world?.meta.name === "Shared" && !g.builder._slotPending;
+        },
+        null,
+        { timeout: 30_000 },
+      );
       // The shared world is endless: (90, 90) reads as air until it streams in.
-      await waitForColumn(page2, 90, 90);
+      // Load its column here rather than wait on the streamer, which a runner
+      // with no GPU gets to far too slowly: this tests the share, not streaming.
+      await page2.evaluate(() => window.ccDebug.game.world.ensureColumn(90 >> 4, 90 >> 4));
 
       expect(await page2.evaluate(() => window.ccDebug.game.world.get(90, 90, 50))).toBe(9);
       expect(await page2.evaluate(() => window.ccDebug.game.world.meta.name)).toBe("Shared");

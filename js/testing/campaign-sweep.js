@@ -26,7 +26,7 @@ import { GameState } from "../game.js";
 import { ACTS, getActLevel } from "../../src/data/campaign/acts.js";
 import { campaignMap } from "../../src/data/levels/campaign.js";
 import { hasLineOfSight } from "../../src/systems/physics.js";
-import { LOOP_REWIND_WINDOW } from "../../src/systems/chrono-hazards.js";
+import { LOOP_REWIND_WINDOW, collapseFront, collapseStepAt } from "../../src/systems/chrono-hazards.js";
 import { SeededRNG } from "../../src/utils/seeded-rng.js";
 
 const TICKS_PER_S = 60;
@@ -237,6 +237,13 @@ export function createCampaignSweep(game, t) {
         if (h.type === "blade" && !h.stopped && Math.hypot(h.x - p.x, h.y - p.y) < (h.radius ?? 1.5) + 1.6) {
           shift();
           if (p.chronoActive && cp.has("dash") && !seen.length) game.dashFromKeys();
+        }
+        // A collapse at your heels: shift as the front closes, as the level's
+        // card teaches. Walking it, the rubble lands a fifth of a tile short
+        // of each landing forever (a catch never kills).
+        if (h.type === "collapse" && hz.triggers[h.id] != null) {
+          const at = collapseStepAt(h, p.x, p.y);
+          if (at >= 0 && at - collapseFront(h, hz.clock, hz.triggers[h.id]) <= 6) shift();
         }
       }
       if (!obj) return;
