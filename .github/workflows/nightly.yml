@@ -3,6 +3,8 @@ name: Nightly
 # The slow tier: what is too long or too noisy for every PR. Each suite runs
 # whether or not the one before it failed, and every screenshot, report and
 # trace is uploaded either way, so a red night still shows what it saw.
+# Specs tagged @gpu are skipped: the runner has no GPU, renders WebGL in
+# software at a few frames a second, and they wait on per-frame work.
 on:
   schedule:
     - cron: "17 4 * * *" # 04:17 UTC, off the top of the hour
@@ -19,10 +21,10 @@ jobs:
     env:
       CI: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -32,7 +34,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -55,7 +57,7 @@ jobs:
       - name: Bots (every profile and suite)
         id: bots
         if: ${{ !cancelled() }}
-        run: npx playwright test --project=chromium tests/bots.spec.js --output=test-results/bots
+        run: npx playwright test --project=chromium tests/bots.spec.js --grep-invert @gpu --output=test-results/bots
       - name: Keep the bots report
         if: ${{ !cancelled() }}
         run: mv playwright-report reports-bots || true
@@ -67,7 +69,7 @@ jobs:
           npx playwright test --project=chromium
           tests/forge.spec.js tests/cinematic.spec.js tests/aria.spec.js
           tests/weapon-fire.spec.js tests/mobile-layout.spec.js tests/suits.spec.js
-          --output=test-results/specs
+          --grep-invert @gpu --output=test-results/specs
       - name: Keep the specs report
         if: ${{ !cancelled() }}
         run: mv playwright-report reports-specs || true
@@ -98,9 +100,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: mv playwright-report reports-perf || true
 
+      # always(), not !cancelled(): a cancelled night still uploads what it saw.
       - name: Upload screenshots
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-screenshots
           path: screenshots/
@@ -108,8 +111,8 @@ jobs:
           retention-days: 14
 
       - name: Upload reports and traces
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-reports
           path: |

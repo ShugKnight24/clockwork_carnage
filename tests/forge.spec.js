@@ -5,6 +5,10 @@
  *
  * GPU flags (`--use-gl=angle --enable-gpu`) come from playwright.config.js —
  * plain headless Chromium has no WebGL2, so the Forge would never open.
+ *
+ * Specs tagged @gpu wait on meshing, streaming or movement, all of which run
+ * per frame. A runner with no GPU renders in software at a few frames a
+ * second, so the nightly job skips them; run them locally.
  */
 import { test, expect } from "@playwright/test";
 import { loadGame, debug, screenshot } from "./helpers.js";
@@ -219,7 +223,7 @@ test.describe("Voxel Forge", () => {
     await screenshot(page, "forge-editor");
   });
 
-  test("a world made with Ctrl+N is the one drawn", async ({ page }) => {
+  test("a world made with Ctrl+N is the one drawn", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(90_000);
     await loadGame(page);
     await debug(page, "startBuilder");
@@ -250,7 +254,7 @@ test.describe("Voxel Forge", () => {
     expect(await page.evaluate(() => window.ccDebug.game.voxelRenderer.stats.chunksDrawn)).toBeGreaterThan(0);
   });
 
-  test("a new world has water near its dry spawn, and draws it", async ({ page }) => {
+  test("a new world has water near its dry spawn, and draws it", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(90_000);
     await loadGame(page);
     await debug(page, "startBuilder");
@@ -286,7 +290,7 @@ test.describe("Voxel Forge", () => {
     await screenshot(page, "forge-new-world-water");
   });
 
-  test("vessels: place a boat, board it with B, drive it with W, and find it again after a reload", async ({ page }) => {
+  test("vessels: place a boat, board it with B, drive it with W, and find it again after a reload", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(120_000);
     await loadGame(page);
     await debug(page, "startBuilder");
@@ -365,7 +369,7 @@ test.describe("Voxel Forge", () => {
     expect(Math.hypot(after[0].x - driven.x, after[0].y - driven.y)).toBeLessThan(3);
   });
 
-  test("draws the whole world at the lowest quality preset", async ({ page }) => {
+  test("draws the whole world at the lowest quality preset", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(90_000);
     await loadGame(page);
     await debug(page, "startBuilder");
@@ -508,6 +512,8 @@ test.describe("Voxel Forge", () => {
       await page2.goto(`/#${hash}`, { waitUntil: "networkidle" });
       await page2.waitForFunction(() => window.ccDebug != null, { timeout: 10_000 });
       await waitForForge(page2, 30_000);
+      // The shared world is endless: (90, 90) reads as air until it streams in.
+      await waitForColumn(page2, 90, 90);
 
       expect(await page2.evaluate(() => window.ccDebug.game.world.get(90, 90, 50))).toBe(9);
       expect(await page2.evaluate(() => window.ccDebug.game.world.meta.name)).toBe("Shared");
@@ -697,7 +703,7 @@ test.describe("Voxel Forge", () => {
     ).toEqual([7, made.edge]);
   });
 
-  test("an old v4 world grows endless on Ctrl+B twice, and the seam and the build survive a reload", async ({ page }) => {
+  test("an old v4 world grows endless on Ctrl+B twice, and the seam and the build survive a reload", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(180_000);
     await loadGame(page);
     // A v4 world as an older build left it: rolling ground, no generator, a
@@ -1273,7 +1279,7 @@ test.describe("Voxel Forge", () => {
     expect(await page.evaluate(() => window.ccDebug.game.world.get(44, 64, 49))).toBe(17);
   });
 
-  test("the three station blocks read apart from stone and rock", async ({ page }) => {
+  test("the three station blocks read apart from stone and rock", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(120_000);
     await loadGame(page);
     await debug(page, "startBuilder");
@@ -1491,7 +1497,7 @@ test.describe("Voxel Forge", () => {
     expect(placed.after).toBe(placed.before - 1);
   });
 
-  test("endless: fly 600 blocks, terrain keeps coming, memory stays bounded, a far build survives a reload", async ({ page }) => {
+  test("endless: fly 600 blocks, terrain keeps coming, memory stays bounded, a far build survives a reload", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(300_000);
     await loadGame(page);
     await debug(page, "startBuilder");
@@ -1568,7 +1574,7 @@ test.describe("Voxel Forge", () => {
     await screenshot(page, "forge-endless-far-build");
   });
 
-  test("endless: half a million blocks out, the world streams in and draws", async ({ page }) => {
+  test("endless: half a million blocks out, the world streams in and draws", { tag: "@gpu" }, async ({ page }) => {
     test.setTimeout(120_000);
     await loadGame(page);
     await debug(page, "startBuilder");
