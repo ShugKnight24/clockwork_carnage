@@ -362,36 +362,85 @@ const FACE =
   "C6.8,-75.5 7.4,-79 7.2,-84 C7,-89.5 4,-91.6 0,-91.6 C-4,-91.6 -7,-89.5 -7.2,-84 Z";
 const NECK = "M-3.9,-74.6 L3.9,-74.6 L4.5,-65.4 L-4.5,-65.4 Z";
 
+/**
+ * Eye shapes per body type. The feminine eye is a touch larger with a
+ * heavier lid line and lashes; its brow is thinner and arched higher.
+ */
+const EYE = {
+  masc: {
+    white: "M-4.7,-81.6 Q-3.1,-83.3 -1.5,-81.7 Q-3.1,-80.3 -4.7,-81.6 Z",
+    iris: ".95",
+    pupil: ".42",
+    fold: "M-4.9,-81.75 Q-3.1,-83.7 -1.3,-81.9 Q-3.1,-83.1 -4.9,-81.75 Z",
+    lid: "M-4.9,-81.7 Q-3.1,-83.3 -1.3,-81.8",
+    lidW: 0.5,
+    brow: "M-5.9,-83.7 C-4.8,-85 -2.8,-85.3 -1.1,-84.5 L-1.2,-84 C-2.8,-84.6 -4.6,-84.4 -5.7,-83.4 Z",
+    lashes: "",
+  },
+  fem: {
+    white: "M-5,-81.6 Q-3.1,-83.9 -1.3,-81.75 Q-3.1,-79.9 -5,-81.6 Z",
+    iris: "1.1",
+    pupil: ".48",
+    fold: "M-5.2,-81.75 Q-3.1,-84.4 -1.1,-81.95 Q-3.1,-83.7 -5.2,-81.75 Z",
+    lid: "M-5.25,-81.65 Q-3.1,-84 -1.1,-81.85",
+    lidW: 0.65,
+    brow: "M-5.7,-84.1 C-4.6,-85.9 -2.6,-86.1 -1.3,-85.1 L-1.4,-84.8 C-2.7,-85.5 -4.4,-85.4 -5.55,-83.9 Z",
+    // Three short lashes flicking out from the outer corner.
+    lashes: "M-5.15,-81.85 L-5.9,-82.4 M-4.7,-82.55 L-5.2,-83.2 M-4.1,-83.05 L-4.35,-83.7",
+  },
+};
+
 function eyes(c) {
   const shadow = c.skin.shadow;
+  const E = c.fem ? EYE.fem : EYE.masc;
   const eye = (s) => {
     const x = s * 3.1;
     const M = s > 0 ? mirror : (d) => d;
     return (
       // Soft socket shade, kept small: a wide dark band read as goggles.
       `<ellipse cx="${x}" cy="-82.3" rx="2.3" ry="1.2" fill="${shadow}" opacity=".16"/>` +
-      `<path d="${M("M-4.7,-81.6 Q-3.1,-83.3 -1.5,-81.7 Q-3.1,-80.3 -4.7,-81.6 Z")}" fill="#ece6de"/>` +
-      `<circle cx="${f(x + 0.1)}" cy="-81.65" r=".95" fill="${c.eyes}"/>` +
-      `<circle cx="${f(x + 0.1)}" cy="-81.65" r=".95" fill="none" stroke="${mix(c.eyes, "#000000", 0.55)}" stroke-width=".2"/>` +
-      `<circle cx="${f(x + 0.1)}" cy="-81.65" r=".42" fill="#050505"/>` +
+      `<path d="${M(E.white)}" fill="#ece6de"/>` +
+      `<circle cx="${f(x + 0.1)}" cy="-81.65" r="${E.iris}" fill="${c.eyes}"/>` +
+      `<circle cx="${f(x + 0.1)}" cy="-81.65" r="${E.iris}" fill="none" stroke="${mix(c.eyes, "#000000", 0.55)}" stroke-width=".2"/>` +
+      `<circle cx="${f(x + 0.1)}" cy="-81.65" r="${E.pupil}" fill="#050505"/>` +
       `<circle cx="${f(x - 0.25)}" cy="-82.05" r=".22" fill="#fff"/>` +
       // Upper lid: a thin fold, so the eye reads open and alert, not sleepy.
-      `<path d="${M("M-4.9,-81.75 Q-3.1,-83.7 -1.3,-81.9 Q-3.1,-83.1 -4.9,-81.75 Z")}" fill="${mix(c.skin.color, shadow, 0.4)}"/>` +
-      line(M("M-4.9,-81.7 Q-3.1,-83.3 -1.3,-81.8"), "#1a100c", 0.5, 0.95) +
+      `<path d="${M(E.fold)}" fill="${mix(c.skin.color, shadow, 0.4)}"/>` +
+      line(M(E.lid), "#1a100c", E.lidW, 0.95) +
+      (E.lashes ? line(M(E.lashes), "#1a100c", 0.28, 0.85) : "") +
       line(M("M-4.4,-80.95 Q-3.1,-80.35 -1.8,-80.95"), shadow, 0.25, 0.45) +
       // Brow: tapered, arched, hair-coloured.
-      `<path d="${M("M-5.9,-83.7 C-4.8,-85 -2.8,-85.3 -1.1,-84.5 L-1.2,-84 C-2.8,-84.6 -4.6,-84.4 -5.7,-83.4 Z")}" fill="${mix(c.hair.brow || (c.hair.id === "none" ? c.skin.shadow : c.hair.color), "#000000", 0.2)}"/>`
+      `<path d="${M(E.brow)}" fill="${mix(c.hair.brow || (c.hair.id === "none" ? c.skin.shadow : c.hair.color), "#000000", 0.2)}"/>`
     );
   };
   return eye(-1) + eye(1);
 }
 
-/** Face without hair (head top -91.6, chin -71.2). */
+/** Feminine mouth: a cupid's-bow upper lip over a fuller lower lip. */
+function femMouth(c) {
+  const lip = mix(c.skin.color, "#b0474f", 0.42);
+  return (
+    `<path d="M-2.5,-74 C-1.6,-74.9 -0.6,-74.9 0,-74.4 C0.6,-74.9 1.6,-74.9 2.5,-74 C1.2,-73.75 -1.2,-73.75 -2.5,-74 Z" fill="${mix(lip, "#000000", 0.12)}"/>` +
+    `<path d="M-2.4,-73.9 C-1.2,-73.7 1.2,-73.7 2.4,-73.9 C1.6,-72.3 -1.6,-72.3 -2.4,-73.9 Z" fill="${lip}"/>` +
+    line("M-2.6,-74 C-1.2,-73.6 1.2,-73.6 2.6,-74", mix(c.skin.shadow, "#000000", 0.35), 0.4, 0.85) +
+    `<ellipse cx=".5" cy="-73.1" rx="1" ry=".32" fill="#fff" opacity=".22"/>`
+  );
+}
+
+/** Face without hair (head top -91.6, chin -71.2). Feminine faces get their own eyes, cheeks and mouth, then the jaw taper. */
 function face(c) {
   const shadow = c.skin.shadow;
   const ear = "M-7,-83.6 C-8.9,-84.4 -9.6,-82 -9.2,-79.8 C-8.9,-78.2 -8,-77.4 -6.8,-77.8 Z";
   const synthetic = c.skin.id === "synthetic";
-  return (
+  const fem = c.fem;
+  const blush = mix(c.skin.color, "#d0605a", 0.35);
+  const mouth = fem
+    ? femMouth(c)
+    : // Mouth: a level, slightly lifted line (the old curve read as a frown).
+      `<path d="M-2.4,-74 C-1,-74.3 1,-74.3 2.4,-74 C1.2,-73.3 -1.2,-73.3 -2.4,-74 Z" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
+      line("M-2.6,-74.05 C-1.2,-73.55 1.2,-73.55 2.6,-74.05", mix(shadow, "#000000", 0.4), 0.5, 0.9) +
+      line("M-1.3,-72.75 C-0.5,-72.5 0.5,-72.5 1.3,-72.75", mix(c.skin.color, "#ffffff", 0.3), 0.4, 0.45);
+  const markup =
     shape(ear, "url(#skin)", 0.8) +
     shape(mirror(ear), mix(c.skin.color, shadow, 0.55), 0.8) +
     shape(FACE, "url(#skin)") +
@@ -403,17 +452,20 @@ function face(c) {
     `<ellipse cx=".5" cy="-76.1" rx="1.9" ry=".55" fill="${shadow}" opacity=".35"/>` +
     line("M-1.7,-76.7 C-1,-75.9 1,-75.9 1.7,-76.7", shadow, 0.45, 0.85) +
     // Cheeks: a faint warm lift under each eye.
-    `<ellipse cx="-4.2" cy="-78.2" rx="1.7" ry="1" fill="${mix(c.skin.color, "#d0605a", 0.35)}" opacity=".22"/>` +
-    `<ellipse cx="4.2" cy="-78.2" rx="1.7" ry="1" fill="${mix(c.skin.color, "#d0605a", 0.35)}" opacity=".16"/>` +
-    // Mouth: a level, slightly lifted line (the old curve read as a frown).
-    `<path d="M-2.4,-74 C-1,-74.3 1,-74.3 2.4,-74 C1.2,-73.3 -1.2,-73.3 -2.4,-74 Z" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
-    line("M-2.6,-74.05 C-1.2,-73.55 1.2,-73.55 2.6,-74.05", mix(shadow, "#000000", 0.4), 0.5, 0.9) +
-    line("M-1.3,-72.75 C-0.5,-72.5 0.5,-72.5 1.3,-72.75", mix(c.skin.color, "#ffffff", 0.3), 0.4, 0.45) +
+    `<ellipse cx="-4.2" cy="-78.2" rx="1.7" ry="1" fill="${blush}" opacity="${fem ? ".3" : ".22"}"/>` +
+    `<ellipse cx="4.2" cy="-78.2" rx="1.7" ry="1" fill="${blush}" opacity="${fem ? ".22" : ".16"}"/>` +
+    // Feminine cheekbones: a soft high lift and the hollow under it.
+    (fem
+      ? `<ellipse cx="-4.8" cy="-79.6" rx="1.9" ry=".7" fill="#fff" opacity=".1"/>` +
+        line("M-6.2,-78.4 C-5.4,-77 -4.4,-76.4 -3.4,-76.2", shadow, 0.3, 0.18) +
+        line("M6.2,-78.4 C5.4,-77 4.4,-76.4 3.4,-76.2", shadow, 0.3, 0.26)
+      : "") +
+    mouth +
     (synthetic
       ? line("M-6.6,-79.6 L-4.4,-77.4 L-4.6,-74.4 M6.6,-79.6 L4.4,-77.4 L4.6,-74.4 M0,-91.4 L0,-87.8", "#3a424e", 0.4, 0.8)
       : "") +
-    line("M7.3,-87 C7.6,-84 7.4,-80 6.9,-77 M7,-76.4 C6.4,-74.8 5.6,-73.6 4.6,-72.8", c.rim, 0.4, 0.5)
-  );
+    line("M7.3,-87 C7.6,-84 7.4,-80 6.9,-77 M7,-76.4 C6.4,-74.8 5.6,-73.6 4.6,-72.8", c.rim, 0.4, 0.5);
+  return fem ? warpX(markup, FEM_JAW) : markup;
 }
 
 /** Hair. `under` = only what shows under an open helmet. */
@@ -941,8 +993,8 @@ const BUILDS = {
   // Athletic: narrower shoulders, a defined waist, fuller hips; toned limbs,
   // not thin ones.
   fem: {
-    sh: 0.92, hip: 1.06, armW: 0.97, legW: 1.01, shoulder: 0.92, scale: 0.99, head: 0.95,
-    torso: piecewise([[-80, 0.9], [-64, 0.9], [-54, 0.95], [-46, 0.9], [-36, 0.84], [-28, 0.94], [-20, 1.1], [-6, 1.12], [60, 1.12]]),
+    sh: 0.92, hip: 1.1, armW: 0.97, legW: 1.01, shoulder: 0.92, scale: 0.99, head: 0.95,
+    torso: piecewise([[-80, 0.9], [-64, 0.9], [-54, 0.95], [-46, 0.88], [-36, 0.78], [-28, 0.92], [-20, 1.12], [-6, 1.18], [60, 1.18]]),
   },
 };
 /** A pose with the build's shoulder and hip spacing. Explicit elbow/wrist points (a grip) stay put. */
@@ -957,20 +1009,26 @@ function buildPose(P, B) {
     }),
   };
 }
-/** Feminine jaw: the face narrows toward a softer chin. */
-const FEM_JAW = piecewise([[-84, 1], [-78, 0.95], [-71, 0.8]]);
-const femFace = (markup) =>
-  warpX(markup, FEM_JAW) +
-  // Lashes on the upper lids.
-  line("M-4.7,-81.8 Q-5.3,-82 -5.8,-82.6 M4.7,-81.8 Q5.3,-82 5.8,-82.6", "#1a100c", 0.32, 0.85) +
-  // Fuller lips.
-  `<path d="M-2.1,-74.2 C-1.2,-74.9 -0.4,-74.6 0,-74.3 C0.4,-74.6 1.2,-74.9 2.1,-74.2 C1.2,-72.9 -1.2,-72.9 -2.1,-74.2 Z" fill="#a85a58" opacity=".55"/>`;
+/**
+ * Feminine face shape: a slightly narrower brow and temples, then a firm
+ * taper from the cheekbones to a smaller, softer chin. Held almost level
+ * through the eyes so the (unwarped) irises stay centred in their whites.
+ */
+const FEM_JAW = piecewise([[-92, 0.96], [-86, 0.97], [-82, 0.97], [-79, 0.93], [-75, 0.8], [-71, 0.74]]);
 /** A moulded chest plate for the feminine frame (before the reshape narrows it). */
 const FEM_CHEST =
   `<ellipse cx="-7" cy="-53" rx="6.4" ry="5" fill="url(#sheen)" opacity=".5"/>` +
   `<ellipse cx="7" cy="-53" rx="6.4" ry="5" fill="#000" opacity=".12"/>` +
   line("M-14.6,-51 C-13,-44.8 -5.2,-44 -1,-47.6 M14.6,-51 C13,-44.8 5.2,-44 1,-47.6", INK, 0.6, 0.55) +
   line("M-13.4,-50.6 C-11.6,-45.8 -5.6,-45.2 -2,-47.8", "#eaf4ff", 0.45, 0.35);
+/** Armours whose kit paints a solid chest plate over the torso (and FEM_CHEST). */
+const PLATED = new Set(["heavy", "howitzer", "trencher", "reliquary", "pathfinder"]);
+/** The same moulding pressed into those plates, drawn over them: lighter, so it reads as shaped armour. */
+const FEM_PLATE =
+  `<ellipse cx="-7.2" cy="-53.4" rx="5.8" ry="4.4" fill="url(#sheen)" opacity=".32"/>` +
+  `<ellipse cx="7.2" cy="-53.4" rx="5.8" ry="4.4" fill="#000" opacity=".1"/>` +
+  line("M-14,-51.4 C-12.6,-45.6 -5.4,-44.8 -1.2,-47.8 M14,-51.4 C12.6,-45.6 5.4,-44.8 1.2,-47.8", INK, 0.6, 0.5) +
+  line("M-12.8,-50.8 C-11.2,-46.4 -5.8,-45.8 -2.2,-48", "#eaf4ff", 0.45, 0.3);
 
 /**
  * Reaper: a knit balaclava with a painted skull, the agent's own eyes looking
@@ -1065,10 +1123,9 @@ function bandanaHead(c) {
     const y = i > 7 ? -89.6 : -92.2;
     dots += `<circle cx="${f(x)}" cy="${f(y + Math.abs(x) * 0.08)}" r=".32" fill="#5a6068"/>`;
   }
-  const faceMarkup = c.fem ? femFace(face(c)) : face(c);
   return {
     front:
-      faceMarkup +
+      face(c) +
       shape(tails, cloth, 0.7) +
       shape(wrap, cloth, 0.8) +
       `<path d="${wrap}" fill="url(#weave)" opacity=".5"/>` +
@@ -1080,13 +1137,74 @@ function bandanaHead(c) {
   };
 }
 
-/** Pilot: a sealed shell with a dark face plate and three round optics. */
-function pilotHelmet(c) {
+/**
+ * Pilot optics per visor pick, the same glass and light as closedVisor:
+ * `glass` fills each lens, `glint` is its highlight, `lit` the lens glow
+ * (null = unlit glass), `core` the inner light per lens.
+ */
+function pilotLenses(c, lenses) {
   const e = c.energy;
+  const each = (fn) => lenses.map(([x, y, r]) => fn(x, y, r)).join("");
+  const glint = (color, op) => line(each((x, y, r) => `M${f(x - r * 0.55)},${f(y - r * 0.35)} Q${f(x - r * 0.2)},${f(y - r * 0.75)} ${f(x + r * 0.2)},${f(y - r * 0.7)} `), color, 0.4, op);
+  const bloom = (fill, op) => `<g fill="${fill}" filter="url(#bloom)" opacity="${op}">${each((x, y, r) => `<circle cx="${x}" cy="${y}" r="${r}"/>`)}</g>`;
+  switch (c.visor) {
+    case "goldwrap":
+      // Tinted gold: you see yourself in it, the light behind stays faint.
+      return {
+        glass: "url(#goldGlass)",
+        glint: glint("#fff6d0", 0.85),
+        glow: `<g fill="${e}" opacity=".35">${each((x, y, r) => `<circle cx="${x}" cy="${f(y + r * 0.45)}" r="${f(r * 0.22)}"/>`)}</g>`,
+      };
+    case "fullface":
+      // Blackout: mirrored, a hard glint on each lens and almost no light.
+      return {
+        glass: "url(#mirrorGlass)",
+        glint: glint("#ffffff", 0.75) + `<g fill="#ffffff" opacity=".35">${each((x, y, r) => `<circle cx="${f(x + r * 0.4)}" cy="${f(y + r * 0.4)}" r="${f(r * 0.16)}"/>`)}</g>`,
+        glow: `<g stroke="${e}" stroke-width=".45" fill="none" opacity=".5">${each((x, y, r) => `<circle cx="${x}" cy="${y}" r="${f(r - 0.2)}"/>`)}</g>`,
+      };
+    case "slit":
+      // A narrow lit band across each lens.
+      return {
+        glass: "url(#visor)",
+        glint: glint("#ffffff", 0.5),
+        glow: bloom(e, ".45") + `<g fill="${c.hot}">${each((x, y, r) => `<rect x="${f(x - r * 0.8)}" y="${f(y - 0.3)}" width="${f(r * 1.6)}" height=".6" rx=".3"/>`)}</g>`,
+      };
+    case "split":
+      // Twin segmented optics: each lens split by a dark bar, two lit halves.
+      return {
+        glass: "url(#visor)",
+        glint: glint("#ffffff", 0.7) + line(each((x, y, r) => `M${x},${f(y - r)} L${x},${f(y + r)} `), "#03060a", 0.5, 0.9),
+        glow:
+          bloom(e, ".6") +
+          `<g fill="${c.hot}">${each((x, y, r) => `<ellipse cx="${f(x - r * 0.45)}" cy="${y}" rx="${f(r * 0.3)}" ry="${f(r * 0.22)}"/><ellipse cx="${f(x + r * 0.45)}" cy="${y}" rx="${f(r * 0.3)}" ry="${f(r * 0.22)}"/>`)}</g>`,
+      };
+    case "glow":
+      // Beacon: high-lumen, every lens flooded and a halo round the plate.
+      return {
+        glass: "url(#visor)",
+        glint: "",
+        glow:
+          `<ellipse cx="0" cy="-82.8" rx="12" ry="5.6" fill="${e}" filter="url(#bloom)" opacity=".4"/>` +
+          bloom(e, "1") +
+          `<g fill="${c.core}" filter="url(#glow)">${each((x, y, r) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.85)}"/>`)}</g>` +
+          `<g fill="#ffffff">${each((x, y, r) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.35)}"/>`)}</g>`,
+      };
+    default:
+      return {
+        glass: "url(#visor)",
+        glint: "",
+        glow: bloom(e, ".6") + `<g fill="${c.core}">${each((x, y, r) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.45)}"/>`)}</g>`,
+      };
+  }
+}
+
+/** Pilot: a sealed shell with a dark face plate and three round optics, glazed per the visor pick. */
+function pilotHelmet(c) {
   const shell = SHELLS.standard;
   const plate = "M-9.6,-87.2 C-4.6,-88.8 4.6,-88.8 9.6,-87.2 L9.4,-77.8 C8,-74 5,-71.6 0,-70.8 C-5,-71.6 -8,-74 -9.4,-77.8 Z";
   const lenses = [[0, -82.6, 2.5], [-5, -83.2, 1.9], [5, -83.2, 1.9]];
-  const ring = lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r + 0.7)}" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#visor)" stroke="${INK}" stroke-width=".35"/>`).join("");
+  const optics = pilotLenses(c, lenses);
+  const ring = lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r + 0.7)}" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${r}" fill="${optics.glass}" stroke="${INK}" stroke-width=".35"/>`).join("");
   return {
     front:
       shape(shell, "url(#steel)") +
@@ -1094,12 +1212,11 @@ function pilotHelmet(c) {
       shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-88.6 L-1.5,-88.6 Z", "url(#steelDk)", 0.5) +
       shape(plate, "#0c0f13", 0.8) +
       ring +
+      optics.glint +
       line("M-2.6,-75.4 L2.6,-75.4 M-3,-73.8 L3,-73.8", "#2a3038", 0.6, 1) +
       line("M-1.2,-84.2 C-0.6,-84.8 0.4,-84.9 1,-84.6", "#ffffff", 0.45, 0.8) +
       `<circle cx="-11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`,
-    glow:
-      `<g fill="${e}" filter="url(#bloom)" opacity=".6">${lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join("")}</g>` +
-      `<g fill="${c.core}">${lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r * 0.45)}"/>`).join("")}</g>`,
+    glow: optics.glow,
   };
 }
 
@@ -1111,7 +1228,7 @@ function head(c, peek) {
   const w = SHELL_HALF[style] || 11.2;
   const earX = w - 0.3;
   if (peek) {
-    return { front: hairBack(c) + (c.fem ? femFace(face(c)) : face(c)) + hair(c, false), glow: eyeGlow(c, 0.45) };
+    return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
   }
   const shell = SHELLS[style] || SHELLS.standard;
   const ears = EARLESS_HELMETS.has(style)
@@ -1743,14 +1860,36 @@ const chestTrim = (c) =>
   line(SEAM_R, mix(c.pal.primary, "#000000", 0.35), 1.3, 0.9) +
   line("M-15.8,-50 C-11,-44.6 -5,-44.8 -0.6,-47.6 M15.8,-50 C11,-44.6 5,-44.8 0.6,-47.6", INK, 0.45, 0.8);
 
-/** Variant overlay: trim stripes along the existing chest seams and, with wear, scratches. */
+/**
+ * Edges of each armour's chest plate (kit.front in gear()): top rim, bottom
+ * rim and any raised detail, painted in the variant trim instead of the
+ * pectoral seams those plates cover. `rings` ring the round bosses; circles,
+ * like the kit's own, so the body reshape leaves them round.
+ */
+const PLATE_TRIM = {
+  heavy: { d: "M-15.8,-64.6 C-8,-67 8,-67 15.8,-64.6 M-16.8,-44.8 C-8,-42.6 8,-42.6 16.8,-44.8", rings: [[-7.6, -56, 5], [7.6, -56, 5]] },
+  howitzer: { d: "M-13.8,-63.4 L13.8,-63.4 M-15.4,-41 L15.4,-41 M-3.4,-63 L-4,-41.4 M3.4,-63 L4,-41.4" },
+  trencher: { d: "M-13.8,-64 C-7,-65.4 7,-65.4 13.8,-64 M-14.6,-38.6 C-7,-37.2 7,-37.2 14.6,-38.6 M-5.2,-62.4 L5.2,-62.4" },
+  reliquary: { d: "M-14.2,-64 C-6,-67.2 6,-67.2 14.2,-64 M-15.2,-42 L15.2,-42", rings: [[0, -54.4, 6.6]] },
+  pathfinder: { d: "M-14.4,-66.4 C-7.6,-70.4 7.6,-70.4 14.4,-66.4 M-15,-40 C-7,-37.4 7,-37.4 15,-40 M-13.2,-55.6 C-6.4,-58 6.4,-58 13.2,-55.6" },
+};
+
+/**
+ * Variant overlay, drawn over the armour's own kit so every suit shows it:
+ * trim stripes along the chest seams (or the plate rims on plated suits), a
+ * waist stripe and, with wear, scratches.
+ */
 function variantTrim(c) {
   const v = c.variant;
   if (!v) return "";
+  const plate = PLATE_TRIM[c.armor];
   let out =
     `<g data-variant="${v.id}">` +
-    line(SEAM_L, v.trim, 0.9, 0.95) +
-    line(SEAM_R, v.trim, 0.9, 0.95) +
+    (plate
+      ? line(plate.d, INK, 1.5, 0.6) +
+        line(plate.d, v.trim, 0.9, 0.95) +
+        (plate.rings || []).map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${v.trim}" stroke-width=".8" opacity=".95"/>`).join("")
+      : line(SEAM_L, v.trim, 0.9, 0.95) + line(SEAM_R, v.trim, 0.9, 0.95)) +
     line("M-12,-30 L12,-30", v.trim, 0.7, 0.8);
   if (v.wear > 0.3) {
     const n = Math.round(v.wear * 8);
@@ -1908,9 +2047,10 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     TW(
       recolor(torso({ pecs: !c.fem }) + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
         (fs.softTorso ? "" : chestTrim(c)) +
-        variantTrim(c) +
         insignia(c) +
         kit.front +
+        (c.fem && PLATED.has(c.armor) ? FEM_PLATE : "") +
+        variantTrim(c) +
         acc.front,
     ) +
     rifle.body +
@@ -2177,9 +2317,9 @@ function fallenParts(c) {
       acc.back +
       recolor(trappedArm.body + lowerLeg.body + upperLeg.body + torso(), map) +
       chestTrim(c) +
-      variantTrim(c) +
       insignia(c) +
       kit.front +
+      variantTrim(c) +
       fallenDamage() +
       recolor(shoulder(c, 1, -4), map) +
       (wears(c, "chest") ? badgeAt(c, A.chest) : "") +

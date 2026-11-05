@@ -7,6 +7,7 @@ import {
   VISOR_STYLES,
   SHOULDER_STYLES,
   DEFAULT_CHARACTER,
+  takesVisor,
 } from "../../src/data/cosmetics.js";
 import {
   grantOwned,
@@ -50,6 +51,18 @@ describe("gearBonuses", () => {
     const b = gearBonuses({ armorIndex: 3, helmetIndex: 4, visorIndex: 1, shoulderIndex: 0 });
     expect(b.moveSpeedAdd).toBeGreaterThan(0);
     expect(b.maxHealthAdd ?? 0).toBe(0);
+  });
+
+  it("skips the visor under a helmet that has none", () => {
+    const beacon = VISOR_STYLES.findIndex((v) => v.id === "glow");
+    const helm = (id) => HELMET_STYLES.findIndex((h) => h.id === id);
+    expect(gearBonuses({ helmetIndex: helm("bandana"), visorIndex: beacon }).maxChronoEnergyAdd ?? 0).toBe(0);
+    expect(gearBonuses({ helmetIndex: helm("reaper"), visorIndex: beacon }).maxChronoEnergyAdd ?? 0).toBe(0);
+    // Pilot's lenses take the visor.
+    expect(gearBonuses({ helmetIndex: helm("pilot"), visorIndex: beacon }).maxChronoEnergyAdd).toBe(25);
+    expect(takesVisor(helm("pilot"))).toBe(true);
+    expect(takesVisor(helm("bandana"))).toBe(false);
+    expect(takesVisor(undefined)).toBe(true);
   });
 
   it("survives a missing or partial character", () => {

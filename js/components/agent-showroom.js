@@ -25,7 +25,9 @@ import {
   VISOR_STYLES,
   VOICE_PROFILES,
   WEAPON_SKINS,
+  takesVisor,
 } from "../../src/data/cosmetics.js";
+import { FRAME_SHAPE } from "../../src/rendering/svg-art/frames.js";
 import * as Skins from "../../src/data/weapon-skins.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
@@ -120,6 +122,9 @@ const STAGE_LIGHTS = [
 /** Turntable sway: how far it turns (yaw units, ±1 max) and how fast (rad/s). */
 const SPIN_YAW = 0.85;
 const SPIN_RATE = 0.9;
+/** The flat figure's turn at full yaw (rad), and each layer's depth from the body (art units, + toward you). */
+const TURN_MAX = 0.36;
+const TURN_DEPTH = { back: -9, cape: -6, head: 1 };
 
 /** Whole-figure crop for frame tiles (the cape and boots inside the frame). */
 const FRAME_VIEW = [-46, -100, 92, 162];
@@ -223,6 +228,23 @@ const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", ac
 const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const TIER = ["", "I", "II", "III"];
+
+/** Notes under a section's grid, shown by refreshContent when they apply. */
+const SECTION_NOTES = {
+  "badge.metal": `<p class="snote" data-note="auto-metal" hidden>Auto finish takes its metal from the armour. Pick a finish below to use your own.</p>`,
+  // Text filled in too: both depend on what else is worn.
+  visorIndex: `<p class="snote" data-note="no-visor" hidden></p>`,
+  shoulderIndex: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
+};
+
+/** Why the frame overrides the shoulder pick (its FRAME_SHAPE flags), or "". */
+function shoulderNote(ch) {
+  const frame = BODY_FRAMES[ch.frameIndex | 0] || BODY_FRAMES[0];
+  const shape = FRAME_SHAPE[frame.id] || {};
+  if (shape.noShoulders) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
+  if (shape.bareRight) return `${frame.name} keeps the right shoulder bare: this pick fits the left.`;
+  return "";
+}
 
 /** Stat lines for a loadout, mirroring Game.applyLoadoutBonuses. */
 function classStats(cls) {
@@ -599,6 +621,7 @@ svg { display: block; }
 .snote { margin: 8px 0 0; font: 500 var(--cc-type-label)/1.35 var(--cc-font); color: var(--cc-text-dim); }
 .snote[hidden] { display: none; }
 .section.muted .grid .opt:not(:hover):not(:focus) { opacity: 0.55; }
+.section.off .grid, .section.off .lockfold, .section.off h3 .cur { display: none; }
 .grid.rifle .thumb { aspect-ratio: 2.4; }
 .card .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .card .desc { font: 500 var(--cc-type-body)/1.35 var(--cc-font); color: var(--cc-text-dim); letter-spacing: 0.3px; }
@@ -2057,7 +2080,7 @@ class AgentShowroom extends HTMLElement {
     this.el.figure.querySelector("svg")?.setAttribute("viewBox", this.view.map((v) => v.toFixed(2)).join(" "));
   }
 
-  /** Turn parallax: back gear and cape slide against the body, head leads, light sweeps. */
+  /** The turn: one rotation about the figure's axis, back gear and cape trailing by their depth; light sweeps. */
   applyYaw() {
     const y = this.yaw;
     // Scoped to the stage (everything that reads it lives there): set on the
@@ -2074,12 +2097,17 @@ class AgentShowroom extends HTMLElement {
     const svg = this.el.figure.querySelector("svg");
     if (!svg) return;
     const set = (sel, tf) => svg.querySelector(sel)?.setAttribute("transform", tf);
-    const sx = (1 - Math.abs(y) * 0.07).toFixed(3);
-    set(".ag-yaw-back", `translate(${(-y * 7).toFixed(2)} 0) scale(${sx} 1)`);
-    set(".ag-yaw-cape", `translate(${(-y * 4.5).toFixed(2)} 0) scale(${sx} 1)`);
-    set(".ag-yaw-body", `translate(${(y * 0.8).toFixed(2)} 0) scale(${sx} 1)`);
-    set(".ag-yaw-head", `translate(${(y * 2.4).toFixed(2)} 0)`);
-    set(".ag-shadow", `translate(${(y * 3).toFixed(2)} 0)`);
+    // Every layer turns by the same angle: the same squash, and a slide set by
+    // how far behind (or ahead of) the body it sits. Slides picked per layer
+    // (the head leading, the cape swinging wide) read as cut-outs coming apart.
+    const a = y * TURN_MAX;
+    const sx = Math.cos(a).toFixed(3);
+    const at = (depth) => `translate(${(Math.sin(a) * depth).toFixed(2)} 0) scale(${sx} 1)`;
+    set(".ag-yaw-back", at(TURN_DEPTH.back));
+    set(".ag-yaw-cape", at(TURN_DEPTH.cape));
+    set(".ag-yaw-body", at(0));
+    set(".ag-yaw-head", at(TURN_DEPTH.head));
+    set(".ag-shadow", at(0));
   }
 
   flashStage() {
@@ -2346,7 +2374,7 @@ class AgentShowroom extends HTMLElement {
       body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);
     }
     const variant = s.key === "armorIndex" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
-    const note = s.key === "badge.metal" ? `<p class="snote" data-note="auto-metal" hidden>Auto finish takes its metal from the armour. Pick a finish below to use your own.</p>` : "";
+    const note = SECTION_NOTES[s.key] || "";
     // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
     const locks = s.groupBy ? "" : this.lockInfoHtml(s);
     return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
@@ -2716,6 +2744,20 @@ class AgentShowroom extends HTMLElement {
     if (autoMetal) {
       autoMetal.hidden = ch.badge.finish !== "auto";
       autoMetal.closest(".section").classList.toggle("muted", ch.badge.finish === "auto");
+    }
+    // Helmets with no visor (HELMET_STYLES[].visor) fold the Visor picks away:
+    // under them every tile would look the same, and the perk doesn't count.
+    const noVisor = this.shadowRoot.querySelector('.content [data-note="no-visor"]');
+    if (noVisor) {
+      const off = !takesVisor(ch.helmetIndex);
+      noVisor.hidden = !off;
+      noVisor.textContent = off ? `The ${HELMET_STYLES[ch.helmetIndex | 0].name} has no visor, so this pick and its perk don't apply.` : "";
+      noVisor.closest(".section").classList.toggle("off", off);
+    }
+    const frameNote = this.shadowRoot.querySelector('.content [data-note="frame-shoulders"]');
+    if (frameNote) {
+      frameNote.textContent = shoulderNote(ch);
+      frameNote.hidden = !frameNote.textContent;
     }
     this.shadowRoot.querySelectorAll(".content .chip[data-placement]").forEach((chip) => {
       const on = ch.badge.placements.includes(chip.dataset.placement);
