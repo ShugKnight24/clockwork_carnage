@@ -5,6 +5,7 @@
 import { getLayerImage, layerBaked, onRasterRelease, scaleBucket, touchLayer } from "./svg-art/raster.js";
 import { isModernArt, isRealisticArt } from "./art-style.js";
 import { CEILING_Z } from "../systems/physics.js";
+import { RIG_PAD_R, RIG_STEP_R } from "../data/levels/rooms/rnd.js";
 import { DEFS as PROP_DEFS, PROP_SPRITES, PROP_VARIANTS, buildRealisticProps } from "./svg-art/sprites/props.js";
 import { DEFS as PICKUP_DEFS, buildRealisticPickups } from "./svg-art/sprites/pickups.js";
 
@@ -1703,59 +1704,166 @@ function renderFloorGap(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
 PROP_RENDERERS.floor_gap = renderFloorGap;
 
 /**
- * R&D's telemetry rig: a floor pad and a ring gantry over it on two posts.
- * `entity.scan` (set while a reading runs) sweeps a sheet of light down
- * through the ring.
+ * R&D's telemetry rig: a two-tier platform (a step all round, the pad on
+ * top, each riser lit along its nose like the bay's dado strip) and a ring
+ * gantry over it on two posts, its ring above a suited cadet's head.
+ * Radii from RIG_PAD_R / RIG_STEP_R (one cell is the sprite's width), so the
+ * step's lit edge is the very ring the calibration checks you are inside.
+ *
+ * `entity.wait`: nobody on it yet (the pad pulses, a column of light stands
+ * in it, to be seen across the bay). `entity.scan`: a reading runs (a sheet
+ * of light sweeps down through the ring). `entity.read` (0-1): how far the
+ * calibration has got, filling the pad's ring. `entity.synced`: the time it
+ * finished, when the whole rig flashes green and settles.
  */
 function renderTelemetryRig(ctx, sx, cy, sw, sh, dist, t, fog, entity) {
   const ground = groundY(cy, sh);
-  const top = ground - sh * 0.78;
-  const halfW = sw * 0.46;
-  const post = Math.max(2, sw * 0.05);
+  const rise = sh * 0.05; // each riser, 10 cm
+  const stepW = sw * RIG_STEP_R * 0.98; // a hair in, clear of the box's edge
+  const padW = sw * RIG_PAD_R;
+  // How flat a floor circle looks from standing eye height, kept within the
+  // box's foot so the step's near edge is never cut off.
+  const flat = Math.min(0.1, Math.max(0.04, 0.45 / Math.max(0.5, dist)));
+  const ryStep = Math.max(1.5, stepW * flat);
+  const ryPad = Math.max(1.5, padW * flat);
+  const stepTop = ground - rise;
+  const padTop = ground - rise * 2;
+  const top = ground - sh * 1.15; // the ring at 2.3 m, over a 2 m suit
+  const post = Math.max(2, sw * 0.045);
   const scanning = entity?.scan > 0;
-  // Waiting for someone to stand in it (`entity.wait`): the ring on the
-  // floor pulses and a column of light stands in it, to be seen across the bay.
   const waiting = !scanning && entity?.wait > 0;
+  const read = Math.min(1, Math.max(0, entity?.read || 0));
+  const since = entity?.synced ? (t - entity.synced) / 1000 : Infinity;
+  const flash = since < 1.2 ? 1 - since / 1.2 : 0;
+  const synced = since < Infinity;
   const pulse = 0.5 + 0.5 * Math.sin(t * 0.005);
+  const lit = synced ? "90,255,154" : "70,224,255";
   ctx.save();
   ctx.globalAlpha = fog;
-  if (waiting) {
-    const beam = ctx.createLinearGradient(0, cy - sh * 0.55, 0, ground);
-    beam.addColorStop(0, "rgba(70,224,255,0)");
-    beam.addColorStop(0.5, `rgba(70,224,255,${0.1 + 0.08 * pulse})`);
-    beam.addColorStop(1, `rgba(120,236,255,${0.38 + 0.2 * pulse})`);
-    ctx.fillStyle = beam;
-    ctx.fillRect(sx - halfW * 0.7, cy - sh * 0.55, halfW * 1.4, ground - (cy - sh * 0.55));
-    ctx.fillStyle = `rgba(200,250,255,${0.5 + 0.3 * pulse})`;
-    ctx.fillRect(sx - halfW * 0.04, cy - sh * 0.55, halfW * 0.08, ground - (cy - sh * 0.55));
-  }
-  // The pad, and the ring round it.
-  ctx.fillStyle = scanning ? "rgba(70,224,255,0.55)" : `rgba(70,224,255,${waiting ? 0.3 + 0.25 * pulse : 0.25})`;
+
+  // A tier: its riser (lit at the edges, dark in the middle like the bay's
+  // brushed steel), its tread, and the light strip along its nose.
+  const tier = (rx, ry, yBot, yTop, tread, glow = 0) => {
+    const side = ctx.createLinearGradient(sx - rx, 0, sx + rx, 0);
+    side.addColorStop(0, "#2a2e34");
+    side.addColorStop(0.3, "#6e767f");
+    side.addColorStop(0.5, "#9aa2ac");
+    side.addColorStop(0.7, "#6e767f");
+    side.addColorStop(1, "#2a2e34");
+    ctx.fillStyle = side;
+    ctx.beginPath();
+    ctx.ellipse(sx, yBot, rx, ry, 0, 0, Math.PI);
+    ctx.lineTo(sx - rx, yTop);
+    ctx.lineTo(sx + rx, yTop);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = tread;
+    ctx.beginPath();
+    ctx.ellipse(sx, yTop, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The nose strip, and its glow down the riser.
+    ctx.strokeStyle = `rgba(${lit},${0.75 + 0.25 * Math.max(flash, glow)})`;
+    ctx.lineWidth = Math.max(1, sh * (0.006 + 0.008 * glow));
+    ctx.beginPath();
+    ctx.ellipse(sx, yTop, rx, ry, 0, 0, glow ? Math.PI * 2 : Math.PI);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(${lit},0.18)`;
+    ctx.lineWidth = Math.max(1, (yBot - yTop) * 0.5);
+    ctx.beginPath();
+    ctx.ellipse(sx, (yTop * 3 + yBot) / 4, rx, ry, 0, 0.15, Math.PI - 0.15);
+    ctx.stroke();
+  };
+
+  // Contact shadow, then the step and the pad.
+  ctx.globalAlpha = fog * 0.35;
+  ctx.fillStyle = "#000";
   ctx.beginPath();
-  ctx.ellipse(sx, ground, halfW, Math.max(2, sh * 0.05), 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, ground + ryStep * 0.15, stepW, ryStep, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = waiting || scanning ? "#9ff4ff" : "rgba(160,244,255,0.5)";
-  ctx.lineWidth = Math.max(1.5, sw * (waiting ? 0.025 + 0.015 * pulse : 0.02));
+  ctx.globalAlpha = fog;
+  // Its edge is the ring you stand inside: it pulses while the rig waits.
+  tier(stepW, ryStep, ground, stepTop, "#4a5058", waiting ? pulse : 0);
+  // The step's hazard edge, a chevron every so often round the tread.
+  ctx.strokeStyle = "rgba(255,176,56,0.55)";
+  ctx.lineWidth = Math.max(1, sh * 0.004);
+  ctx.setLineDash([Math.max(2, sw * 0.03), Math.max(2, sw * 0.03)]);
   ctx.beginPath();
-  ctx.ellipse(sx, ground, halfW * 1.15, Math.max(2.5, sh * 0.06), 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, stepTop, (stepW + padW) / 2, (ryStep + ryPad) / 2, 0, 0, Math.PI * 2);
   ctx.stroke();
-  // Posts and the ring.
-  ctx.fillStyle = "#3a4048";
-  for (const s of [-1, 1]) ctx.fillRect(sx + s * halfW - post / 2, top, post, ground - top);
+  ctx.setLineDash([]);
+  const padFill = ctx.createRadialGradient(sx, padTop, 0, sx, padTop, padW);
+  padFill.addColorStop(0, scanning || synced ? `rgba(${lit},0.65)` : "#3a4a56");
+  padFill.addColorStop(1, "#1c2228");
+  tier(padW, ryPad, stepTop, padTop, padFill);
+
+  // The lit ring you stand inside: pulsing while it waits, a dim track
+  // filling bright as the reading goes on, solid once it's done.
+  const ringRx = padW * 0.9;
+  const ringRy = ryPad * 0.9;
+  ctx.lineWidth = Math.max(1.5, sw * (waiting ? 0.02 + 0.012 * pulse : 0.018));
+  ctx.strokeStyle = waiting ? `rgba(159,244,255,${0.6 + 0.4 * pulse})` : `rgba(${lit},0.35)`;
+  ctx.beginPath();
+  ctx.ellipse(sx, padTop, ringRx, ringRy, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  if (read > 0 || synced) {
+    ctx.strokeStyle = synced ? "#5aff9a" : "#b4faff";
+    ctx.lineWidth = Math.max(2, sw * 0.024);
+    ctx.beginPath();
+    ctx.ellipse(sx, padTop, ringRx, ringRy, 0, Math.PI / 2, Math.PI / 2 + Math.PI * 2 * (synced ? 1 : read));
+    ctx.stroke();
+  }
+
+  // Waiting: a column of light stands on the pad, soft at its edges (three
+  // nested bands, brightest at the core).
+  if (waiting) {
+    const beam = ctx.createLinearGradient(0, top, 0, padTop);
+    beam.addColorStop(0, "rgba(70,224,255,0)");
+    beam.addColorStop(0.6, `rgba(70,224,255,${0.04 + 0.03 * pulse})`);
+    beam.addColorStop(1, `rgba(120,236,255,${0.12 + 0.06 * pulse})`);
+    ctx.fillStyle = beam;
+    for (const k of [1, 0.66, 0.33]) ctx.fillRect(sx - ringRx * k, top, ringRx * 2 * k, padTop - top);
+  }
+
+  // Posts on the step, either side, and the ring.
+  const px = (stepW + padW) / 2;
+  for (const s of [-1, 1]) {
+    const x = sx + s * px - post / 2;
+    ctx.fillStyle = "#3a4048";
+    ctx.fillRect(x, top, post, stepTop - top);
+    ctx.fillStyle = "#6e767f";
+    ctx.fillRect(x, top, Math.max(1, post * 0.3), stepTop - top);
+    // A status lamp at chest height on each post.
+    ctx.fillStyle = synced ? "#5aff9a" : scanning ? `rgba(70,224,255,${0.6 + 0.4 * pulse})` : "#2c3640";
+    ctx.fillRect(x, ground - sh * 0.7, post, Math.max(2, sh * 0.03));
+  }
+  const ringH = Math.max(2, sh * 0.06);
   ctx.strokeStyle = "#6a7480";
   ctx.lineWidth = Math.max(2, sw * 0.04);
   ctx.beginPath();
-  ctx.ellipse(sx, top, halfW, Math.max(2, sh * 0.06), 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, top, px, ringH, 0, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.strokeStyle = scanning ? "#46e0ff" : "rgba(70,224,255,0.5)";
+  ctx.strokeStyle = scanning || synced ? `rgb(${lit})` : "rgba(70,224,255,0.5)";
   ctx.lineWidth = Math.max(1, sw * 0.015);
   ctx.stroke();
+
+  // Scanning: a faint sheet through the ring, a bright line sweeping down.
   if (scanning) {
-    const y = top + ((t * 0.0009) % 1) * (ground - top);
-    ctx.fillStyle = "rgba(70,224,255,0.18)";
-    ctx.fillRect(sx - halfW, top, halfW * 2, ground - top);
-    ctx.fillStyle = "rgba(180,250,255,0.75)";
-    ctx.fillRect(sx - halfW, y, halfW * 2, Math.max(1, sh * 0.008));
+    const y = top + ((t * 0.0009) % 1) * (padTop - top);
+    ctx.fillStyle = "rgba(70,224,255,0.035)";
+    for (const k of [1, 0.6]) ctx.fillRect(sx - ringRx * k, top, ringRx * 2 * k, padTop - top);
+    ctx.beginPath();
+    ctx.ellipse(sx, y, ringRx, Math.max(1, ringRy * ((y - top) / (padTop - top))), 0, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1, sh * 0.006);
+    ctx.strokeStyle = "rgba(180,250,255,0.8)";
+    ctx.stroke();
+  }
+  // Synced: the rig flashes green from the pad up, then settles.
+  if (flash > 0) {
+    const g = ctx.createLinearGradient(0, top, 0, padTop);
+    g.addColorStop(0, "rgba(90,255,154,0)");
+    g.addColorStop(1, `rgba(90,255,154,${0.45 * flash})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(sx - px, top, px * 2, padTop - top);
   }
   ctx.restore();
 }
