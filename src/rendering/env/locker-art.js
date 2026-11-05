@@ -665,57 +665,92 @@ function paintRange(ctx, p, r, sign = false) {
 
 export { STATION_WALLS };
 
-/** Painters for wall-art.js's PAINTERS, by id. */
-export const STATION_PAINTERS = {
-  [STATION_WALLS.LOCKERS_A]: lockerPair(
-    { name: "RASCZAK", num: 401, deco: { note: "BRIEF 0600" } },
-    { name: "KAEL", num: 402, open: ["helmet", "photos", "shirt", "medal", "boots"] },
-    "UNIT 4",
-  ),
-  [STATION_WALLS.LOCKERS_B]: lockerPair({ name: "OKAFOR", num: 403, deco: { sticker: "#c23a3a" } }, { name: "LINDQVIST", num: 404 }),
-  [STATION_WALLS.LOCKERS_C]: lockerPair(
-    { name: "DUARTE", num: 405, open: ["mug", "drawing", "shirt", "boots"] },
-    { name: "MBEKI", num: 406, deco: { photo: "#7aa0c8" } },
-    "UNIT 7",
-  ),
-  [STATION_WALLS.LOCKERS_D]: lockerPair(
-    { name: "PRICE", num: 407, deco: { note: "OWE U 1" } },
-    { name: "TANAKA", num: 408, open: ["cap", "photos", "jacket", "charm", "boots"] },
-  ),
-  [STATION_WALLS.LOCKERS_E]: lockerPair(
-    { name: "BRANDT", num: 414, deco: { photo: "#c89a7a" } },
-    { name: "REYES", num: 415 },
-    "UNIT 4",
-  ),
-  [STATION_WALLS.LOCKERS_F]: lockerPair(
-    { name: "NAKAMURA", num: 416, open: ["cap", "drawing", "shirt", "boots"] },
-    { name: "IBARRA", num: 417, deco: { note: "GYM 1800" } },
-  ),
-  [STATION_WALLS.LOCKERS_G]: lockerPair(
-    { name: "FISCHER", num: 418, deco: { sticker: "#3aa060" } },
-    { name: "OYELARAN", num: 419, deco: { photo: "#9a7ac8" } },
-    "UNIT 7",
-  ),
-  [STATION_WALLS.LOCKERS_H]: lockerPair(
-    { name: "HOLM", num: 420 },
-    { name: "SANTOS", num: 421, open: ["helmet", "photos", "jacket", "boots"] },
-  ),
-  [STATION_WALLS.LOCKERS_SPARE_1]: lockerPair({ name: null, num: null }, { name: null, num: null, deco: { sticker: "#c2a03a" } }),
-  [STATION_WALLS.LOCKERS_SPARE_2]: lockerPair({ name: null, num: null, deco: { note: "SPARE" } }, { name: null, num: null }),
-  [STATION_WALLS.LOCKERS_SPARE_3]: lockerPair({ name: null, num: null }, { name: null, num: null }),
-  [STATION_WALLS.LOCKERS_MINE]: lockerPair({ name: "11235", num: 412, sticker: "rnd" }, { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } }),
-  [STATION_WALLS.LOCKERS_MINE_LIT]: lockerPair({ name: "11235", num: 412, sticker: "rnd", lit: true }, { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } }),
-  [STATION_WALLS.LOCKERS_MINE_OPEN]: lockerPair(
-    { name: "11235", num: 412, open: ["patrol", "photos", "shirt", "boots"] },
-    { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } },
-  ),
+/**
+ * Who is in each named bank: `left` and `right` as the art is painted (the
+ * door at the texture's left edge first). The art lies mirrored across a
+ * face (see the top of this file), so on the north wall the `left` door is
+ * the east one and on the south wall the west one; lockerAt() does that.
+ * The officers in the prologue kit up in front of their own (KIT_AT in
+ * js/tutorial-system.js), so a bank moved round the room moves its names
+ * with it; tests/unit/locker-names.test.js holds the two together.
+ */
+export const LOCKER_BANKS = {
+  [STATION_WALLS.LOCKERS_A]: {
+    left: { name: "LINDQVIST", num: 404 },
+    right: { name: "KAEL", num: 402, open: ["helmet", "photos", "shirt", "medal", "boots"] },
+    unit: "UNIT 4",
+  },
+  [STATION_WALLS.LOCKERS_B]: {
+    left: { name: "HOLM", num: 420 },
+    right: { name: "OKAFOR", num: 403, deco: { sticker: "#c23a3a" } },
+  },
+  [STATION_WALLS.LOCKERS_C]: {
+    left: { name: "DUARTE", num: 405, open: ["mug", "drawing", "shirt", "boots"] },
+    right: { name: "MBEKI", num: 406, deco: { photo: "#7aa0c8" } },
+    unit: "UNIT 7",
+  },
+  [STATION_WALLS.LOCKERS_D]: {
+    left: { name: "PRICE", num: 407, deco: { note: "OWE U 1" } },
+    right: { name: "TANAKA", num: 408, open: ["cap", "photos", "jacket", "charm", "boots"] },
+  },
+  [STATION_WALLS.LOCKERS_E]: {
+    left: { name: "REYES", num: 415 },
+    right: { name: "BRANDT", num: 414, deco: { photo: "#c89a7a" } },
+    unit: "UNIT 4",
+  },
+  [STATION_WALLS.LOCKERS_F]: {
+    left: { name: "NAKAMURA", num: 416, open: ["cap", "drawing", "shirt", "boots"] },
+    right: { name: "IBARRA", num: 417, deco: { note: "GYM 1800" } },
+  },
+  [STATION_WALLS.LOCKERS_G]: {
+    left: { name: "FISCHER", num: 418, deco: { sticker: "#3aa060" } },
+    right: { name: "OYELARAN", num: 419, deco: { photo: "#9a7ac8" } },
+    unit: "UNIT 7",
+  },
+  [STATION_WALLS.LOCKERS_H]: {
+    left: { name: "RASCZAK", num: 401, deco: { note: "BRIEF 0600" } },
+    right: { name: "SANTOS", num: 421, open: ["helmet", "photos", "jacket", "boots"] },
+    unit: "UNIT 4",
+  },
+  [STATION_WALLS.LOCKERS_SPARE_1]: { left: { name: null, num: null }, right: { name: null, num: null, deco: { sticker: "#c2a03a" } } },
+  [STATION_WALLS.LOCKERS_SPARE_2]: { left: { name: null, num: null, deco: { note: "SPARE" } }, right: { name: null, num: null } },
+  [STATION_WALLS.LOCKERS_SPARE_3]: { left: { name: null, num: null }, right: { name: null, num: null } },
+  [STATION_WALLS.LOCKERS_MINE]: {
+    left: { name: "11235", num: 412, sticker: "rnd" },
+    right: { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } },
+  },
+  [STATION_WALLS.LOCKERS_MINE_LIT]: {
+    left: { name: "11235", num: 412, sticker: "rnd", lit: true },
+    right: { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } },
+  },
+  [STATION_WALLS.LOCKERS_MINE_OPEN]: {
+    left: { name: "11235", num: 412, open: ["patrol", "photos", "shirt", "boots"] },
+    right: { name: "ABARA", num: 413, deco: { sticker: "#2a6ac2" } },
+  },
   // The Supervisor's, by the door: shut all morning; after 06:47 his heavy
   // plate comes out of it and his coat goes in (js/tutorial-system.js).
-  [STATION_WALLS.LOCKERS_SUP]: lockerPair({ name: "SIMON", num: 400, deco: { note: "SUPV" } }, { name: "HALE", num: 409 }),
-  [STATION_WALLS.LOCKERS_SUP_OPEN]: lockerPair(
-    { name: "SIMON", num: 400, open: ["cap", "photos", "shirt", "medal"] },
-    { name: "HALE", num: 409 },
-  ),
+  [STATION_WALLS.LOCKERS_SUP]: { left: { name: "SIMON", num: 400, deco: { note: "SUPV" } }, right: { name: "HALE", num: 409 } },
+  [STATION_WALLS.LOCKERS_SUP_OPEN]: {
+    left: { name: "SIMON", num: 400, open: ["cap", "photos", "shirt", "medal"] },
+    right: { name: "HALE", num: 409 },
+  },
+};
+
+/**
+ * The locker in a bank's cell at world x, on a north (`faceNorth`, seen from
+ * the room to its south) or a south wall: null for a cell that isn't a bank.
+ */
+export function lockerAt(id, x, faceNorth) {
+  const bank = LOCKER_BANKS[id];
+  if (!bank) return null;
+  const u = x - Math.floor(x);
+  const east = u >= 0.5;
+  return east === faceNorth ? bank.left : bank.right;
+}
+
+/** Painters for wall-art.js's PAINTERS, by id. */
+export const STATION_PAINTERS = {
+  ...Object.fromEntries(Object.entries(LOCKER_BANKS).map(([id, b]) => [id, lockerPair(b.left, b.right, b.unit)])),
   [STATION_WALLS.GYM]: paintGym,
   [STATION_WALLS.GYM_BOARD]: paintGymBoard,
   [STATION_WALLS.GYM_RACK]: paintGymRack,

@@ -87,12 +87,15 @@ carve(38, 4, 46, 23);
 // each with its officer's name (src/rendering/env/locker-art.js). The
 // cadet's is on the south wall: LOCKERS_MINE, swapped for its lit and open
 // twins by the prologue. Benches down the middle are props. Every named
-// pair is on one cell only, the spare banks (no names) between them.
+// pair is on one cell only, the spare banks (no names) between them. The
+// named officers kit up in front of their own (KIT_AT, js/tutorial-system.js):
+// Kael at A (north, 15), Brandt at E (north, 10), Okafor at B (south, 10),
+// Lt. Rasczak at H (south, 22); tests/unit/locker-names.test.js checks it.
 const LW = STATION_WALLS;
 const LOCKER_SPARES = [LW.LOCKERS_SPARE_1, LW.LOCKERS_SPARE_2, LW.LOCKERS_SPARE_3];
 const LOCKERS_NAMED = {
-  37: { 6: LW.LOCKERS_A, 10: LW.LOCKERS_B, 14: LW.LOCKERS_E, 18: LW.LOCKERS_F },
-  47: { 7: LW.LOCKERS_C, 11: LW.LOCKERS_D, 17: LW.LOCKERS_G, 21: LW.LOCKERS_H },
+  37: { 6: LW.LOCKERS_F, 10: LW.LOCKERS_E, 15: LW.LOCKERS_A, 19: LW.LOCKERS_D },
+  47: { 7: LW.LOCKERS_C, 10: LW.LOCKERS_B, 18: LW.LOCKERS_G, 22: LW.LOCKERS_H },
 };
 for (const row of [37, 47]) {
   for (let c = 4; c <= 23; c++) {
