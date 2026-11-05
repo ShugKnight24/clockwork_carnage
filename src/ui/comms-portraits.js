@@ -291,7 +291,7 @@ function head(pen, F, L) {
   pen.fill(CHIN_SHADOW, darkOf(sk, 0.5), 0.75);
   const ex = L.male ? 35.2 : 36.2;
   for (const s of [-1, 1]) pen.part(ell(50 + s * (50 - ex), 41, 2.5, 4.3), darkOf(sk, 0.08), { depth: 1.6, hi: 0, rim: s > 0 ? 1 : 0 });
-  pen.part(L.male ? FACE_M : FACE_F, sk, { depth: 6.5, rim: 2.2 });
+  pen.part(L.face ?? (L.male ? FACE_M : FACE_F), sk, { depth: 6.5, rim: 2.2 });
   // Cheek warmth, the nose's shadow side and the nostrils.
   pen.fill(ell(43.2, 48, 3.6, 2.2), "#d8705c", L.male ? 0.08 : 0.16);
   pen.fill(ell(56.8, 48, 3.6, 2.2), "#d8705c", L.male ? 0.06 : 0.12);
@@ -302,6 +302,8 @@ function head(pen, F, L) {
     pen.line("M55.6 47.8Q56.8 51.4 55.2 55", darkOf(sk, 0.4), 0.7, 0.55);
     pen.line("M41 42.6L39.4 43.6M59 42.6L60.6 43.6", darkOf(sk, 0.4), 0.6, 0.5);
   }
+  // A scar down the cheek, brow to jaw.
+  if (L.scar) pen.line("M57.4 36.4L60.4 45.4L59.2 51", mix(sk, "#e8c8b8", 0.5), 0.9, 0.85);
   if (L.stubble) pen.fill("M38.6 48C41 56 46 60 50 60.4C54 60 59 56 61.4 48C58 53 54 56 50 56.4C46 56 42 53 38.6 48Z", "#2a2420", 0.28);
   eyes(pen, F, L);
   if (L.moustache) pen.part("M43.4 51.2C46 49.2 54 49.2 56.6 51.2C55.2 53.2 52.2 52.2 50 52.5C47.8 52.2 44.8 53.2 43.4 51.2Z", L.moustache, { depth: 1.2, hi: 0.35 });
@@ -446,6 +448,50 @@ function civilian(pen, F, C) {
 
 const SKINS = ["#e3b892", "#c48a5e", "#8a5a3c", "#f0caa6", "#a8714a", "#6e4630"];
 const HAIRS = ["#1d1712", "#3a2618", "#120e0c", "#5a3b22", "#26201c"];
+/** A broad, square jaw (Kael's). */
+const FACE_JAW = "M34.6 38C34.6 24 41.6 18.4 50 18.4C58.4 18.4 65.4 24 65.4 38C65.4 49 63.6 56 57.6 59.4C54 61 46 61 42.4 59.4C36.4 56 34.6 49 34.6 38Z";
+
+/**
+ * A PD officer on duty: navy shirt, gold-edged shoulder boards, the badge,
+ * the peaked cap. `rank` "lt" puts a silver bar on each board and a silver
+ * band on the cap; "sgt" three chevrons high on each sleeve.
+ */
+function dutyBust(pen, F, D) {
+  const gold = "#d9b44a";
+  const silver = "#dfe4ea";
+  pen.part(TORSO, "#33558c", { depth: 6, rim: 2.4 });
+  if (D.rank === "sgt") {
+    const chev = "M6.6 92.4L13.4 85.4L20.6 90.6M5.4 96.8L12.4 89.8L19.8 95M4.4 101L11.4 94.2L19 99.4";
+    pen.line(chev, "#0b1220", 3, 0.7);
+    pen.line(mir(chev), "#0b1220", 3, 0.7);
+    pen.line(chev, gold, 1.5);
+    pen.line(mir(chev), gold, 1.5);
+  }
+  // Shoulder boards with gold edges.
+  const ep = "M12 78.4L32.4 71.6L33.6 76L14.4 83Z";
+  pen.part(ep, "#203a66", { depth: 1, hi: 0.3 });
+  pen.part(mir(ep), "#203a66", { depth: 1, hi: 0.3, rim: 1 });
+  pen.line("M14.4 83L33.6 76", gold, 1);
+  pen.line(mir("M14.4 83L33.6 76"), gold, 1);
+  if (D.rank === "lt") {
+    const lt = "M20.4 76.8L26.4 74.8L27.4 77.6L21.4 79.6Z";
+    pen.part(lt, silver, { depth: 0.6, hi: 0.5, ink: 0.6 });
+    pen.part(mir(lt), silver, { depth: 0.6, hi: 0.5, ink: 0.6 });
+  }
+  pen.part("M39.6 66L50 78.4L60.4 66L64.4 70.4L50 86L35.6 70.4Z", "#c9d4de", { depth: 2 });
+  pen.part("M48 77L52 77L53.4 96L50 99.6L46.6 96Z", "#0b1220", { depth: 1, hi: 0.3 });
+  // Badge on the chest.
+  pen.part("M70 79L74 80.4L73.4 85.4L70 87.4L66.6 85.4L66 80.4Z", gold, { depth: 1, hi: 0.5, ink: 0.6 });
+  head(pen, F, { skin: D.skin, male: true, brow: D.hair, iris: D.iris ?? "#3a2a1e", stern: D.stern, age: D.age, scar: D.scar, stubble: D.stubble, face: D.face });
+  for (const s of [-1, 1]) pen.fill(s < 0 ? "M35.4 34L39 34L38.6 46L36 44Z" : mir("M35.4 34L39 34L38.6 46L36 44Z"), D.temples ?? D.hair);
+  castShadow(pen, 34.6);
+  // Peaked cap: crown, band, peak and badge.
+  pen.part("M29.6 33.4C28 18 38 10.6 50 10C62 10.6 72 18 70.4 33.4Z", "#1c2c4c", { depth: 3, rim: 2, hi: 0.3 });
+  pen.part(rect(31, 29.4, 38, 5.4), D.rank === "lt" ? "#b8c2ce" : "#0b1220", { flat: true, ink: 0.7 });
+  pen.part("M29.4 34.6L70.6 34.6Q62 41.6 50 41.6Q38 41.6 29.4 34.6Z", "#06090f", { depth: 1.5, hi: 0.5 });
+  pen.line("M34 36.2Q50 40 66 36.2", "#5a6a8a", 0.6, 0.6);
+  pen.part("M50 17.6L53.4 21.6L50 26L46.6 21.6Z", gold, { depth: 0.8, hi: 0.5, ink: 0.6 });
+}
 
 function hashOf(s) {
   let h = 2166136261;
@@ -582,29 +628,25 @@ const CAST = {
     tint: "#6fb6ff",
     blinks: true,
     paint(pen, F, v) {
-      const gold = "#d9b44a";
-      const skin = SKINS[v % SKINS.length];
-      const hair = HAIRS[(v >> 3) % HAIRS.length];
-      pen.part(TORSO, "#33558c", { depth: 6, rim: 2.4 });
-      // Shoulder boards with gold edges.
-      const ep = "M12 78.4L32.4 71.6L33.6 76L14.4 83Z";
-      pen.part(ep, "#203a66", { depth: 1, hi: 0.3 });
-      pen.part(mir(ep), "#203a66", { depth: 1, hi: 0.3, rim: 1 });
-      pen.line("M14.4 83L33.6 76", gold, 1);
-      pen.line(mir("M14.4 83L33.6 76"), gold, 1);
-      pen.part("M39.6 66L50 78.4L60.4 66L64.4 70.4L50 86L35.6 70.4Z", "#c9d4de", { depth: 2 });
-      pen.part("M48 77L52 77L53.4 96L50 99.6L46.6 96Z", "#0b1220", { depth: 1, hi: 0.3 });
-      // Badge on the chest.
-      pen.part("M70 79L74 80.4L73.4 85.4L70 87.4L66.6 85.4L66 80.4Z", gold, { depth: 1, hi: 0.5, ink: 0.6 });
-      head(pen, F, { skin, male: true, brow: hair, iris: "#3a2a1e" });
-      for (const s of [-1, 1]) pen.fill(s < 0 ? "M35.4 34L39 34L38.6 46L36 44Z" : mir("M35.4 34L39 34L38.6 46L36 44Z"), hair);
-      castShadow(pen, 34.6);
-      // Peaked cap: crown, band, peak and badge.
-      pen.part("M29.6 33.4C28 18 38 10.6 50 10C62 10.6 72 18 70.4 33.4Z", "#1c2c4c", { depth: 3, rim: 2, hi: 0.3 });
-      pen.part(rect(31, 29.4, 38, 5.4), "#0b1220", { flat: true, ink: 0.7 });
-      pen.part("M29.4 34.6L70.6 34.6Q62 41.6 50 41.6Q38 41.6 29.4 34.6Z", "#06090f", { depth: 1.5, hi: 0.5 });
-      pen.line("M34 36.2Q50 40 66 36.2", "#5a6a8a", 0.6, 0.6);
-      pen.part("M50 17.6L53.4 21.6L50 26L46.6 21.6Z", gold, { depth: 0.8, hi: 0.5, ink: 0.6 });
+      dutyBust(pen, F, { skin: SKINS[v % SKINS.length], hair: HAIRS[(v >> 3) % HAIRS.length] });
+    },
+  },
+
+  // Lt. Rasczak and Sgt. Kael in their duty blues, before they kit up: one
+  // face each (not the officers' hashed one), and their rank on.
+  rasczakDuty: {
+    tint: "#ff4a2e",
+    blinks: true,
+    paint(pen, F) {
+      dutyBust(pen, F, { skin: "#d9ab86", hair: "#3a3430", temples: "#8a8680", iris: "#4a6a80", stern: true, age: true, scar: true, rank: "lt" });
+    },
+  },
+
+  kaelDuty: {
+    tint: "#4488ff",
+    blinks: true,
+    paint(pen, F) {
+      dutyBust(pen, F, { skin: "#8a5a3c", hair: "#120e0c", iris: "#2a1a10", stubble: true, face: FACE_JAW, rank: "sgt" });
     },
   },
 
@@ -1136,12 +1178,13 @@ function mouthAt(t, seed) {
  * Draw a speaker's portrait with its well at (x, y), `size` square.
  * @param {CanvasRenderingContext2D} ctx
  * @param {{ speaker: string, x: number, y: number, size: number, style: "comic"|"real"|"legacy",
- *   tone: string, t: number, speaking?: boolean, radio?: boolean, dpr?: number }} o
+ *   tone: string, t: number, speaking?: boolean, radio?: boolean, dpr?: number, portrait?: string }} o
+ *   `portrait` names a bust outright (Rasczak in his duty blues), over the speaker's own.
  */
 export function drawCommsPortrait(ctx, o) {
   const { speaker, x, y, size, style, tone, t } = o;
   const dpr = o.dpr ?? 1;
-  const id = portraitIdFor(speaker);
+  const id = CAST[o.portrait] ? o.portrait : portraitIdFor(speaker);
   const ch = CAST[id];
   const seed = (hashOf(String(speaker)) % 1000) / 100;
   const variant = id === "officer" ? hashOf(String(speaker)) % 997 : 0;

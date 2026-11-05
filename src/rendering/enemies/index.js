@@ -39,6 +39,8 @@ export const ENEMY_RENDERERS = {
   hound: renderHound,
   // The station's people (js/npc.js) share the rig; they are not enemies.
   officer: renderStationPerson,
+  rasczak: renderStationPerson,
+  kael: renderStationPerson,
   officerKit: renderStationPerson,
   rasczakKit: renderStationPerson,
   kaelKit: renderStationPerson,
