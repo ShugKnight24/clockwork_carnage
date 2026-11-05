@@ -4,13 +4,14 @@ import { isModernArt } from "../rendering/art-style.js";
 import { UI, drawBackdrop, drawTitle, drawCaption } from "./modern-ui-kit.js";
 import { drawModernMenu, drawModernPrompt, menuItemsFor, MENU_FOOTER } from "./tutorial-ui.js";
 import { activeDevice, drawPrompt } from "./input-glyphs.js";
+import { campaignPromptLayout } from "./layout.js";
 
 const PROMPT_TITLE = "START CAMPAIGN";
 const PROMPT_SUBTITLE = "Start in the locker room, or deploy straight into Act 1?";
 const PROMPT_FOOTER = [...MENU_FOOTER, ["back", "to go back"]];
-const PROMPT_ITEMS = [
+export const PROMPT_ITEMS = [
   { label: "PROLOGUE: LOCKER ROOM", key: "[1]", color: "#00ffcc", desc: "Suit up, learn the controls, answer the alarm" },
-  { label: "SKIP TO ACT 1", key: "[2]", color: "#ff8844", desc: "Straight into the fire. No training wheels." },
+  { label: "SKIP TO ACT 1", key: "[2]", color: "#ff8844", desc: "Skip the prologue. Straight into the fire." },
 ];
 
 /** @param {object} [input] the game, for the device's key prompts (src/ui/input-glyphs.js) */
@@ -66,11 +67,7 @@ export function renderCampaignPrompt(ctx, w, h, selection = 0, input = null) {
   // Menu items
   const menuItems = items;
 
-  const menuW = 380;
-  const itemH = 56;
-  const menuH = menuItems.length * itemH + 16;
-  const mx = (w - menuW) / 2;
-  const my = h * 0.38;
+  const { menuW, itemH, menuH, mx, my } = campaignPromptLayout(w, h, menuItems.length);
 
   ctx.fillStyle = "rgba(0, 5, 15, 0.75)";
   ctx.beginPath();
@@ -154,15 +151,7 @@ function renderModernCampaignPrompt(ctx, w, h, sel, now, items, input) {
     size: compact ? 10 : 11, scheme: "steel", align: "center",
   });
 
-  const menuW = 380;
-  const itemH = 56;
-  const layout = {
-    menuW,
-    itemH,
-    menuH: items.length * itemH + 16,
-    mx: (w - menuW) / 2,
-    my: h * 0.38,
-  };
+  const layout = campaignPromptLayout(w, h, items.length);
   drawModernMenu(ctx, items, sel, now, layout, 26, 42);
   if (activeDevice(input) !== "touch") drawModernPrompt(ctx, w / 2, h - barHeight / 2, PROMPT_FOOTER, input, compact ? 8 : 10);
   ctx.textAlign = "left";
