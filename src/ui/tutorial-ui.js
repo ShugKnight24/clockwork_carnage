@@ -17,8 +17,8 @@ import {
   drawBackdrop,
   inkText,
 } from "./modern-ui-kit.js";
-import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, padFamily, padLabelGlyph } from "./input-glyphs.js";
-import { PROLOGUE_STEPS, PROLOGUE_BEATS } from "../data/prologue.js";
+import { activeDevice, drawGlyph, drawPrompt, glyph, glyphWidth, keyLabel, padFamily, padLabelGlyph } from "./input-glyphs.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS, SKIP_LINES } from "../data/prologue.js";
 import { DEFAULT_KEYBINDS } from "../systems/input-manager.js";
 import { formatKeyCode } from "./key-labels.js";
 import { wrapWords } from "../utils/text.js";
@@ -443,6 +443,7 @@ export function renderTutorialOverlay(ctx, w, h, state) {
 export function renderTutorialCard(ctx, w, h, state, lane = {}) {
   const { mode, isTouchDevice, tutorialStepTime, tutorialStep } = state;
   if (mode !== "tutorial") return 0;
+  drawSkipTag(ctx, w, h, state.input);
   const device = state.input ? activeDevice(state.input) : isTouchDevice ? "touch" : "keyboard";
   const copy = tutorialStepCopy(device, state.input);
   const step = copy[tutorialStep];
@@ -469,6 +470,68 @@ export function renderTutorialCard(ctx, w, h, state, lane = {}) {
   return bottom;
 }
 
+let lastSkip = null;
+
+/**
+ * The comms line's skip prompt, small at its plate's corner while one of the
+ * prologue's lines is up: the key or button (SKIP_LINES), or on a phone a
+ * SKIP tag to tap (toggleCard). The tutorial does the skipping (skipLine).
+ * @param {object} [game]
+ */
+function drawSkipTag(ctx, w, h, game) {
+  lastSkip = null;
+  const t = game?.tutorial;
+  const msg = game?.ariaComms?.message;
+  if (!t?.canSkip?.() || !msg || msg.place === "fold") return;
+  // Where the plate is: as aria-comms' _anchor places it.
+  const lanes = game.messages?.lanes;
+  const low = !lanes || msg.place === "low" || !msg.prominent || lanes.comms === lanes.commsLow;
+  const r = lanes ? (low ? lanes.commsLow : lanes.comms) : null;
+  const cx = r ? r.x + r.w / 2 : w / 2;
+  const right = Math.round(cx + Math.min(460, r?.w ?? 460) / 2 - 4);
+  const top = r ? Math.max(r.y + 12, game._tutorialCardBottom ? game._tutorialCardBottom + 22 : 0) : h * 0.135;
+  const midY = Math.round(low && r ? r.y + r.h + 11 : top - 10);
+  const device = activeDevice(game);
+  const look = isModernArt() ? "modern" : "legacy";
+  ctx.save();
+  ctx.globalAlpha = 0.7;
+  if (device === "touch") {
+    ctx.font = look === "legacy" ? "bold 10px monospace" : uiFont(10, 700);
+    const tw = Math.ceil(ctx.measureText("SKIP ›").width) + 16;
+    const th = 20;
+    const x = right - tw;
+    const y = midY - th / 2;
+    ctx.fillStyle = "rgba(0, 8, 16, 0.85)";
+    ctx.strokeStyle = "rgba(200, 220, 240, 0.4)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, tw, th, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#e4edf5";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("SKIP ›", x + tw / 2, midY + 1);
+    // A thumb-sized target round the tag.
+    lastSkip = { x: x - 8, y: y - 10, w: tw + 16, h: th + 20, at: performance.now(), tap: () => t.skipLine() };
+  } else {
+    const g = device === "gamepad" ? glyph(game, SKIP_LINES.pad, "gamepad") : { text: keyLabel(SKIP_LINES.key), kind: "key" };
+    if (g.text) {
+      ctx.font = look === "legacy" ? "10px monospace" : uiFont(9, 700);
+      const label = "SKIP";
+      const lw = Math.ceil(ctx.measureText(label).width);
+      const gw = glyphWidth(ctx, g, 8, look);
+      const x = right - lw - gw - 5;
+      drawGlyph(ctx, x, midY, g, 8, look, "#e4edf5");
+      ctx.font = look === "legacy" ? "10px monospace" : uiFont(9, 700);
+      ctx.fillStyle = "#e4edf5";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x + gw + 5, midY + 1);
+    }
+  }
+  ctx.restore();
+}
+
 let cardOpenedAt = -Infinity;
 let teachOpenedAt = -Infinity;
 let cardFoldedAt = -Infinity;
@@ -487,10 +550,16 @@ function noteCard(place, bottom, collapsed) {
 
 /**
  * A tap at (x, y) on a phone card: a folded one opens again, hint and all, for
- * another CARD_COLLAPSE_AFTER seconds; an open one folds now. True when the
- * tap was on one.
+ * another CARD_COLLAPSE_AFTER seconds; an open one folds now. On the comms
+ * line's SKIP tag, it skips the line. True when the tap was on either.
  */
 export function toggleCard(x, y) {
+  // The comms line's SKIP tag first: a tap skips the line, a double tap the lot.
+  const s = lastSkip;
+  if (s && performance.now() - s.at < 250 && x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) {
+    s.tap();
+    return true;
+  }
   const c = lastCard;
   if (!c || performance.now() - c.at > 250) return false;
   if (x < c.x || x > c.x + c.w || y < c.y || y > c.y + c.h) return false;

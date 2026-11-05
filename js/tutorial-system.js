@@ -28,7 +28,7 @@ import { Enemy, Pickup, Prop, Projectile } from "../src/entities/index.js";
 import { GameState } from "../src/types.js";
 import { validatePropPosition } from "../src/systems/spawner.js";
 import { TUTORIAL_SANDBOX_STEP } from "../src/constants.js";
-import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, TRIAL_GRADES, gradeTrial, lineDuration, trialStart } from "../src/data/prologue.js";
+import { PROLOGUE_STEPS, PROLOGUE_BEATS, PROLOGUE_TRIALS, PROLOGUE_ODDITIES, SKIP_LINES, TRIAL_GRADES, gradeTrial, lineDuration, trialStart } from "../src/data/prologue.js";
 import { ARIA_COMMS } from "../src/data/dialogue.js";
 import { drawLine } from "../src/systems/aria-comms.js";
 import { spawnEnergyBurst } from "../src/rendering/particle-system.js";
@@ -42,7 +42,7 @@ import { TRACK_AREA, TRACK_BARS, TRACK_TUNNEL, TRACK_PIT, TRACK_WALLS, LANES } f
 import { arrive as startArrival, pendingArrivals, clearArrivals } from "../src/systems/arrival.js";
 import { shovePlayer } from "../src/systems/ai.js";
 import { HALL_WALLS } from "../src/data/levels/rooms/halls.js";
-import { RND_WALLS, RIG_AT, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
+import { RND_WALLS, RIG_AT, RIG_STEP_R, BREAKER_CELL } from "../src/data/levels/rooms/rnd.js";
 import { ATRIUM_GAP } from "../src/data/levels/rooms/atrium.js";
 import { CORRIDOR_WALLS } from "../src/data/levels/rooms/corridor.js";
 import { DISPATCH_WALLS } from "../src/data/levels/rooms/dispatch.js";
@@ -92,6 +92,10 @@ const SQUAD_AT = [
 ];
 /** Who is who in the squads: the lieutenant, the sergeant, and the two who rib the cadet. */
 const SQUAD_NAMES = { 1: "Sgt. Kael", 3: "Lt. Rasczak", 4: "Ofc. Brandt", 6: "Ofc. Okafor" };
+/** The two with rank, in their duty blues before they kit up (src/data/npcs.js). */
+const SQUAD_DUTY = { 1: "kael", 3: "rasczak" };
+/** Their comms busts in those blues (src/ui/comms-portraits.js), for lines said before the plate goes on. */
+const DUTY_PORTRAIT = { rasczak: "rasczakDuty", kael: "kaelDuty" };
 /**
  * Where each officer kits up: in front of their own locker, on the north
  * bank (row 37) or the south (row 47), clear of the benches and the cadet's.
@@ -100,7 +104,7 @@ const KIT_AT = [
   [8.5, 38.6],
   [15.2, 38.6],
   [8.5, 46.3],
-  [22.5, 46.3],
+  [22.3, 46.3],
   [10.2, 38.6],
   [19.0, 38.6],
   [10.6, 46.3],
@@ -135,6 +139,8 @@ const SUP_ROUTES = {
 };
 /** Where the Supervisor waits for the sheet: by Lift B, in the sim hall. */
 const SUP_AT_LIFT = { x: 33.5, y: 6.0 };
+/** Back at his desk after the range while you finish the other trials, facing his door. */
+const SUP_AT_DESK = { x: 47.0, y: 22.4, face: { x: 46.5, y: 19 } };
 /**
  * The Supervisor's locker (the north bank, by the door: src/data/levels/
  * tutorial.js), where he stands to kit up, and what he faces.
@@ -147,8 +153,8 @@ const SUP_LOCKER = { x: 22.5, y: 38.6 };
  * he'll go without you, and where things come through on the way (each when
  * he is past `after`, his y down the corridor).
  */
-const ESCORT_SPEED = 1.25;
-const ESCORT_STUTTER = 2.8;
+const ESCORT_SPEED = 1.7;
+const ESCORT_STUTTER = 5;
 const ESCORT_LEASH = 6.5;
 const ESCORT_WAVES = [
   { after: 14, spots: [[29.5, 25.5, "henchman"]] },
@@ -305,7 +311,9 @@ const EARSHOT = 14;
 /**
  * The room each of them carries through, wherever they stand in it: Lin
  * talks the sim hall through from her booth's mic (the booth is below the
- * hall's floor box), Orr has R&D, Vale the track.
+ * hall's floor box), Orr has R&D, Vale the track. Only while they are in it
+ * (or at their post): Orr still walking up the east wing can't be heard in
+ * the bay you ran ahead to.
  */
 const ROOM_OF = { orr: "rnd", lin: "arena", vale: "track" };
 
@@ -467,6 +475,15 @@ const SIM_DAMAGE = { drone: 7, henchman: 9, sentinel: 14, glitchling: 6 };
 /** The steps after which ARIA may say a word of encouragement. */
 const ENCOURAGE_AFTER = new Set(["fire", "ads", "moving", "shotgun", "slide", "dash", "cover", "vents"]);
 
+/**
+ * Done is done: once a step's objective is met, what was still to be said
+ * about it goes unsaid (advanceStep), up to SIX FORTY-SEVEN, where the story
+ * takes over and plays out. The walks are the exception: the talk on the way
+ * is their point, and you often arrive before it ends.
+ */
+const STORY_FROM = PROLOGUE_BEATS.findIndex((b) => b.id === "sixFortySeven");
+const PLAYS_OUT = new Set(["toRange", "toLab"]);
+
 const SHOTGUN = 1;
 const PISTOL = 0;
 
@@ -540,27 +557,24 @@ const ANCHOR_LINES = [
  * the HUD learns where you look: where you look is where the suit aims),
  * and the anchor (stand still through the jolt: the module they didn't tell
  * you about, and the second the room skips when it holds you).
+ *
+ * The suit comes online as it goes: the stamina bar is the frame's reading,
+ * the chrono bar the anchor's, both dark until their part fills them.
  */
-const CALIB_FRAME_TIME = 3.5;
-const CALIB_ANCHOR_TIME = 4;
+const CALIB_FRAME_TIME = 2;
+const CALIB_ANCHOR_TIME = 2.5;
 /** Into the anchor's hold, when the jolt goes through; and the longest it waits for her warning first. */
-const CALIB_JOLT_AT = 1.4;
-const CALIB_WARN_WAIT = 6;
+const CALIB_JOLT_AT = 1;
+const CALIB_WARN_WAIT = 4;
 /** The beacons, in the order they light: north, west, then east of the pad. */
 const CALIB_BEACONS = [[70.5, 4.6], [67.2, 8.0], [74.6, 6.2]];
 /** How near the reticle must be to a beacon (radians), and how long held there. */
-const CALIB_LOOK_CONE = 0.1;
-const CALIB_LOOK_HOLD = 0.45;
+const CALIB_LOOK_CONE = 0.12;
+const CALIB_LOOK_HOLD = 0.35;
 const CALIB_LINES = {
   frame: [["DR. ORR", "Frame first. Stand easy: the servos are learning your weight, and your reach.", "calm"]],
-  eyes: [
-    ["DR. ORR", "Body's in. Now your eyes.", "calm"],
-    ["ARIA", "Follow the lights. Each one you hold, I learn where you look. That's where your shots go.", "curious"],
-  ],
-  anchor: [
-    ["DR. ORR", "Good. Where you look, the suit aims.", "warm"],
-    ["DR. ORR", "Last one. The anchor: the module nobody told you about. Hold still. You'll feel this.", "worried"],
-  ],
+  eyes: [["ARIA", "Follow the lights. Where you look is where your shots go.", "curious"]],
+  anchor: [["DR. ORR", "Last one. The anchor: the module nobody told you about. Hold still. You'll feel this.", "worried"]],
   jolt: [
     ["ARIA", "What was that? The room just skipped. A whole second, gone.", "afraid"],
     ["DR. ORR", "That was the anchor holding you while the world didn't. You'll never need it.", "calm"],
@@ -568,6 +582,17 @@ const CALIB_LINES = {
 };
 /** What the card says, by part. */
 const CALIB_STAGES = { frame: "FRAME", eyes: "EYES", anchor: "ANCHOR" };
+/** How far each part of the calibration has got, 0-1 (`c` is the step's counter). */
+function calibParts(c) {
+  const order = ["frame", "eyes", "anchor"];
+  const at = order.indexOf(c.part);
+  const part = (i, k) => (at > i ? 1 : at === i ? Math.min(1, k) : 0);
+  return {
+    frame: part(0, c.read / CALIB_FRAME_TIME),
+    eyes: part(1, ((c.beacon || 0) + (c.hold || 0) / CALIB_LOOK_HOLD) / CALIB_BEACONS.length),
+    anchor: part(2, c.read / CALIB_ANCHOR_TIME),
+  };
+}
 
 /**
  * The cover drill (the "coverDrill" step): its holo targets at the hall's
@@ -578,7 +603,7 @@ const DRILL_TARGETS = [[41.5, 4.5], [46.5, 4.5]];
 const DRILL_BLIND_AT = [43.5, 6.5];
 const DRILL_VOLLEY = 1.1;
 /** Blind shots that earn the blind-fire part without a kill: it's about keeping heads down. */
-const DRILL_BLIND_SHOTS = 8;
+const DRILL_BLIND_SHOTS = 4;
 
 /** The range's reload drill: active reloads it wants, and the Supervisor's word on a jam. */
 const RELOAD_GOAL = 2;
@@ -731,9 +756,10 @@ const LOGIC = {
       t.lockerShut(g);
       // Facing the door, so the Supervisor walks in where you can see him.
       g.player.angle = -0.1;
-      // The squad at their lockers, turned toward each other and the cadet.
+      // The squad at their lockers, turned toward each other and the cadet;
+      // the lieutenant and the sergeant with their rank on.
       t.squad = SQUAD_AT.map(([x, y], i) => {
-        const n = new Npc(x, y, "officer", { name: SQUAD_NAMES[i] ?? null });
+        const n = new Npc(x, y, SQUAD_DUTY[i] ?? "officer", { name: SQUAD_NAMES[i] ?? null });
         n.faceTo(g.player);
         g.entities.push(n);
         return n;
@@ -937,7 +963,9 @@ const LOGIC = {
         orr.faceTo(p);
         const before = t.script.some((q) => q.line[0] !== "DR. ORR" && q.line[0] !== "ARIA") || (t._ourLine && g.ariaComms?.message?.speaker !== "DR. ORR");
         if (!before) c.waited += g.deltaTime || 0;
-        if (g.ariaComms?.message?.speaker === "DR. ORR" || c.waited > ORR_WAIT_MAX) c.go = true;
+        // Skipped, her lines never come: she goes once his are done.
+        const hers = t.script.some((q) => q.line[0] === "DR. ORR");
+        if (g.ariaComms?.message?.speaker === "DR. ORR" || c.waited > ORR_WAIT_MAX || (!before && !hers)) c.go = true;
         return false;
       }
       // Then she walks with you: ahead of you and out of earshot, she stops
@@ -967,8 +995,11 @@ const LOGIC = {
 
   /**
    * The rig tunes the suit to the cadet (CALIB_*): the frame, the eyes and
-   * the anchor, each from its pad, in the lit ring. Off the pad, or moving on
-   * it, the reading waits; it never resets.
+   * the anchor, each from its pad, inside the lit ring (RIG_STEP_R, the
+   * platform's edge as the rig draws it). Off the pad, or moving on it, the reading waits; it never
+   * resets. The suit comes online as it goes: stamina with the frame, the
+   * chrono meter with the anchor, the rig's ring filling with the whole; at
+   * the end the rig flashes green and both bars are yours.
    */
   calibrate: {
     waypoint: RIG_AT,
@@ -982,7 +1013,11 @@ const LOGIC = {
       c.lastY = g.player.y;
       t.toStation(g, "orr", { snap: true });
       c.rig = g.entities.find((e) => e.type === "prop" && e.propType === "telemetry_rig");
-      if (c.rig) c.rig.wait = 1;
+      if (c.rig) {
+        c.rig.wait = 1;
+        c.rig.read = 0;
+        c.rig.synced = 0;
+      }
       CALIB_BEACONS.forEach(([x, y], i) => {
         const b = new Prop(x, y, "calib_beacon");
         b.state = "off";
@@ -996,11 +1031,7 @@ const LOGIC = {
       const still = Math.hypot(p.x - c.lastX, p.y - c.lastY) < 0.02;
       c.lastX = p.x;
       c.lastY = p.y;
-      const on = t.near(g, RIG_AT.x, RIG_AT.y, 0.75);
-      if (c.rig) {
-        c.rig.scan = on ? 1 : 0;
-        c.rig.wait = on ? 0 : 1;
-      }
+      const on = t.near(g, RIG_AT.x, RIG_AT.y, RIG_STEP_R);
       if (on && !c.started) {
         c.started = true;
         t.say(CALIB_LINES.frame);
@@ -1013,6 +1044,7 @@ const LOGIC = {
           // What she hadn't got to about the last part is behind you now.
           t.script = t.script.filter((q) => q.step !== t.step);
           t.say(CALIB_LINES.eyes);
+          playChronoSound(g.audio, "lock");
           if (beacons[0]) beacons[0].state = "on";
         }
       } else if (c.part === "eyes") {
@@ -1039,7 +1071,7 @@ const LOGIC = {
           t.say(CALIB_LINES.anchor);
         }
       } else if (c.part === "anchor") {
-        // Her lines first: the jolt waits for "you'll feel this".
+        // Her line first: the jolt waits for "you'll feel this".
         if (on && still && (c.jolted || t.stepLinesDone() || t.clock - c.anchorAt > CALIB_WARN_WAIT)) c.read += dt;
         if (!c.jolted && c.read >= CALIB_JOLT_AT) {
           // The anchor holds the cadet while the room skips a second: a
@@ -1052,20 +1084,40 @@ const LOGIC = {
           // Said through the step's end: what it was matters more than when.
           t.say(CALIB_LINES.jolt, { keep: true });
         }
-        if (c.read >= CALIB_ANCHOR_TIME && c.jolted) return true;
       }
-      return false;
+      // The suit coming online: each bar is its part's reading, held there
+      // (no regen, no spending) until the part is done.
+      const k = calibParts(c);
+      p.stamina = (p.staminaCap ?? p.maxStamina) * k.frame;
+      p.chronoEnergy = p.maxChronoEnergy * k.anchor;
+      p.chronoActive = false;
+      if (c.rig) {
+        c.rig.scan = on ? 1 : 0;
+        c.rig.wait = on ? 0 : 1;
+        c.rig.read = (k.frame + k.eyes + k.anchor) / 3;
+      }
+      return c.part === "anchor" && c.jolted && c.read >= CALIB_ANCHOR_TIME;
     },
     progress: (t, g) => {
       const c = t.c;
-      if (!t.near(g, RIG_AT.x, RIG_AT.y, 0.75)) return c.started ? "BACK ON THE PAD · THE READING WAITS" : "STAND ON THE PAD · INSIDE THE LIT RING";
-      const part = CALIB_STAGES[c.part];
-      if (c.part === "eyes") return `CALIBRATING · ${part} · LOOK AT THE LIT BEACON ${Math.min(c.beacon + 1, CALIB_BEACONS.length)}/${CALIB_BEACONS.length}`;
-      const k = c.read / (c.part === "frame" ? CALIB_FRAME_TIME : CALIB_ANCHOR_TIME);
-      return `CALIBRATING · ${part} ${Math.min(100, Math.round(k * 100))}% · HOLD STILL`;
+      const k = calibParts(c);
+      const pct = (v) => (v >= 1 ? "OK" : `${Math.round(v * 100)}%`);
+      const readout = `FRAME ${pct(k.frame)} · EYES ${Math.min(c.beacon, CALIB_BEACONS.length)}/${CALIB_BEACONS.length} · ANCHOR ${pct(k.anchor)}`;
+      if (!t.near(g, RIG_AT.x, RIG_AT.y, RIG_STEP_R)) return `${c.started ? "BACK ON THE PAD · THE READING WAITS" : "STAND ON THE PAD · INSIDE THE LIT RING"}\n${readout}`;
+      const doing = c.part === "eyes" ? "LOOK AT THE LIT BEACON" : "HOLD STILL";
+      return `CALIBRATING · ${CALIB_STAGES[c.part]} · ${doing}\n${readout}`;
     },
     exit(t, g) {
-      if (t.c.rig) t.c.rig.scan = t.c.rig.wait = 0;
+      const p = g.player;
+      // Tuned: the bars are the suit's now, full; the rig flashes green.
+      p.stamina = p.staminaCap ?? p.maxStamina;
+      p.chronoEnergy = p.maxChronoEnergy;
+      if (t.c.rig) {
+        t.c.rig.scan = t.c.rig.wait = 0;
+        t.c.rig.read = 1;
+        t.c.rig.synced = g.time || 1;
+      }
+      playChronoSound(g.audio, "seal");
       CALIB_BEACONS.forEach((_, i) => t.clearTag(g, `calib${i}`));
       t.say([["DR. ORR", "There. It took. It's yours now.", "happy"]], { keep: true });
     },
@@ -1477,10 +1529,11 @@ const LOGIC = {
           t.clearTargets(g, "coverDrill");
           t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
           c.blindShots = 0;
-          t.say([["LIN", "Now don't aim. Fire over the top. It's wild, but it keeps their heads down.", "excited"]]);
+          c.coverHipKills = 0;
+          t.say([["LIN", "Now stay down and don't aim. Just fire. It's wild, but it keeps their heads down.", "excited"]]);
         }
       } else if (c.stage === "blind") {
-        if (got("blindFireKills") >= 1 || c.blindShots >= DRILL_BLIND_SHOTS) {
+        if (got("blindFireKills") >= 1 || c.coverHipKills >= 1 || c.blindShots >= DRILL_BLIND_SHOTS) {
           c.stage = "dash";
           t.say([["LIN", "Next block, on your left. Look at it and go. Stay low.", "calm"]]);
         } else if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
@@ -1500,7 +1553,7 @@ const LOGIC = {
       return [
         `COVER ${n(0, got("tookCover") + got("coverDashes"), 1)}`,
         `PEEK KILLS ${n(1, got("peekKills"), 2)}`,
-        `BLIND FIRE ${n(2, got("blindFireKills"), 1)}`,
+        `BLIND FIRE ${n(2, c.blindShots ?? 0, DRILL_BLIND_SHOTS)}`,
         `COVER DASH ${n(3, got("coverDashes"), 1)}`,
       ].join(" · ");
     },
@@ -1702,7 +1755,8 @@ const LOGIC = {
       const foes = t.alive(g, "escort");
       const there = Math.hypot(sup.x - SUP_LOCKER.x, sup.y - SUP_LOCKER.y) < 0.45;
       // The minute catches at him: half a second stopped, then he goes on.
-      if (!sup.frozen && !there && (c.stutter -= g.deltaTime || 0) <= 0) {
+      // Only on the move: stood waiting for you, he's still.
+      if (sup.walking && !sup.frozen && !there && (c.stutter -= g.deltaTime || 0) <= 0) {
         c.stutter = ESCORT_STUTTER;
         t.supHold(sup);
         sup.freeze();
@@ -1913,6 +1967,11 @@ const LOGIC = {
       t.place(g, "patch", new Pickup(44.5, 21.5, "health"));
       t.place(g, "patchAmmo", new Pickup(48.5, 21.5, "ammo"));
       t.pickedUp = false;
+      // The transfer is the story, so it outlasts a fast grab; the med pack
+      // is advice, and none is needed at full health.
+      const [transfer, medPack] = t.def.lines;
+      t.say([transfer], { keep: true });
+      if (g.player.health < g.player.maxHealth) t.say([medPack]);
     },
     update: (t) => t.pickedUp,
   },
@@ -2238,7 +2297,7 @@ export class TutorialSystem {
     const halfHeights = [viewH / 2.4, viewH / 5];
     // Who the first step shows (the squad, the Supervisor), then the looks
     // it warms for later (warmNpc), which otherwise decode under play.
-    const people = ["officer", "supervisor", "officerKit", "rasczakKit", "kaelKit", "staff", "clerk"];
+    const people = ["officer", "rasczak", "kael", "supervisor", "officerKit", "rasczakKit", "kaelKit", "staff", "clerk"];
     let built = false;
     let uploaded = false;
     let city = false;
@@ -2502,6 +2561,10 @@ export class TutorialSystem {
     const prev = this.def;
     this.logic?.exit?.(this, g);
     g.audio.menuConfirm();
+    // Its objective's done: the rest of what this step had to say goes unsaid.
+    if (prev && prev.beat < STORY_FROM && !PLAYS_OUT.has(prev.id)) {
+      this.script = this.script.filter((q) => q.step !== this.step || q.line[3]?.need);
+    }
     if (prev && ENCOURAGE_AFTER.has(prev.id) && this.script.length === 0 && Math.random() < 0.5) {
       const line = drawLine("tutorialEncouragement", ARIA_COMMS.tutorialEncouragement);
       if (line) this.say([["ARIA", line, "happy"]]);
@@ -2542,6 +2605,7 @@ export class TutorialSystem {
       if (e.type === "health" || e.type === "ammo") e._shut = !this.pickupsOpen;
     }
 
+    this._updateSkip(g.deltaTime || 0);
     this._updateScript(g.deltaTime || 0);
     this._updateTargets(g);
     this._updateAlert(g);
@@ -2966,6 +3030,9 @@ export class TutorialSystem {
   noteKill(enemy, head = false) {
     const p = this.game.player;
     this.c.kills = (this.c.kills || 0) + 1;
+    // In cover with the sights down: blind, for the drill, whether or not the
+    // round went through the block (a clear line over it is still a shot from cover).
+    if (p.cover && !p.isAiming) this.c.coverHipKills = (this.c.coverHipKills || 0) + 1;
     if (head) this.c.heads = (this.c.heads || 0) + 1;
     if (p.isAiming) this.c.aimedKills = (this.c.aimedKills || 0) + 1;
     if (p.weapons[p.currentWeapon] === SHOTGUN) this.c.shotgunKills = (this.c.shotgunKills || 0) + 1;
@@ -2999,8 +3066,15 @@ export class TutorialSystem {
     this.cert.run = null;
     const n = this.cert.order.length;
     if (n < PROLOGUE_TRIALS.length) {
-      // The one who ran it grades it, in person (calibration has no grade to give).
-      if (trial?.par != null) this.say([[trial.lead, trialComment(trial, result), "calm"]], { keep: true });
+      // The one who ran it grades it, in person (calibration has no grade to
+      // give), ahead of the queue: behind it, you'd have left their room.
+      // Coaching still on air for the run gives way to it.
+      if (trial?.par != null) {
+        if (this._ourLineStep === this.step) this._cutLine();
+        this.say([[trial.lead, trialComment(trial, result), "calm"]], { keep: true, first: true });
+      }
+      // His range done and trials still to run, he goes back to his desk.
+      if (id === "weapons" && this.sup) this.goTo(g, this.sup, SUP_AT_DESK.x, SUP_AT_DESK.y, SUP_AT_DESK.face);
       this.escalate(n);
     }
   }
@@ -3355,7 +3429,9 @@ export class TutorialSystem {
 
   /**
    * Queue lines to play in order once the comms are free. `cut` drops what
-   * was still to come and cuts off the line in progress (an alarm).
+   * was still to come and cuts off the line in progress (an alarm). The lines
+   * of one call are one exchange: they play in their order, whoever can or
+   * can't be heard (see _held).
    */
   say(lines, { cut = false, keep = false, first = false } = {}) {
     const g = this.game;
@@ -3370,21 +3446,100 @@ export class TutorialSystem {
     // line about the range is no use in the gym (see _updateScript). A
     // `keep` line (the sheet, the calibration's oddities) is never stale.
     // `first`: someone in front of you, ahead of the queue (not over the line being said).
-    const queued = lines.map((line) => ({ line, step: keep ? null : this.step, from: this.step }));
+    const batch = (this._batch = (this._batch ?? 0) + 1);
+    const queued = lines.map((line) => ({ line, step: keep ? null : this.step, from: this.step, batch }));
     if (first) this.script.unshift(...queued);
     else this.script.push(...queued);
+  }
+
+  /** Whether one of the prologue's lines is up on the comms now, to be skipped. */
+  canSkip() {
+    return !!this._ourLine && this.game.ariaComms?.message?._prologue === this._ourLine;
+  }
+
+  /**
+   * The skip key, pressed: the line being said stops, and the next comes on.
+   * Pressed again soon after (SKIP_LINES.again), everything queued goes too.
+   * True when it skipped anything.
+   */
+  skipLine() {
+    const again = this.runClock - (this._skippedAt ?? -Infinity) < SKIP_LINES.again;
+    if (!this.canSkip() && !again) return false;
+    this._skippedAt = this.runClock;
+    if (again) this.flushLines();
+    this._cutLine();
+    return true;
+  }
+
+  /** Everything still queued goes unsaid, bar a line that says what to do next (`need`). */
+  flushLines() {
+    this.script = this.script.filter((q) => q.line[3]?.need);
+  }
+
+  /** Stop the line being said; the next waits only a beat. */
+  _cutLine() {
+    const g = this.game;
+    const comms = g.ariaComms;
+    if (!this._ourLine || !comms) return;
+    if (comms.message?._prologue === this._ourLine) {
+      comms.message = null;
+      g.audio?.stopSpeech?.("comms");
+    }
+    if (comms.queue) comms.queue = comms.queue.filter((m) => m._prologue !== this._ourLine);
+    this._lineGap = 0.2;
+  }
+
+  /**
+   * The skip key and pad button (SKIP_LINES), read each frame: a press skips
+   * the line, a hold skips the lot. (A phone taps the line's SKIP tag:
+   * src/ui/tutorial-ui.js.)
+   */
+  _updateSkip(dt) {
+    const g = this.game;
+    const pad = g.gamepad;
+    const button = pad?.bindings?.[SKIP_LINES.pad];
+    const down = !!g.keys?.[SKIP_LINES.key] || (g.settings?.gamepadEnabled !== false && Number.isInteger(button) && !!pad.activeGamepad?.buttons?.[button]?.pressed);
+    if (down && !this._skipDown) this.skipLine();
+    this._skipHeld = down ? (this._skipHeld ?? 0) + dt : 0;
+    if (this._skipHeld >= SKIP_LINES.hold && !this._skipFlushed) {
+      this._skipFlushed = true;
+      this.flushLines();
+      this._cutLine();
+    }
+    if (!down) this._skipFlushed = false;
+    this._skipDown = down;
   }
 
   /** Whether the current step's own lines have all been said (other chatter aside). */
   stepLinesDone() {
     // As in scriptIdle, a line waiting for you to come within earshot holds nothing up.
-    return !this.script.some((q) => q.step === this.step && this._audible(q.line[0])) && !(this._ourLine && this._ourLineStep === this.step);
+    const held = this._held();
+    return !this.script.some((q) => q.step === this.step && !held.has(q)) && !(this._ourLine && this._ourLineStep === this.step);
   }
 
   /** Whether every queued line has been said and the last has finished. */
   scriptIdle() {
     // A line waiting for you to come within earshot holds nothing up.
-    return !this._ourLine && this.script.every((s) => !this._audible(s.line[0]));
+    const held = this._held();
+    return !this._ourLine && this.script.every((s) => held.has(s));
+  }
+
+  /**
+   * The queued lines that can't be said yet: someone's out of earshot, and
+   * so is the rest of their exchange after them. A reply never jumps ahead
+   * of what it answers: outrun Orr to R&D and ARIA's "she's not
+   * exaggerating" used to play before Orr had said a word of it.
+   */
+  _held() {
+    const held = new Set();
+    const waiting = new Set();
+    for (const q of this.script) {
+      if (waiting.has(q.batch) || !this._audible(q.line[0])) {
+        held.add(q);
+        waiting.add(q.batch);
+      }
+    }
+    return held;
   }
 
   _updateScript(dt) {
@@ -3406,9 +3561,11 @@ export class TutorialSystem {
     this.script = this.script.filter((s) => !stale(s.step) && !(s.step === null && stale(s.from) && !this._audible(s.line[0])));
     if (this._ourLine || comms.message || comms.queue?.length || this._lineGap > 0 || !this.script.length) return;
     // Someone out of earshot keeps their line until you are back in it (or
-    // it goes stale); whoever you can hear goes on meanwhile. Dropping it
-    // lost whole briefings: Orr's walk, Lin's calls across the sim hall.
-    const at = this.script.findIndex((s) => this._audible(s.line[0]));
+    // it goes stale); whoever you can hear goes on meanwhile, unless it's
+    // the rest of the same exchange. Dropping it lost whole briefings:
+    // Orr's walk, Lin's calls across the sim hall.
+    const held = this._held();
+    const at = this.script.findIndex((s) => !held.has(s));
     if (at < 0) return;
     const [next] = this.script.splice(at, 1);
     this._ourLineStep = next.step;
@@ -3419,6 +3576,8 @@ export class TutorialSystem {
     comms.queueLine?.({
       // `as`: a voice speaking under someone's own name (the floor's people).
       speaker: opts?.as ?? speaker,
+      // A line may name its bust; Rasczak and Kael still on duty get theirs in blues.
+      portrait: opts?.portrait ?? this._dutyPortrait(opts?.as ?? speaker),
       text,
       color: style.color,
       voice: radio ? style.radioVoice : style.voice,
@@ -3429,6 +3588,12 @@ export class TutorialSystem {
     });
     this._ourLine = id;
     this._lineGap = 0.35;
+  }
+
+  /** Rasczak's or Kael's duty bust, while their NPC is still in blues (SQUAD_DUTY). */
+  _dutyPortrait(speaker) {
+    const kind = /RASCZAK/i.test(speaker) ? "rasczak" : /KAEL/i.test(speaker) ? "kael" : null;
+    return kind && this.squad?.some((n) => n.enemyType === kind) ? DUTY_PORTRAIT[kind] : undefined;
   }
 
   /**
@@ -3442,7 +3607,9 @@ export class TutorialSystem {
     if (!n?.active) return true;
     const p = this.game.player;
     if (Math.hypot(n.x - p.x, n.y - p.y) < EARSHOT) return true;
-    if (ROOM_OF[id] && inArea(p, ROOM_OF[id])) return true;
+    const room = ROOM_OF[id];
+    const post = STATIONS[id];
+    if (room && inArea(p, room) && (inArea(n, room) || Math.hypot(n.x - post.x, n.y - post.y) < 2)) return true;
     return Object.keys(AREAS).some((a) => inArea(p, a) && inArea(n, a));
   }
 
