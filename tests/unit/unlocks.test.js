@@ -13,8 +13,10 @@ import {
   LOCKABLE as LOCK,
   ensureUnlockStore,
   resetUnlockStore,
+  withinReach,
+  droppableItems,
 } from "../../src/systems/unlocks.js";
-import { LOADOUT_CLASSES, ARMOR_STYLES, DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
+import { LOADOUT_CLASSES, ARMOR_STYLES, HELMET_STYLES, DEFAULT_CHARACTER, TIER_UNLOCKS } from "../../src/data/cosmetics.js";
 import { SYMBOLS, FINISHES, BADGE_PRESETS, byId, indexOfId } from "../../src/data/badges.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
@@ -76,15 +78,29 @@ describe("unlock rules", () => {
     expect(st.value).toBe(50);
   });
 
-  it("tier II needs the tutorial; tier III takes three campaign levels or arena round 5", () => {
-    expect(unlockState("helmetIndex", 1, unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(true);
-    const arena = unlockContext({ stats: { highestArenaRound: 5 } });
-    expect(unlockState("armorIndex", MK3, arena).unlocked).toBe(true);
-    const close = unlockContext({ stats: { highestArenaRound: 4, campaignLevelsCleared: 1 } });
+  it("tier II takes Act 1 or arena round 10; tier III takes Act 2 or arena round 15", () => {
+    // The tutorial and most of Act I no longer open MK II.
+    expect(unlockState("helmetIndex", 1, unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(false);
+    expect(unlockState("helmetIndex", 1, unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 7 })).unlocked).toBe(false);
+    expect(unlockState("helmetIndex", 1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
+    expect(unlockState("armorIndex", MK2, unlockContext({ stats: { highestArenaRound: 10 } })).unlocked).toBe(true);
+    const actOne = unlockContext({ campaignSaveAct: 2 });
+    expect(unlockState("armorIndex", MK2, actOne).unlocked).toBe(true);
+    expect(unlockState("armorIndex", MK3, actOne).unlocked).toBe(false);
+    expect(unlockState("armorIndex", MK3, unlockContext({ stats: { campaignActsCleared: 2 } })).unlocked).toBe(true);
+    expect(unlockState("armorIndex", MK3, unlockContext({ stats: { highestArenaRound: 15 } })).unlocked).toBe(true);
+    const close = unlockContext({ stats: { highestArenaRound: 14 }, campaignSaveAct: 2 });
     const st = unlockState("armorIndex", MK3, close);
     expect(st.unlocked).toBe(false);
-    // Reports the branch closest to done (4/5 rounds beats 1/3 levels).
-    expect(st.hint).toBe("Clear 3 campaign levels or survive arena round 5 · 4/5 rounds");
+    // Reports the branch closest to done (14/15 rounds beats 1/2 acts).
+    expect(st.hint).toBe("Clear Act 2 or survive arena round 15 · 14/15 rounds");
+  });
+
+  it("Corpsman's rule is the act its label names", () => {
+    const COR = idx(LOADOUT_CLASSES, "corpsman");
+    expect(LOADOUT_CLASSES[COR].unlock).toMatchObject({ type: "campaignActs", count: 2, label: "Clear Act 2 of the campaign" });
+    expect(unlockState("loadoutIndex", COR, unlockContext({ campaignSaveAct: 2, campaignSaveLevel: 6 })).unlocked).toBe(false);
+    expect(unlockState("loadoutIndex", COR, unlockContext({ campaignSaveAct: 3 })).unlocked).toBe(true);
   });
 
   it("grandfathered gear stays usable", () => {
@@ -95,7 +111,7 @@ describe("unlock rules", () => {
   });
 
   it("newlyEarned skips what was already announced", () => {
-    const ctx = unlockContext({ stats: { tutorialComplete: true, totalDashes: 60 } });
+    const ctx = unlockContext({ stats: { campaignActsCleared: 1, totalDashes: 60 } });
     const all = earnedIds(ctx);
     expect(all).toContain(`loadoutIndex:${PHA}`);
     expect(all.some((id) => id.startsWith("armorIndex:"))).toBe(true);
@@ -171,7 +187,13 @@ describe("badge and accessory unlocks", () => {
     const ctx = unlockContext();
     expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "backpack"), ctx).unlocked).toBe(true);
     expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), ctx).unlocked).toBe(false);
-    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(true);
+    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
+    // One rule set for armour and accessories alike.
+    for (const [slot, items] of Object.entries(ACCESSORIES)) {
+      items.forEach((item, i) => {
+        if (item.tier > 1) expect(ruleFor(`acc.${slot}`, i)).toBe(TIER_UNLOCKS[item.tier]);
+      });
+    }
   });
 
   it("ownership of id-based items survives table reordering", () => {
@@ -219,6 +241,63 @@ describe("badge and accessory unlocks", () => {
     expect(describeId("badge.symbol:#lordslayer")).toMatchObject({ kind: "Badge symbol", name: "Lord Slayer" });
     expect(describeId("acc.back:#antenna").name).toBe("Rift Antenna");
     expect(describeId(`armorVariant:#${ARMOR_STYLES[0].variant.id}`).kind).toBe("Armour variant");
+  });
+});
+
+describe("gear drop reach", () => {
+  const helm = (tier) => HELMET_STYLES.findIndex((h) => h.tier === tier && !h.unlock);
+
+  it("drops only the act in progress's tier, never a later one", () => {
+    const actOne = unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 2 });
+    expect(withinReach(ruleFor("helmetIndex", helm(2)), actOne)).toBe(true);
+    expect(withinReach(ruleFor("helmetIndex", helm(3)), actOne)).toBe(false);
+    const actTwo = unlockContext({ campaignSaveAct: 2 });
+    expect(withinReach(ruleFor("helmetIndex", helm(3)), actTwo)).toBe(true);
+    // Act emblems follow the same reach: Act 3's waits for Act 3.
+    expect(withinReach(ruleFor("badge.symbol", indexOfId(SYMBOLS, "act3")), actTwo)).toBe(false);
+  });
+
+  it("never drops what a feat earns", () => {
+    const ctx = unlockContext({ campaignSaveAct: 4 });
+    expect(withinReach({ type: "achievement", id: "centurion" }, ctx)).toBe(false);
+    expect(withinReach({ type: "dashes", count: 50 }, ctx)).toBe(false);
+    const pool = droppableItems(unlockContext({ campaignSaveAct: 1 }));
+    expect(pool.length).toBeGreaterThan(0);
+    expect(pool.some(({ key, index }) => key === "helmetIndex" && HELMET_STYLES[index].id === "reaper")).toBe(false);
+    for (const { key, index } of pool) expect(ruleFor(key, index)).not.toBe(TIER_UNLOCKS[3]);
+  });
+
+  it("counts a level rule by the act its level falls in", () => {
+    const actOne = unlockContext({ campaignSaveAct: 1 });
+    expect(withinReach({ type: "campaignLevels", count: ACTS[0].levels.length }, actOne)).toBe(true);
+    expect(withinReach({ type: "campaignLevels", count: ACTS[0].levels.length + 1 }, actOne)).toBe(false);
+  });
+});
+
+describe("unlock store pacing migration", () => {
+  const store = {};
+  beforeEach(() => {
+    for (const k of Object.keys(store)) delete store[k];
+    vi.stubGlobal("localStorage", {
+      getItem: (k) => store[k] ?? null,
+      setItem: (k, v) => { store[k] = v; },
+      removeItem: (k) => { delete store[k]; },
+    });
+    resetUnlockStore();
+  });
+
+  it("keeps gear earned under the earlier tier rules", () => {
+    // A tutorial graduate who had MK II announced under the old rules.
+    const id = ownedKey("armorIndex", MK2);
+    localStorage.setItem("cc_unlocks", JSON.stringify({ owned: { "acc.back:#antenna": true }, seen: { [id]: true }, v2: true }));
+    const s = ensureUnlockStore(null, { tutorialComplete: true }, {});
+    expect(s.paced).toBe(true);
+    expect(s.owned[id]).toBe(true);
+    expect(s.owned["acc.back:#antenna"]).toBe(true);
+    const ctx = unlockContext({ stats: { tutorialComplete: true }, owned: s.owned });
+    expect(unlockState("armorIndex", MK2, ctx).unlocked).toBe(true);
+    expect(unlockState("armorIndex", MK3, ctx).unlocked).toBe(false);
+    expect(JSON.parse(store.cc_unlocks).paced).toBe(true);
   });
 });
 

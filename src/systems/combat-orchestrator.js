@@ -17,7 +17,7 @@ import {
 } from "./combat.js";
 import { playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { playerEyeZ3D } from "../world/voxel-physics.js";
-import { LOCKABLE, gameUnlockContext, lockedItems } from "./unlocks.js";
+import { LOCKABLE, gameUnlockContext, droppableItems } from "./unlocks.js";
 import { FINISHES } from "../data/weapon-skins.js";
 import { WEAPONS } from "../data/weapons.js";
 import { Projectile, Enemy, Pickup } from "../entities/index.js";
@@ -603,15 +603,16 @@ export function damagePlayer(game, amount, attacker) {
 // ── Gear drops ──────────────────────────────────────────────────────────────
 
 /** Base chance a campaign kill drops a piece of gear. */
-const GEAR_DROP_CHANCE = 0.05;
-/** Multiplier for enemies that are meant to be worth killing. */
-const ELITE_DROP_BONUS = 4;
+const GEAR_DROP_CHANCE = 0.03;
+/** Multiplier for enemies that are meant to be worth killing (15% a kill). */
+const ELITE_DROP_BONUS = 5;
 
 /**
  * Roll a gear drop on a campaign kill. Only ever drops something the player
- * does not already have, so a kill never hands over a duplicate, and the pool
- * is the same locked-item set the creators show — picking one up is exactly
- * equivalent to earning it.
+ * does not already have, so a kill never hands over a duplicate, and only
+ * what the current act is working towards (droppableItems) — a drop is a
+ * piece of the next unlock early, never a later act's gear. Picking one up is
+ * exactly equivalent to earning it.
  */
 export function maybeDropGear(game, enemy, { chance = GEAR_DROP_CHANCE } = {}) {
   if (!enemy || game.mode !== "campaign") return null;
@@ -619,7 +620,7 @@ export function maybeDropGear(game, enemy, { chance = GEAR_DROP_CHANCE } = {}) {
   const elite = !!(enemy.def?.isBoss || enemy.def?.elite || enemy._hunter || enemy.maxHealth >= 200);
   if (Math.random() >= chance * (elite ? ELITE_DROP_BONUS : 1)) return null;
 
-  const pool = lockedItems(gameUnlockContext(game, { fresh: true }));
+  const pool = droppableItems(gameUnlockContext(game, { fresh: true }));
   if (!pool.length) return null;
   const pick = pool[(Math.random() * pool.length) | 0];
   const entry = LOCKABLE[pick.key];

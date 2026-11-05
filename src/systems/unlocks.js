@@ -7,8 +7,9 @@
  * Modern showroom and the Legacy canvas creator) and the unlock toast read it.
  *
  * Persistence (`cc_unlocks`): `owned` grandfathers gear a player had already
- * equipped before unlocks existed, and `seen` records which unlocks have been
- * announced so the celebration toast fires once.
+ * equipped before unlocks existed (or earned before a rule tightened), and
+ * `seen` records which unlocks have been announced so the celebration toast
+ * fires once.
  */
 
 import {
@@ -247,7 +248,7 @@ export function loadUnlockStore() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return { owned: data.owned || {}, seen: data.seen || {}, v2: !!data.v2 };
+    return { owned: data.owned || {}, seen: data.seen || {}, v2: !!data.v2, paced: !!data.paced };
   } catch (_) {
     return null;
   }
@@ -255,7 +256,7 @@ export function loadUnlockStore() {
 
 export function saveUnlockStore(store) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ owned: store.owned, seen: store.seen, v2: !!store.v2 }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ owned: store.owned, seen: store.seen, v2: !!store.v2, paced: !!store.paced }));
   } catch (_) {}
 }
 
@@ -280,6 +281,10 @@ function readCampaignSave() {
  * flag) would otherwise have every newly-lockable id fire the unlock toast
  * at once for progress the player already made — so on first touch after the
  * upgrade, mark everything currently earned as seen instead.
+ *
+ * Stores saved before the tier rules were spread over the campaign (no
+ * `paced` flag) earned their gear under the old, earlier rules. Everything
+ * announced by then was earned, so it becomes owned and stays unlocked.
  */
 export function ensureUnlockStore(character, stats, achievements) {
   // One shared object. The toast listener holds onto the store it was given at
@@ -295,9 +300,14 @@ export function ensureUnlockStore(character, stats, achievements) {
       store.v2 = true;
       saveUnlockStore(store);
     }
+    if (!store.paced) {
+      for (const id of Object.keys(store.seen)) if (store.seen[id]) store.owned[id] = true;
+      store.paced = true;
+      saveUnlockStore(store);
+    }
     return (_store = store);
   }
-  store = { owned: {}, seen: {}, v2: true };
+  store = { owned: {}, seen: {}, v2: true, paced: true };
   const save = readCampaignSave();
   const ctx = unlockContext({ stats, achievements, campaignSaveLevel: save.level, campaignSaveAct: save.act });
   let hasSavedCharacter = false;
@@ -363,6 +373,44 @@ export function lockedItems(ctx) {
     }
   }
   return out;
+}
+
+/** Act the campaign's `count`-th cleared level falls in (1-based). */
+function actOfLevel(count) {
+  for (let a = 1; a <= totalActs(); a++) if (count <= levelsBefore(a + 1)) return a;
+  return totalActs();
+}
+
+/**
+ * Whether a rule is the player's next step through the campaign: met by
+ * finishing the act they are in now, or an earlier one. Rules earned some
+ * other way (achievements, arena, dashes, weapon kills) never are — a drop
+ * shouldn't hand over what a feat is meant to earn.
+ */
+export function withinReach(rule, ctx) {
+  if (!rule) return false;
+  const act = ctx.campaignActsCleared + 1;
+  switch (rule.type) {
+    case "tutorial":
+      return true;
+    case "campaignActs":
+      return rule.count <= act;
+    case "campaignLevels":
+      return actOfLevel(rule.count) <= act;
+    case "anyOf":
+      return (rule.rules || []).some((r) => withinReach(r, ctx));
+    default:
+      return false;
+  }
+}
+
+/**
+ * What a battlefield drop may hand over: locked items whose own rule is the
+ * next step (see withinReach), so loot pulls this act's reward forward a
+ * little and never a later act's.
+ */
+export function droppableItems(ctx) {
+  return lockedItems(ctx).filter(({ key, index }) => withinReach(ruleFor(key, index), ctx));
 }
 
 /**
