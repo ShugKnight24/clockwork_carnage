@@ -29,8 +29,8 @@ import {
   BLIND_FIRE_MIN_CONE,
 } from "./cover.js";
 import { activeDevice } from "../ui/input-glyphs.js";
-import { playerEyeZ } from "./physics.js";
-import { distanceToWall } from "./combat.js";
+import { playerEyeZ, EYE_Z } from "./physics.js";
+import { distanceToWall, hitSpan } from "./combat.js";
 
 /** The ease onto the face. */
 const SNAP_SECONDS = 0.16;
@@ -44,8 +44,18 @@ const PEEK_RATE = 12;
 const BLIND_AIM_CONE = 0.2;
 /** With nothing under the reticle, blind fire converges this far out (cells). */
 const BLIND_AIM_FALLBACK = 8;
+/** A blind-fired round sent at an enemy stays this far (of its height) inside its top and bottom. */
+const BLIND_SPAN_INSET = 0.2;
 /** A kill this soon after a blind-fire shot counts as a blind-fire kill (ms). */
 const BLIND_KILL_MS = 800;
+/**
+ * Cover-to-cover: the furthest face a dash slides to (cells). The geometry's
+ * own 4.5 fell short of the sim hall's drill blocks from most of the first
+ * one, and a dash there only stood you up out of cover.
+ */
+const COVER_DASH_REACH = 5.5;
+/** A cover slide may run this long past the slide's own length to get there (ms). */
+const COVER_DASH_OVERRUN_MS = 400;
 
 export function createCoverStats() {
   return { tookCover: 0, peekKills: 0, blindFireKills: 0, coverDashes: 0, shotsBlocked: 0 };
@@ -106,7 +116,8 @@ export function coverPress(game) {
 
 /**
  * A dash with cover involved. From cover: slide to the cover the view is on
- * (a roadie run), or step out and let the dash go. On a pad or touch, where
+ * (a roadie run), or step out and let the dash go; on a keyboard a dash
+ * straight into the cover with nowhere to slide stays put. On a pad or touch, where
  * the dash button doubles as the cover button, a dash toward a face in reach
  * takes it instead. @returns {boolean} handled: no ordinary dash
  */
@@ -114,9 +125,22 @@ export function coverDash(game, dirX, dirY) {
   const p = game.player;
   if (!p || game.world || !game.map) return false;
   if (p.cover) {
-    const t = coverDashTarget(game.map, p.x, p.y, p.angle, p.cover.face);
+    const face = p.cover.face;
+    // The cover the view is on; failing that, the cover the dash is pointed
+    // at (a strafe key held with it).
+    let t = coverDashTarget(game.map, p.x, p.y, p.angle, face, COVER_DASH_REACH);
+    if (!t && (dirX || dirY)) t = coverDashTarget(game.map, p.x, p.y, Math.atan2(dirY, dirX), face, COVER_DASH_REACH);
+    if (!t) {
+      // Straight into your own cover a dash goes nowhere: stay on it rather
+      // than stand up out of it for nothing. On a pad or touch the dash
+      // button is also how you leave cover, so there it always steps out.
+      const device = activeDevice(game);
+      const leaves = device === "gamepad" || device === "touch";
+      if (!leaves && dirX * face.nx + dirY * face.ny < -0.7) return true;
+      leaveCover(game);
+      return false;
+    }
     leaveCover(game);
-    if (!t) return false;
     const dx = t.x - p.x;
     const dy = t.y - p.y;
     const d = Math.hypot(dx, dy) || 1;
@@ -127,7 +151,7 @@ export function coverDash(game, dirX, dirY) {
     p.slideDirY = dy / d;
     p.slideCooldown = 0.8;
     p.staminaRegenDelay = 0.5;
-    p._coverDash = { face: t, until: game.time + p.slideDuration * 1000 + 200 };
+    p._coverDash = { face: t, until: game.time + p.slideDuration * 1000 + COVER_DASH_OVERRUN_MS };
     game.audio?.dashSound?.();
     game.audio?.playerGrunt?.(game.getVoiceProfile?.(), "slide");
     return true;
@@ -150,7 +174,15 @@ function updateCoverDash(game) {
   // How far the target still is along the slide: at or past it, arrive.
   const ahead = (t.x - p.x) * p.slideDirX + (t.y - p.y) * p.slideDirY;
   const left = Math.hypot(t.x - p.x, t.y - p.y);
-  if (ahead > 0.3 && p.isSliding && game.time < run.until) return;
+  if (ahead > 0.3 && game.time < run.until) {
+    // The slide ran out short of a far face: keep it going at its tail
+    // speed, or it stopped in the open and dropped you out of cover.
+    if (!p.isSliding) {
+      p.isSliding = true;
+      p.slideTime = p.slideDuration * 0.1;
+    }
+    return;
+  }
   p._coverDash = null;
   if (left > 1.2) return;
   p.isSliding = false;
@@ -225,12 +257,20 @@ export function updateCover(game, dt) {
   }
 
   // Peek: aiming stands you up over low cover, or leans you out round the
-  // end of high cover you are at. Elsewhere along high cover it does nothing.
+  // end of high cover you are at. Elsewhere along high cover (and against a
+  // wall with no end to lean round) the sights still come up, with nothing
+  // to pop out of: you stay hidden. The sights wait on `peek`
+  // (src/systems/aim.js), and it used to stay at 0 there, so aiming did
+  // nothing at all against most of a wall.
   const edge = edgeAt(f, c.s);
-  if (!f.low && p.isAiming && !c.lean && edge && !c.snap) c.lean = edge;
+  if (!f.low && p.isAiming && !c.lean && edge && !c.snap) {
+    c.lean = edge;
+    c.peek = 0; // ease out round the end from the wall, not from sights already up
+  }
   const wantPeek = p.isAiming && !c.snap && (f.low || !!c.lean);
-  c.peek += ((wantPeek ? 1 : 0) - c.peek) * Math.min(1, PEEK_RATE * dt);
-  if (!wantPeek && c.peek < 0.02) {
+  const sightsUp = p.isAiming && !c.snap;
+  c.peek += ((sightsUp ? 1 : 0) - c.peek) * Math.min(1, PEEK_RATE * dt);
+  if (!sightsUp && c.peek < 0.02) {
     c.peek = 0;
     c.lean = 0;
   }
@@ -242,7 +282,7 @@ export function updateCover(game, dt) {
   }
   p.coverDown = f.low && !wantPeek;
   p.coverPeeking = wantPeek && c.peek > 0.5;
-  p.coverDashTarget = c.snap ? null : coverDashTarget(map, p.x, p.y, p.angle, f);
+  p.coverDashTarget = c.snap ? null : coverDashTarget(map, p.x, p.y, p.angle, f, COVER_DASH_REACH);
 }
 
 /** Firing from cover without the sights up: blind fire, if the cover is in the shot's way. */
@@ -297,26 +337,44 @@ export function beginCoverShot(game, blind = isBlindFiring(game.player)) {
 /**
  * Where a blind-fired round is sent: from where it leaves (beginCoverShot's
  * standing eye over low cover, or the lean point round the end of high
- * cover) at the point under the reticle, as the camera behind the cover sees
- * it. Flown on the camera's own yaw and pitch it passed beside or over what
- * the reticle was on, by the whole lean or lift. That point is on the
- * nearest enemy close to the aim line, or a few cells out with none.
+ * cover) at what the reticle is pointed at. Down behind low cover the view
+ * is all block, so the reticle can only be pointed roughly the way an enemy
+ * is: the round goes at the nearest enemy close to the aim line, at the
+ * reticle's height on it kept inside the figure, and the blind spread is
+ * what makes it wild. Aimed only past the camera's own line, it needed the
+ * reticle within a body's width of a figure the player could not see, and
+ * blind fire took many rounds to land one. With no enemy near the line it
+ * goes at the point under the reticle a few cells out.
  * @returns {{ yaw: number, pitch: number }}
  */
 export function coverShotAim(game, saved, yaw, pitch) {
   if (!saved) return { yaw, pitch };
   const p = game.player;
   let dist = BLIND_AIM_FALLBACK;
+  let mark = null;
   for (const e of game.entities) {
     if (e.type !== "enemy" || !e.active || e.state === "dead") continue;
     const d = Math.hypot(e.x - saved.x, e.y - saved.y);
     const off = Math.atan2(e.y - saved.y, e.x - saved.x) - yaw;
-    if (d > 0.5 && d < dist && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < BLIND_AIM_CONE) dist = d;
+    if (d > 0.5 && d < dist && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < BLIND_AIM_CONE) {
+      dist = d;
+      mark = e;
+    }
   }
-  const tx = saved.x + Math.cos(yaw) * dist - p.x;
-  const ty = saved.y + Math.sin(yaw) * dist - p.y;
+  // The reticle's height out there, as the camera behind the cover sees it.
+  let z = saved.eye + Math.tan(pitch) * dist;
+  let tx = saved.x + Math.cos(yaw) * dist - p.x;
+  let ty = saved.y + Math.sin(yaw) * dist - p.y;
+  if (mark) {
+    // hitSpan is measured from the standing eye line (EYE_Z); z from the floor.
+    const [lo, hi] = hitSpan(mark);
+    const inset = (hi - lo) * BLIND_SPAN_INSET;
+    z = Math.max(lo + inset + EYE_Z, Math.min(hi - inset + EYE_Z, z));
+    tx = mark.x - p.x;
+    ty = mark.y - p.y;
+  }
   const along = Math.max(0.5, Math.hypot(tx, ty));
-  const rise = saved.eye + Math.tan(pitch) * dist - playerEyeZ(p);
+  const rise = z - playerEyeZ(p);
   return { yaw: Math.atan2(ty, tx), pitch: Math.atan(rise / along) };
 }
 

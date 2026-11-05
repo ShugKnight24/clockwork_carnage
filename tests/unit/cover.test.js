@@ -30,7 +30,8 @@ import {
   noteCoverKill,
   leaveCover,
 } from "../../src/systems/cover-play.js";
-import { hasLineOfSight, EYE_Z, CROUCH_EYE_Z, STAND_EYE_Z } from "../../src/systems/physics.js";
+import { hasLineOfSight, EYE_Z, CROUCH_EYE_Z, STAND_EYE_Z, eyeOffsetZ } from "../../src/systems/physics.js";
+import { rayEnemyHit } from "../../src/systems/combat.js";
 import { createGrid, createHeights, lowWall, lowTile, coverBlocks, LAYER, room } from "../../src/data/levels/map-helpers.js";
 
 /**
@@ -301,6 +302,27 @@ describe("taking and holding cover", () => {
     expect(game.player.y).toBeCloseTo(f.sMin);
     expect(game.player.coverPeeking).toBe(false);
   });
+
+  it("brings the sights up against a wall with no end to lean round, still hidden", () => {
+    // The room's west wall: high cover, its ends in the corners.
+    const game = fakeGame(1.6, 8, Math.PI);
+    coverPress(game);
+    frames(game, 12);
+    const f = game.player.cover.face;
+    expect(f.low).toBe(false);
+    expect(edgeAt(f, game.player.cover.s)).toBe(0);
+    const x = game.player.x;
+    game.player.isAiming = true;
+    frames(game, 10);
+    // aim.js waits on `peek` before the sights come up.
+    expect(game.player.cover.peek).toBeGreaterThan(0.75);
+    expect(game.player.coverPeeking).toBe(false);
+    expect(game.player.x).toBeCloseTo(x);
+    expect(coverShields(game, 6, 8)).toBe(false); // from in front a wall never shielded
+    game.player.isAiming = false;
+    frames(game, 30);
+    expect(game.player.cover.peek).toBe(0);
+  });
 });
 
 describe("firing from cover", () => {
@@ -349,6 +371,24 @@ describe("firing from cover", () => {
     expect(sent.yaw).toBeCloseTo(-Math.PI / 2);
     endCoverShot(game, saved);
     expect(coverShotAim(game, null, 0, pitch)).toEqual({ yaw: 0, pitch });
+  });
+
+  it("sends a blind-fired round at the enemy the reticle is pointed roughly at, inside its figure", () => {
+    // Down behind the block the view is all block: the reticle is a little
+    // wide of an enemy the player cannot see, and aimed too low.
+    const game = fakeGame(5.5, 7, NORTH);
+    coverPress(game);
+    frames(game, 12);
+    game.player.crouchBlend = 1;
+    const enemy = { type: "enemy", active: true, state: "chase", x: game.player.x + 0.6, y: game.player.y - 5 };
+    game.entities = [enemy];
+    const saved = beginCoverShot(game);
+    const sent = coverShotAim(game, saved, NORTH, Math.atan(-0.4 / 5));
+    const p = game.player;
+    const hit = (yaw, pitch) => rayEnemyHit(p, Math.cos(yaw), Math.sin(yaw), 20, pitch, enemy, eyeOffsetZ(p));
+    expect(hit(NORTH, Math.atan(-0.4 / 5))).toBeNull(); // the camera's own line misses it
+    expect(hit(sent.yaw, sent.pitch)).not.toBeNull();
+    endCoverShot(game, saved);
   });
 
   it("sends a round blind-fired round the end of high cover back across to the reticle", () => {
@@ -402,6 +442,45 @@ describe("cover-to-cover dash", () => {
     game.player.angle = Math.PI / 2;
     expect(coverDash(game, 0, 1)).toBe(false);
     expect(game.player.cover).toBeNull();
+  });
+
+  it("slides to cover further than one slide carries, and keeps going till it gets there", () => {
+    // From the west end of the counter, the block at (10, 6) is over five cells east.
+    const game = fakeGame(4.3, 7, NORTH);
+    coverPress(game);
+    frames(game, 12);
+    game.player.angle = EAST;
+    expect(game.player.coverDashTarget).toBeNull(); // still facing north
+    frames(game, 1);
+    expect(game.player.coverDashTarget).toMatchObject({ cx: 10, cy: 6 });
+    expect(coverDash(game, 1, 0)).toBe(true);
+    // Stand in for a slide that covers less than the distance on its own.
+    frames(game, 60, (g) => {
+      const p = g.player;
+      if (!p.isSliding) return;
+      p.x += 0.1;
+      p.slideTime -= 1 / 60;
+      if (p.slideTime <= 0) p.isSliding = false;
+    });
+    expect(game.coverStats.coverDashes).toBe(1);
+    expect(game.player.cover?.face).toMatchObject({ cx: 10, cy: 6 });
+  });
+
+  it("from cover, a dash pointed at cover slides there when the view is not on it", () => {
+    const game = fakeGame(5.5, 7, NORTH);
+    coverPress(game);
+    frames(game, 12);
+    expect(coverDash(game, 1, 0)).toBe(true);
+    expect(game.player._coverDash?.face).toMatchObject({ cx: 10, cy: 6 });
+  });
+
+  it("on a keyboard, a dash into the cover with nowhere to slide stays in cover", () => {
+    const game = fakeGame(5.5, 7, NORTH);
+    coverPress(game);
+    frames(game, 12);
+    expect(coverDash(game, 0, -1)).toBe(true);
+    expect(game.player.cover).not.toBeNull();
+    expect(game.player.isSliding).toBe(false);
   });
 
   it("on a pad, a dash toward the cover in front takes it", () => {
