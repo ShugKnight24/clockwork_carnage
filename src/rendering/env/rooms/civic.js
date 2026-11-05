@@ -25,6 +25,7 @@ import { CIVIC_WALLS as W } from "../../../data/levels/rooms/civic.js";
 import { T, lin, rad, plate, rivet, led, sink, relief, grey, lightStrip } from "../paint.js";
 import { say } from "./corridor.js";
 import { onScreen, text, lit, bust } from "./east-kit.js";
+import { PROLOGUE_DAWN as DAWN } from "../palettes.js";
 
 const MARBLE = ["#ece6d8", "#ddd5c4", "#c4baa4"];
 const GRANITE = ["#5a5654", "#3e3a38", "#24201e"];
@@ -293,7 +294,8 @@ function paintDirectory(ctx, p, r) {
 }
 
 /**
- * The city through the glass, in the morning: sky warming to the horizon,
+ * The city through the glass, at sunrise (palettes.js PROLOGUE_DAWN, the
+ * hour every window shares): sky warming to the horizon,
  * the far towers in haze, the near ones with their lights still on.
  * `kind` picks the view: 0 the towers and the clock spire, 1 an airship
  * coming in over the river, 2 street level, the river road and a tram.
@@ -304,15 +306,15 @@ function city(ctx, r, x, y, w, h, kind) {
   ctx.rect(x, y, w, h);
   ctx.clip();
   const horizon = y + h * (kind === 2 ? 0.5 : 0.72);
-  ctx.fillStyle = lin(ctx, 0, y, 0, horizon, [[0, "#6e9cd0"], [0.6, "#b8cce0"], [1, "#f4d8b0"]]);
+  ctx.fillStyle = lin(ctx, 0, y - (horizon - y) * 0.5, 0, horizon, DAWN.sky);
   ctx.fillRect(x, y, w, horizon - y);
   if (kind === 0) {
-    ctx.fillStyle = rad(ctx, x + w * 0.7, horizon - 30, 0, 160, [[0, "rgba(255,240,200,0.9)"], [1, "rgba(255,220,160,0)"]]);
+    ctx.fillStyle = rad(ctx, x + w * 0.7, horizon - 30, 0, 160, DAWN.sunGlow);
     ctx.fillRect(x, y, w, h);
   }
-  // Clouds, low and thin.
+  // Clouds, low and thin, lit from under.
   for (let i = 0; i < 4; i++) {
-    ctx.fillStyle = `rgba(255,250,244,${0.25 + r() * 0.3})`;
+    ctx.fillStyle = `${DAWN.sunlit}${0.25 + r() * 0.3})`;
     ctx.beginPath();
     ctx.ellipse(x + r() * w, y + 30 + r() * (horizon - y) * 0.5, 50 + r() * 70, 8 + r() * 8, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -320,13 +322,13 @@ function city(ctx, r, x, y, w, h, kind) {
   // Far towers in haze, then the near ones.
   for (let i = 0; i < 9; i++) {
     const bw = 24 + r() * 34, bh = 50 + r() * 140, bx = x + r() * w;
-    ctx.fillStyle = `rgba(${130 + r() * 20},${148 + r() * 20},${178 + r() * 16},0.75)`;
+    ctx.fillStyle = `rgba(${150 + r() * 20},${120 + r() * 20},${148 + r() * 16},0.75)`;
     ctx.fillRect(bx, horizon - bh, bw, bh);
   }
   if (kind === 0) {
     // The clock spire over the old town.
     const sx = x + w * 0.32;
-    ctx.fillStyle = "#5a6478";
+    ctx.fillStyle = "#4a4060";
     ctx.fillRect(sx - 16, horizon - 250, 32, 250);
     ctx.beginPath();
     ctx.moveTo(sx - 20, horizon - 250);
@@ -341,10 +343,10 @@ function city(ctx, r, x, y, w, h, kind) {
   for (let i = 0; i < 6; i++) {
     const bw = 40 + r() * 50, bh = 80 + r() * (kind === 2 ? 120 : 200), bx = x - 20 + r() * w;
     const tone = 60 + r() * 30;
-    ctx.fillStyle = `rgb(${tone},${tone + 12},${tone + 34})`;
+    ctx.fillStyle = `rgb(${tone - 22},${tone - 30},${tone})`;
     ctx.fillRect(bx, horizon - bh, bw, bh);
-    ctx.fillStyle = "rgba(255,226,170,0.45)";
-    ctx.fillRect(bx + bw - 6, horizon - bh, 6, bh);
+    ctx.fillStyle = `${DAWN.sunlit}0.45)`;
+    ctx.fillRect(bx, horizon - bh, 6, bh);
     for (let wy = horizon - bh + 8; wy < horizon - 6; wy += 14) {
       for (let wx = bx + 5; wx < bx + bw - 10; wx += 10) {
         ctx.fillStyle = r() < 0.3 ? "rgba(255,220,150,0.85)" : "rgba(30,40,60,0.5)";
@@ -398,7 +400,7 @@ function city(ctx, r, x, y, w, h, kind) {
       ctx.fillRect(lx - 10, horizon - 60, 24, 5);
     }
   } else {
-    ctx.fillStyle = lin(ctx, 0, horizon, 0, y + h, [[0, "#8aa4bc"], [1, "#3e5266"]]);
+    ctx.fillStyle = lin(ctx, 0, horizon, 0, y + h, [[0, "#d8a8a4"], [1, "#4a4262"]]);
     ctx.fillRect(x, horizon, w, h);
     ctx.fillStyle = "rgba(255,236,200,0.5)";
     for (let i = 0; i < 10; i++) ctx.fillRect(x + r() * w, horizon + 8 + r() * (y + h - horizon - 20), 20 + r() * 50, 2);

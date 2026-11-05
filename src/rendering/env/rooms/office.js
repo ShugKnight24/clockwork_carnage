@@ -18,6 +18,7 @@
 
 import { OFFICE_WALLS as W } from "../../../data/levels/rooms/office.js";
 import { letter } from "../locker-art.js";
+import { paintDawnView } from "./civic-city.js";
 import { T, lin, rad, plate, rivet, ink, lightStrip, led, relief, grey, sink, raise, emit, material } from "../paint.js";
 
 const PLASTER = ["#b3ab92", "#a0997f", "#878169"];
@@ -156,8 +157,12 @@ function paintCommendations(ctx, p, r) {
   letter(ctx, "TEMPORAL CRIMES DIVISION", T / 2, 263, 11, "#3a2a0a");
 }
 
-/** A window onto the city at night, the venetian blind two-thirds down. */
-function paintBlind(ctx, p, r, wood = WOOD) {
+/**
+ * A window onto the city, the venetian blind two-thirds down: the
+ * prologue's dawn (`hour`, palettes.js windowHour), or the city at night
+ * on the floors after the breach.
+ */
+function paintBlind(ctx, p, r, wood = WOOD, hour = null) {
   plaster(ctx, p, r);
   wainscot(ctx, p, r, wood);
   const x = 52, y = 46, w = T - 104, h = 220;
@@ -166,7 +171,8 @@ function paintBlind(ctx, p, r, wood = WOOD) {
   ctx.fillStyle = lin(ctx, 0, y, 0, y + h, [[0, "#0a1426"], [0.7, "#1a2a4a"], [1, "#3a3048"]]);
   ctx.fillRect(x, y, w, h);
   sink(x, y, w, h, 24);
-  for (let i = 0; i < 9; i++) {
+  if (hour) paintDawnView(ctx, r, x, y, w, h, { hz: 0.82 });
+  else for (let i = 0; i < 9; i++) {
     const bx = x + i * (w / 9) + r() * 10;
     const bh = 60 + r() * 120;
     ctx.fillStyle = "#070b14";
@@ -902,7 +908,7 @@ function paintCaptainTrophies(ctx, p, r) {
 
 export const PAINTERS = {
   [W.COMMENDATIONS]: paintCommendations,
-  [W.BLIND]: (ctx, p, r) => paintBlind(ctx, p, r),
+  [W.BLIND]: (ctx, p, r, act, hour) => paintBlind(ctx, p, r, WOOD, hour),
   [W.BINDERS]: paintBinders,
   [W.NOTICES]: paintNotices,
   [W.STATION_MAP]: paintStationMap,
@@ -920,5 +926,5 @@ export const PAINTERS = {
   [W.CAPTAIN_PANEL]: paintCaptainPanel,
   [W.CAPTAIN_PORTRAIT]: paintCaptainPortrait,
   [W.CAPTAIN_TROPHIES]: paintCaptainTrophies,
-  [W.CAPTAIN_BLIND]: (ctx, p, r) => paintBlind(ctx, p, r, WOOD_DARK),
+  [W.CAPTAIN_BLIND]: (ctx, p, r, act, hour) => paintBlind(ctx, p, r, WOOD_DARK, hour),
 };

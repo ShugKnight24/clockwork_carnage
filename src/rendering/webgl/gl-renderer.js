@@ -346,9 +346,10 @@ vec3 deckCeil(vec2 wp, int kind, float fw) {
     float bar = 1.0 - smoothstep(0.012, 0.03, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));
     vec2 g4 = fract(wp * 0.25);
     float beam = 1.0 - smoothstep(0.012, 0.022, min(min(g4.x, 1.0 - g4.x), min(g4.y, 1.0 - g4.y)));
-    // Morning sky through the panes, a cloud or two drifting in it.
+    // The 06:30 sky straight up through the panes (palettes.js PROLOGUE_DAWN's
+    // zenith), a cloud or two drifting in it, lit rose from under.
     float cloud = smoothstep(0.55, 0.95, sin(wp.x * 0.41 + 1.3) * sin(wp.y * 0.29 + 0.4) * 0.5 + 0.5);
-    vec3 sky = mix(vec3(0.50, 0.64, 0.82), vec3(0.70, 0.76, 0.84), cloud);
+    vec3 sky = mix(vec3(0.20, 0.21, 0.44), vec3(0.86, 0.58, 0.60), cloud);
     return mix(sky, vec3(0.42, 0.33, 0.20), max(bar * 0.85, beam * 0.7));
   }
   float e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
@@ -444,8 +445,8 @@ void main() {
       float emit = smoothstep(0.18, 0.6, dot(over, vec3(0.2126, 0.7152, 0.0722)));
       if (ck < 2) lit += albedo * over * emit * 1.0 * occl;
       else lit += albedo * pool * 0.35 * occl;
-      // Under a skylight the deck has the day on it, not a lamp's pool.
-      if (ck == 1) lit += albedo * vec3(0.16, 0.17, 0.18) * occl;
+      // Under a skylight the deck has the sunrise on it, not a lamp's pool.
+      if (ck == 1) lit += albedo * vec3(0.18, 0.15, 0.13) * occl;
     }
     // Floor roughness from the texture itself: bright plating is polished,
     // dark grime is matte, which breaks the specular up across the deck.
