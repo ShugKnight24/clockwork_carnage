@@ -539,11 +539,34 @@ function npcTable(idle, walk, salute, point, more = {}) {
   };
 }
 
+/** A lieutenant's silver bar, on the shoulder board at shoulder `S`. */
+const ltBar = (S) => sh(`M${P(S[0] - 3.6, S[1] - 1.6)}h7.2v3h-7.2Z`, "#e4e9f0", 0.5);
+
+/**
+ * A sergeant's three chevrons on the upper sleeve below shoulder `S`, points
+ * up the arm, laid along it so they swing with the walk.
+ */
+function sgtChevrons(S, E, color = "#e0c46a") {
+  const len = Math.hypot(E[0] - S[0], E[1] - S[1]) || 1;
+  const d = [(E[0] - S[0]) / len, (E[1] - S[1]) / len];
+  const n = [-d[1], d[0]];
+  let path = "";
+  for (const t of [0.26, 0.4, 0.54]) {
+    const c = lerp(S, E, t);
+    const at = (k, h) => P(c[0] + n[0] * k + d[0] * h, c[1] + n[1] * k + d[1] * h);
+    path += `M${at(-4.6, 3.4)}L${at(0, 0)}L${at(4.6, 3.4)}`;
+  }
+  return ln(path, "#0a0f1a", 2.8, 0.7) + ln(path, color, 1.6);
+}
+
 /**
  * The squad on duty, before the call: PD navy shirt and trousers, the peaked
  * cap, a sidearm on the belt. `officerKit` is the same people kitted up.
+ * `rank` marks the two who lead it: "lt" (Rasczak) a silver bar on each
+ * shoulder board and a silver cap band, "sgt" (Kael) three chevrons on each
+ * sleeve, so they read apart from the squad before anyone has kitted up.
  */
-function officer() {
+function officer({ rank = null } = {}) {
   const table = npcTable(
     { armL: { sh: 8, el: 10 }, armR: { sh: 8, el: 10 } },
     npcWalk(),
@@ -553,15 +576,24 @@ function officer() {
     { frozen: CIV_POSES.frozen },
   );
   const sleeve = { mat: "url(#armor)", guard: "url(#armor)", hand: "url(#skin)", pad: "", upW: 11, foreW: 9.5 };
+  const band = rank === "lt" ? "#b8c2ce" : undefined;
+  // The sleeve and its rank: the chevrons sit on the sleeve, the bar on a board over the shoulder.
+  const arm = (R, s) => {
+    const { S, E } = R.arms[s];
+    let m = armOf(R, s, sleeve);
+    if (rank === "sgt") m += sgtChevrons(S, E);
+    if (rank === "lt") m += sh(`M${P(S[0] - 5.5, S[1] - 2.6)}h11v5.2h-11Z`, "url(#armorDk)", 0.7) + ltBar(S);
+    return m;
+  };
   const poses = build(HUMAN, table, (R, name) => {
     const { shY, hipY } = R;
     let body = legsOf(R, { under: "url(#armorDk)", pad: "", plate: "", thighW: 14, kneeW: 11.5, ankleW: 9.5, bootW: 13 });
     let upper = "";
     if (name.startsWith("back")) {
-      upper += armOf(R, -1, sleeve) + armOf(R, 1, sleeve);
+      upper += arm(R, -1) + arm(R, 1);
       upper += torsoBack(R, { w: 21, waist: 15, mat: "url(#armor)" });
       upper += backLettering(shY + 14, "CHRONOS PD", "#6f86ab", 3.6, { opacity: 0.7 });
-      upper += headBack(R, { gear: "cap" }).body;
+      upper += headBack(R, { gear: "cap", band }).body;
     } else {
       upper += torsoOf(R, { mat: "url(#armor)", under: "url(#armor)", w: 21, waist: 15, plates: false });
       // Collar, placket and pockets; the badge over the heart, the name bar.
@@ -572,8 +604,8 @@ function officer() {
       upper += sh(`M${P(5, shY + 1.5)}h9v2.4h-9Z`, "#d8dee8", 0.5);
       // The sidearm, holstered on the right hip.
       upper += sh(`M${P(15, hipY - 8)}h6v13h-6Z`, "#0b0d12", 0.8);
-      const head = officerHead(R);
-      upper += armOf(R, -1, sleeve) + head.body + armOf(R, 1, sleeve);
+      const head = officerHead(R, { band });
+      upper += arm(R, -1) + head.body + arm(R, 1);
     }
     body += up(R, upper);
     return { body, glow: "", at: {} };
@@ -833,7 +865,9 @@ function heavyKit({ trim = "#5fd8ff", visorDown = true, older = false, rig = HUM
       const head = kitHead(R, { down: visorDown, older, trim });
       glowUp += head.glow;
       upper += armOf(R, -1, pad);
-      if (name.startsWith("salute")) {
+      // Right arm up (a salute, a point): the weapon goes to the left hand,
+      // or it swings out with the arm, past the sprite's box.
+      if (name.startsWith("salute") || name.startsWith("point")) {
         upper += head.body + armOf(R, 1, pad) + gunSide([R.arms[-1].W[0] + 4, R.arms[-1].W[1]], 160, gun, gunLen - 2);
       } else {
         // Weapon slung across the chest, the right hand on its grip.
@@ -1808,6 +1842,8 @@ const EXTRA_DEFS = {
   supervisorKit: `<linearGradient id="capeS" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#a8323a"/><stop offset=".5" stop-color="#6a1620"/><stop offset="1" stop-color="#22060a"/></linearGradient>` +
     `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   officer: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
+  rasczak: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
+  kael: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e2b48e"/><stop offset=".5" stop-color="#b07a56"/><stop offset="1" stop-color="#5a3624"/></linearGradient>`,
   supervisor: `<linearGradient id="skin" x1="0" y1="0" x2="1" y2=".5"><stop offset="0" stop-color="#e0b896"/><stop offset=".5" stop-color="#aa7c5c"/><stop offset="1" stop-color="#553826"/></linearGradient>`,
   staff: CIV_DEFS.staff,
   clerk: CIV_DEFS.clerk,
@@ -1823,13 +1859,17 @@ const EXTRA_DEFS = {
 export const HUMANOIDS = {
   henchman: { build: henchman, variants: 3, box: HUMANOID_BOX, rim: "#ff9a4a", size: 1.1 },
   corruptCop: { build: corruptCop, variants: 3, box: [-72, -92, 142, 186], rim: "#ffd35a", size: 1.08, shield: [-18, -30] },
-  officer: { build: officer, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
+  officer: { build: () => officer(), box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
   officerKit: { build: officerKit, box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.08 },
+  // Lt. Rasczak and Sgt. Kael on duty, before they kit up: the officer with rank on.
+  rasczak: { build: () => officer({ rank: "lt" }), box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
+  kael: { build: () => officer({ rank: "sgt" }), box: HUMANOID_BOX, rim: "#9fc4ff", size: 1.03 },
   // Taller box: the command whip stands over his head.
   rasczakKit: { build: rasczakKit, box: [-70, -106, 140, 200], rim: "#ffb09a", size: 1.1 },
   kaelKit: { build: kaelKit, box: [-76, -88, 152, 182], rim: "#9fbcff", size: 1.17 },
-  supervisor: { build: supervisor, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.08 },
-  supervisorKit: { build: supervisorKit, box: HUMANOID_BOX, rim: "#ffd88a", size: 1.1 },
+  // Wider boxes: his arm straight out (the point at the lift) reaches past the usual one.
+  supervisor: { build: supervisor, box: [-84, -86, 168, 180], rim: "#ffd88a", size: 1.08 },
+  supervisorKit: { build: supervisorKit, box: [-84, -86, 168, 180], rim: "#ffd88a", size: 1.1 },
   staff: { build: civilian("staff"), variants: 2, box: HUMANOID_BOX, rim: "#bfe8e0", size: 1.0 },
   clerk: { build: civilian("clerk"), variants: 2, box: HUMANOID_BOX, rim: "#ffd6b8", size: 0.98 },
   sentinel: { build: sentinel, variants: 2, box: [-96, -128, 190, 222], rim: "#bfe0ff", shield: [-40, -30], views: true, core: [0, -29] },

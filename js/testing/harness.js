@@ -1993,7 +1993,15 @@ function botCadet(game) {
     },
     // On the rig's pad, standing still.
     calibrate: () => {
-      if (Math.hypot(70.5 - p.x, 7.5 - p.y) > 0.6) return walkTo(game, 70.5, 7.5, 0.3) || stepGame(game, 1);
+      // walkTo stops half a cell out, on the ring's edge: the last steps by hand.
+      const d = Math.hypot(70.5 - p.x, 7.5 - p.y);
+      if (d >= 0.5) return walkTo(game, 70.5, 7.5) || stepGame(game, 1);
+      if (d > 0.25) {
+        clearInput(game);
+        p.angle = Math.atan2(7.5 - p.y, 70.5 - p.x);
+        game.keys[game.keybinds.moveForward] = true;
+        return stepGame(game, 1);
+      }
       clearInput(game);
       // The eye part: look at the lit beacon.
       const b = game.entities.find((e) => e.propType === "calib_beacon" && e.state === "on");

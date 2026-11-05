@@ -32,6 +32,11 @@ describe("comms portraits", () => {
     }
   });
 
+  it("has duty busts for Rasczak and Kael, before they kit up", () => {
+    expect(PORTRAIT_IDS).toContain("rasczakDuty");
+    expect(PORTRAIT_IDS).toContain("kaelDuty");
+  });
+
   it("puts static on lines that come over the air", () => {
     expect(isRadioLine({ speaker: "SUPERVISOR", voice: "supervisor" })).toBe(true);
     expect(isRadioLine({ speaker: "SUPERVISOR", voice: "supervisorLive" })).toBe(false);

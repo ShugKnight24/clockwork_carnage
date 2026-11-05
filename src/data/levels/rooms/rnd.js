@@ -48,6 +48,13 @@ const W = RND_WALLS;
 
 /** Where the cadet stands to be read, and the breaker's cell. */
 export const RIG_AT = { x: 70.5, y: 7.5 };
+/**
+ * The rig's platform, in cells: the pad on top (twice the suit's shoulders)
+ * and the step round it, out to the edge of the prop's one-cell box. The
+ * step's lit edge is the ring the calibration reads you inside.
+ */
+export const RIG_PAD_R = 0.42;
+export const RIG_STEP_R = 0.5;
 export const BREAKER_CELL = { x: 76, y: 14 };
 
 const COOL = [214, 234, 255];

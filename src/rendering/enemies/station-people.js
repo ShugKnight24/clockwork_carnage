@@ -24,6 +24,25 @@ const LOOKS = {
     trim: "#d9b44a",
     hat: "cap",
   },
+  // Lt. Rasczak and Sgt. Kael in the same blues, with rank on: his silver
+  // bar on the epaulettes and a silver cap band; the sergeant's chevrons.
+  rasczak: {
+    coat: "#33558c",
+    coatDark: "#203a66",
+    legs: "#18243d",
+    trim: "#d9b44a",
+    hat: "cap",
+    lieutenant: true,
+    capBand: "#b8c2ce",
+  },
+  kael: {
+    coat: "#33558c",
+    coatDark: "#203a66",
+    legs: "#18243d",
+    trim: "#d9b44a",
+    hat: "cap",
+    chevrons: true,
+  },
   officerKit: {
     coat: "#4f5a6e",
     coatDark: "#323a48",
@@ -554,6 +573,11 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
     // Duty uniform: shoulder epaulettes, badge, pockets, belt and radio.
     ctx.fillStyle = look.coatDark;
     for (const side of [-1, 1]) ctx.fillRect(x + side * sh * 0.95 - (side > 0 ? sh * 0.4 : 0), y(-0.455), sh * 0.4, H * 0.025);
+    if (look.lieutenant) {
+      // His silver bar on each epaulette.
+      ctx.fillStyle = "#e4e9f0";
+      for (const side of [-1, 1]) ctx.fillRect(x + side * sh * 0.75 - sh * 0.12, y(-0.452), sh * 0.24, H * 0.018);
+    }
     if (!away) {
       ctx.fillStyle = look.coatDark;
       ctx.beginPath();
@@ -593,6 +617,23 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
       ctx.fillStyle = "#16171b";
       ctx.fillRect(x + hip * 0.55, y(0.1), H * 0.05, H * 0.08);
     }
+  }
+
+  if (look.chevrons) {
+    // The sergeant's three chevrons, high on each sleeve.
+    ctx.strokeStyle = "#e0c46a";
+    ctx.lineWidth = Math.max(1, H * 0.01);
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      const cx = x + side * (sh + arm * 0.2);
+      for (let k = 0; k < 3; k++) {
+        const cy = y(-0.33) + k * H * 0.026;
+        ctx.moveTo(cx - arm * 0.4, cy + H * 0.016);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx + arm * 0.4, cy + H * 0.016);
+      }
+    }
+    ctx.stroke();
   }
 
   if (look.techArm && !away) {
@@ -771,8 +812,9 @@ export function renderStationPerson(ctx, screenX, centerY, halfW, halfH, bodyTop
       ctx.beginPath();
       ctx.roundRect(hx - hr * 1.02, hy - hr * 1.12, hr * 2.04, hr * 0.62, [hr * 0.5, hr * 0.5, hr * 0.06, hr * 0.06]);
       ctx.fill();
-      ctx.fillStyle = "#0b0f19";
+      ctx.fillStyle = look.capBand ?? "#0b0f19";
       ctx.fillRect(hx - hr * 1.0, hy - hr * 0.56, hr * 2.0, hr * 0.12);
+      ctx.fillStyle = "#0b0f19";
       if (!away) {
         ctx.beginPath();
         ctx.ellipse(hx, hy - hr * 0.46, hr * 0.95, hr * 0.16, 0, 0, Math.PI);

@@ -14,6 +14,20 @@ export const NPC_TYPES = {
     color2: "#121d36",
     speed: 1.6,
   },
+  /** Lt. Rasczak on duty, before the call: the officer's blues, a silver bar on each shoulder board. */
+  rasczak: {
+    name: "Lt. Rasczak",
+    color1: "#2c4a7a",
+    color2: "#121d36",
+    speed: 1.6,
+  },
+  /** Sgt. Kael on duty: the officer's blues, three chevrons on each sleeve. */
+  kael: {
+    name: "Sgt. Kael",
+    color1: "#2c4a7a",
+    color2: "#121d36",
+    speed: 1.6,
+  },
   /** The same officers in heavy armour, kitted up for the Engine level. */
   officerKit: {
     name: "Chronos PD Officer",

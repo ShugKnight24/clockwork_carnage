@@ -12,6 +12,7 @@ import {
   BACKSTORIES,
   VOICE_PROFILES,
 } from "../data/index.js";
+import { takesVisor } from "../data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
 import { getIndex, withIndex, lookKey } from "../core/character-fields.js";
@@ -1253,6 +1254,15 @@ export function renderCharacterCreator(
       ctx.fillStyle = palette.accent;
       ctx.font = "bold 10px monospace";
       ctx.fillText(selectedItem.perk.toUpperCase(), infoX + 12, L.contentY + 96);
+    }
+    // A helmet with no visor (takesVisor): the pick is not drawn and its perk not counted.
+    if (curCat.key === "visorIndex" && !takesVisor(char.helmetIndex)) {
+      ctx.fillStyle = "rgba(255, 200, 90, 0.8)";
+      ctx.font = "bold 10px monospace";
+      ctx.fillText(`${(HELMET_STYLES[char.helmetIndex | 0]?.name || "").toUpperCase()}: NO VISOR`, infoX + 12, L.contentY + 96);
+      ctx.fillStyle = "rgba(180,200,220,0.55)";
+      ctx.font = "9px monospace";
+      ctx.fillText("Pick and perk don't apply", infoX + 12, L.contentY + 110);
     }
     if (multi) {
       ctx.fillStyle = "rgba(200, 220, 240, 0.6)";

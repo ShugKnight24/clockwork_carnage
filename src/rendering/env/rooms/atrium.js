@@ -13,6 +13,7 @@ import { ATRIUM_WALLS as W } from "../../../data/levels/rooms/atrium.js";
 import { letter } from "../locker-art.js";
 import { T, lin, plate, rivet, lightStrip, raise, sink } from "../paint.js";
 import { clockFace, lit } from "./east-kit.js";
+import { paintDawnView } from "./civic-city.js";
 
 const CONCRETE = ["#a8a8a2", "#96968f", "#7c7c76"];
 const STEEL = ["#b4bcc6", "#868e98", "#4a5058"];
@@ -44,24 +45,13 @@ function concrete(ctx, p, r, top = 0, bottom = KICK) {
   plate(ctx, 0, KICK, T, T - KICK, p, { tones: DARK, bevel: 3, ink: 2, spec: false });
 }
 
-/** The tall glazing: the morning city through it, mullions, a sill. */
+/** The tall glazing: the city at sunrise through it (civic-city.js paintDawnView), mullions, a sill. */
 function paintWall(ctx, p, r) {
   concrete(ctx, p, r);
   const x = 40, y = 30, w = T - 80, h = 380;
-  ctx.fillStyle = lin(ctx, 0, y, 0, y + h, [[0, "#8ab4dc"], [0.55, "#d8c8a8"], [1, "#6a7a8a"]]);
-  ctx.fillRect(x, y, w, h);
   sink(x, y, w, h, 24);
   lit(x, y, w, h, 0.3, 10);
-  // Towers across the river, low sun on them.
-  for (let i = 0; i < 7; i++) {
-    const bw = 30 + r() * 40;
-    const bh = 60 + r() * 160;
-    const bx = x + r() * (w - bw);
-    ctx.fillStyle = `rgba(${40 + r() * 30},${50 + r() * 30},${70 + r() * 30},0.85)`;
-    ctx.fillRect(bx, y + h - bh, bw, bh);
-    ctx.fillStyle = "rgba(255,220,160,0.35)";
-    for (let k = 0; k < bh / 16; k++) ctx.fillRect(bx + 4, y + h - bh + 6 + k * 16, bw - 8, 3);
-  }
+  paintDawnView(ctx, r, x, y, w, h, { hz: 0.86 });
   for (const mx of [x, x + w / 2 - 6, x + w - 12]) plate(ctx, mx, y, 12, h, p, { tones: STEEL, bevel: 2, ink: 1.5 });
   plate(ctx, x, y + h / 2 - 6, w, 12, p, { tones: STEEL, bevel: 2, ink: 1.5 });
   plate(ctx, x - 10, y + h, w + 20, 16, p, { tones: STEEL, bevel: 3, ink: 2 });

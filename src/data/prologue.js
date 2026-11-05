@@ -90,11 +90,21 @@ export const PROLOGUE_ODDITIES = [
 ];
 
 /**
- * Dialogue: [speaker, text, emotion?, { radio }?]. The Supervisor speaks in
+ * Skipping the comms: the keyboard key and the pad action (View: the minimap's
+ * button, which does nothing in play) that skip the line being said. A double
+ * press (the second within `again` seconds) or a hold of `hold` skips
+ * everything queued. On a phone, the line's SKIP tag takes the taps.
+ */
+export const SKIP_LINES = { key: "Enter", pad: "minimap", again: 0.5, hold: 0.6 };
+
+/**
+ * Dialogue: [speaker, text, emotion?, { radio, need }?]. The Supervisor speaks in
  * person while he is near you, and over the suit channel when not (or with
  * `radio: true`). Lines play in order, one after the other, from when their
  * step begins; a step's lines wait for the last step's to finish unless the
- * step says `cut: true` (an alarm cuts in).
+ * step says `cut: true` (an alarm cuts in). Before SIX FORTY-SEVEN, a step's
+ * lines still to come go unsaid once its objective is done, and the player
+ * can skip them (SKIP_LINES); `need: true` keeps one that says what to do next.
  *
  * Events: [seconds into the step, kind, text?]: "pa" (a station
  * announcement), "flicker" (the lights stutter) and "tremor" (the floor
@@ -203,8 +213,8 @@ export const PROLOGUE_STEPS = [
     trial: "calibration",
     title: "SUIT CALIBRATION",
     color: "#46e0ff",
-    hint: "Stand on the rig's pad, inside the lit ring in the middle of the bay. Hold still for the frame, look at each beacon as it lights, then hold still for the anchor.",
-    lines: [[ORR, "That's the rig. On the pad, inside the ring. It tunes the suit to you: frame, eyes, then the anchor.", "calm"]],
+    hint: "Step up onto the rig's pad, inside the lit ring. Hold still, look at each beacon as it lights, then hold still again. The suit comes online as you go.",
+    lines: [[ORR, "That's the rig. On the pad, inside the ring. It tunes the suit to you.", "calm"]],
   },
 
   // ── 3. CERTIFICATION DAY: the hub ────────────────────────────────
@@ -594,6 +604,8 @@ export const PROLOGUE_STEPS = [
     title: "PATCH UP",
     color: "#44ff88",
     hint: "Grab the med pack on the Supervisor's desk. Your suit also mends small wounds if you stay out of fire.",
+    // The logic says these: the transfer always, the med pack only if you're hurt.
+    defer: true,
     lines: [
       [ARIA, "Your transfer's on top of his pile. Only signature on it is his.", "sad"],
       [ARIA, "Med pack. Take it. Please.", "tender"],
@@ -634,16 +646,16 @@ export const PROLOGUE_STEPS = [
   {
     id: "vents",
     beat: 9,
-    title: "PLASMA VENTS",
+    title: "ENGINE HEAT",
     color: "#ff7733",
     hint: {
-      key: (k) => `The vents burst faster than you can cross. Hold ${k("chronoShift")} to slow them, then go through the gaps.`,
-      touch: "The vents burst faster than you can cross. Tap SLOW to slow them, then go through the gaps.",
-      pad: (b) => `The vents burst faster than you can cross. Hold ${b("chronoShift")} to slow them, then go through the gaps.`,
+      key: (k) => `Heat bursts from the wall grilles faster than you can cross. Hold ${k("chronoShift")} to slow it, then go through the gaps.`,
+      touch: "Heat bursts from the wall grilles faster than you can cross. Tap SLOW to slow it, then go through the gaps.",
+      pad: (b) => `Heat bursts from the wall grilles faster than you can cross. Hold ${b("chronoShift")} to slow it, then go through the gaps.`,
     },
     lines: [
-      [ARIA, "Coolant mains have ruptured. Plasma, at intervals. Not survivable intervals.", "worried"],
-      [ARIA, "Slow it down. Watch the rhythm. Go on the gap.", "calm"],
+      [ARIA, "The breach is venting up the ducts. Engine heat, out of every grille on this floor. In bursts.", "worried"],
+      [ARIA, "Too quick to run. Slow it down. Watch the rhythm. Go on the gap.", "calm"],
     ],
   },
   {

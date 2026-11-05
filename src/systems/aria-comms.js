@@ -1003,7 +1003,7 @@ export class AriaCommsSystem {
   _portrait(ctx, msg, x, y, size, t, style, tone, dpr = pixelRatio(ctx)) {
     const speaking = this._speaking(msg, t) || !!this.game?.audio?.isSpeaking?.(msg._said);
     msg._radio ??= isRadioLine(msg);
-    drawCommsPortrait(ctx, { speaker: msg.speaker || "ARIA", x, y, size, style, tone, t, speaking, radio: msg._radio, dpr });
+    drawCommsPortrait(ctx, { speaker: msg.speaker || "ARIA", portrait: msg.portrait, x, y, size, style, tone, t, speaking, radio: msg._radio, dpr });
   }
 
   // ─── Realistic comms plate ───────────────────────────────────────────────

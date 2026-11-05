@@ -119,5 +119,11 @@ export const room = {
     g[34][26] = W.CLOCK;
     g[36][26] = W.VENT;
     g[43][33] = W.VENT;
+    // Facing pairs where the breach's heat bursts across the hall
+    // (VENT_STRIPS, js/tutorial-system.js): you see where it comes from.
+    for (const r of [22, 25]) {
+      g[r][26] = W.VENT;
+      g[r][33] = W.VENT;
+    }
   },
 };

@@ -140,11 +140,38 @@ export function padActive(gp) {
   return !!gp.anyButton;
 }
 
-/** Once per poll: a pad in use takes over the prompts. */
+/** How far a stick must move between polls to count as the player picking the pad up again. */
+const PAD_STICK_MOVE = 0.2;
+
+/**
+ * Once per poll: a pad the player starts using takes over the prompts. On
+ * the edge (a button going down, a stick leaving rest or moving on), not
+ * the level: a resting trigger or a drifting stick past the deadzone reads
+ * "in use" every poll, and took the prompts back from the keyboard each
+ * frame until the pad was unplugged.
+ */
 export function trackGamepad(game, gp) {
-  if (padActive(gp)) noteInput(game, "gamepad");
+  // Last poll's buttons and sticks (sticks are already zero inside the deadzone).
+  const s = (game._padSeen ??= { any: false, moveX: 0, moveY: 0, lookX: 0, lookY: 0 });
+  let picked = false;
+  if (gp?.connected) {
+    const wasCentred = !(s.moveX || s.moveY || s.lookX || s.lookY);
+    let offCentre = false;
+    let moved = false;
+    for (const k of PAD_STICKS) {
+      const v = gp[k] || 0;
+      if (v) offCentre = true;
+      if (Math.abs(v - s[k]) > PAD_STICK_MOVE) moved = true;
+    }
+    picked = (gp.anyButton && !s.any) || (offCentre && wasCentred) || moved;
+  }
+  s.any = !!(gp?.connected && gp.anyButton);
+  for (const k of PAD_STICKS) s[k] = (gp?.connected && gp[k]) || 0;
+  if (picked) noteInput(game, "gamepad");
   else if (game.inputDevice === "gamepad" && game._inputFamily !== padFamily(game)) noteInput(game, "gamepad");
 }
+
+const PAD_STICKS = ["moveX", "moveY", "lookX", "lookY"];
 
 /**
  * Listen for real keyboard and mouse use (synthetic events, like the ones the

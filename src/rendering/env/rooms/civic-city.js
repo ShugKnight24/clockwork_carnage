@@ -27,6 +27,7 @@
  * looks.
  */
 import { makeCanvas, rng, lin, rad } from "../paint.js";
+import { PROLOGUE_DAWN as DAWN } from "../palettes.js";
 
 /** The tile size every layer is cut into (the GPU wall pass's 512px layers). */
 export const TS = 512;
@@ -69,10 +70,10 @@ export const SPRITES = [
   { name: "airship2", band: 2, D: 62, len: 6, zLo: 6.2, zHi: 8.2, speed: -0.28, period: 210, phase: 20 },
 ];
 
-// The palette of the hour.
-const HAZE = [214, 170, 172];
-const SUNLIT = "rgba(255,190,130,";
-const LAMP = ["#ffe2a0", "#ffd07a", "#ffeccc"];
+// The palette of the hour (palettes.js PROLOGUE_DAWN, which every window shares).
+const HAZE = DAWN.haze;
+const SUNLIT = DAWN.sunlit;
+const LAMP = DAWN.lamp;
 const FRONTS = [[168, 84, 70], [196, 156, 120], [110, 110, 140], [206, 186, 170], [120, 84, 96], [150, 120, 90]];
 
 const mix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
@@ -108,13 +109,10 @@ export function paintSky() {
   return wrapped(W, (g, w, h) => {
     const hz = (h * SKY.sHi) / (SKY.sHi - SKY.sLo);
     const r = rng(71);
-    g.fillStyle = lin(g, 0, 0, 0, hz, [
-      [0, "#232658"], [0.3, "#3c3f7c"], [0.55, "#6e5e98"],
-      [0.74, "#b07a9e"], [0.87, "#e0928e"], [0.95, "#f6b08a"], [1, "#ffd2a2"],
-    ]);
+    g.fillStyle = lin(g, 0, 0, 0, hz, DAWN.sky);
     g.fillRect(-256, 0, w + 512, hz);
     // Below the line: the haze over the plain, where nothing nearer covers it.
-    g.fillStyle = lin(g, 0, hz, 0, h, [[0, "#d8a8a4"], [0.3, "#a08498"], [1, "#5a5070"]]);
+    g.fillStyle = lin(g, 0, hz, 0, h, DAWN.ground);
     g.fillRect(-256, hz, w + 512, h - hz);
     // The sun, just clear of the hills, and the sky warm round it.
     const sx = (SUN / Math.PI) * w;
@@ -122,7 +120,7 @@ export function paintSky() {
       g.save();
       g.translate(x, hz);
       g.scale(2.6, 1);
-      g.fillStyle = rad(g, 0, 0, 0, 230, [[0, "rgba(255,240,200,0.95)"], [0.2, "rgba(255,206,150,0.6)"], [0.55, "rgba(255,160,130,0.22)"], [1, "rgba(255,140,120,0)"]]);
+      g.fillStyle = rad(g, 0, 0, 0, 230, DAWN.sunGlow);
       g.fillRect(-240, -240, 480, 480);
       g.restore();
     }
@@ -150,7 +148,7 @@ export function paintSky() {
       g.fill();
     }
     // The sun's disc, half over the hills.
-    g.fillStyle = "#fff6dc";
+    g.fillStyle = DAWN.sun;
     g.beginPath();
     g.arc(sx, hz - 4, 15, 0, Math.PI * 2);
     g.fill();
@@ -179,6 +177,70 @@ export function paintSky() {
       g.stroke();
     }
   });
+}
+
+/**
+ * The same morning as one flat picture, for a window that repeats along a
+ * wall instead of showing the city by depth (the lobby's front glass, the
+ * offices' blinds, the atrium's glazing): the sky warming down to the
+ * horizon at `hz` (of the height), a band of sunrise along it, the far
+ * towers in haze and the near ones in silhouette, the low sun on their
+ * east faces and a few windows still lit. No disc: a sun in every pane
+ * would read as a row of them. Clipped to the rect.
+ */
+export function paintDawnView(g, r, x, y, w, h, { hz = 0.8 } = {}) {
+  const H = y + h * hz;
+  g.save();
+  g.beginPath();
+  g.rect(x, y, w, h);
+  g.clip();
+  // A window looks out, not up: its top is well down from the zenith.
+  g.fillStyle = lin(g, 0, y - h * 0.45, 0, H, DAWN.sky);
+  g.fillRect(x, y, w, H - y);
+  g.fillStyle = lin(g, 0, H, 0, y + h, DAWN.ground);
+  g.fillRect(x, H, w, y + h - H);
+  // The sunrise along the horizon, even across the pane so panes join.
+  g.fillStyle = lin(g, 0, H - h * 0.3, 0, H + 4, [[0, "rgba(255,190,140,0)"], [0.7, "rgba(255,196,140,0.35)"], [1, "rgba(255,226,170,0.75)"]]);
+  g.fillRect(x, H - h * 0.3, w, h * 0.3 + 4);
+  // Stratus, violet on top and lit from under.
+  for (let i = 0; i < 6; i++) {
+    const cx = x + r() * w, cy = y + (H - y) * (0.15 + r() * 0.55);
+    const len = w * (0.12 + r() * 0.22), th = 2 + r() * 4;
+    g.fillStyle = `rgba(110,88,136,${0.35 + r() * 0.25})`;
+    g.beginPath();
+    g.ellipse(cx, cy, len, th, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = `${SUNLIT}${0.35 + r() * 0.3})`;
+    g.beginPath();
+    g.ellipse(cx + len * 0.06, cy + th * 0.5, len * 0.85, th * 0.5, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Far towers in the haze, then the near ones dark against the glow. The
+  // sun is low in the south-east: off to the left, looking out.
+  const [near, far] = DAWN.silhouette;
+  const tower = (bx, bw, bh, col, lamps) => {
+    g.fillStyle = col;
+    g.fillRect(bx, H - bh, bw, bh + 2);
+    g.fillStyle = `${SUNLIT}${lamps ? 0.5 : 0.3})`;
+    g.fillRect(bx, H - bh, Math.max(2, bw * 0.12), bh);
+    if (!lamps) return;
+    for (let wy = H - bh + 6; wy < H - 4; wy += 11) {
+      for (let wx = bx + bw * 0.2; wx < bx + bw - 6; wx += 9) {
+        if (r() > 0.2) continue;
+        g.fillStyle = LAMP[(r() * LAMP.length) | 0];
+        g.fillRect(wx, wy, 4, 5);
+      }
+    }
+  };
+  for (let i = 0; i < 9; i++) {
+    const bw = w * (0.06 + r() * 0.08);
+    tower(x - bw / 2 + r() * w, bw, h * (0.12 + r() * 0.3), css(mix(far, HAZE, 0.3), 0.9), false);
+  }
+  for (let i = 0; i < 6; i++) {
+    const bw = w * (0.09 + r() * 0.1);
+    tower(x - bw / 2 + r() * w, bw, h * (0.2 + r() * 0.42), css(near), true);
+  }
+  g.restore();
 }
 
 // ── Pieces of the city ──────────────────────────────────────────────────────

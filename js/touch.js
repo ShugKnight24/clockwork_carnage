@@ -18,6 +18,7 @@ import {
   hitRect,
   upgradeLayout,
   tutorialMenuLayout,
+  campaignPromptLayout,
 } from "../src/ui/layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { setCentredAim } from "../src/systems/aim.js";
@@ -51,6 +52,7 @@ const STICK_DEADZONE = 0.2;
 const STICK_SNAP = 0.25;
 import { directorInput } from "../src/cinematic/director.js";
 import { toggleCard } from "../src/ui/tutorial-ui.js";
+import { PROMPT_ITEMS } from "../src/ui/campaign-prompt.js";
 import { reportBug, shareSession } from "../src/systems/playtest-export.js";
 import { gameOverButtonAt, handleGameOverClick } from "../src/systems/input-click-dispatch.js";
 
@@ -366,6 +368,7 @@ export class TouchControls {
         // allows the clipboard and downloads; a tap anywhere else goes on.
         const t = e.changedTouches[0];
         if (g.state === "gameOver" && gameOverButtonAt(g, t.clientX, t.clientY) >= 0) return;
+        if (g.state === "campaignPrompt" && this.handleCampaignPromptTap(t)) return;
         g.handleKeyPress("Enter");
       }
       return;
@@ -911,6 +914,27 @@ export class TouchControls {
         this.game.handleKeyPress("KeyF");
       }
     }
+  }
+
+  /** A tap on a campaign prompt row picks it (the skip included); true if one was hit. */
+  handleCampaignPromptTap(touch) {
+    const g = this.game;
+    const layout = campaignPromptLayout(this.zones.w, this.zones.h, PROMPT_ITEMS.length);
+    for (let i = 0; i < PROMPT_ITEMS.length; i++) {
+      const iy = layout.my + 8 + i * layout.itemH;
+      if (
+        touch.clientX >= layout.mx &&
+        touch.clientX <= layout.mx + layout.menuW &&
+        touch.clientY >= iy &&
+        touch.clientY <= iy + layout.itemH - 6
+      ) {
+        g.campaignPromptSelection = i;
+        g.audio.menuConfirm();
+        g.executeCampaignPromptChoice(i);
+        return true;
+      }
+    }
+    return false;
   }
 
   handleTutorialCompleteTap(touch) {

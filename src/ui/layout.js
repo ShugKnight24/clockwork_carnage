@@ -120,6 +120,16 @@ export function upgradeLayout(w, h, upgradeCount, isTouchDevice, selectedIndex =
   };
 }
 
+/** The campaign prompt's rows: the renderer and the touch handler share it. */
+export function campaignPromptLayout(w, h, itemCount) {
+  const menuW = Math.min(380, w - 40);
+  const itemH = 56;
+  const menuH = itemCount * itemH + 16;
+  const mx = (w - menuW) / 2;
+  const my = h * 0.38;
+  return { menuW, itemH, menuH, mx, my };
+}
+
 export function tutorialMenuLayout(w, h, itemCount) {
   const menuW = Math.min(360, w - 40);
   const itemH = 52;

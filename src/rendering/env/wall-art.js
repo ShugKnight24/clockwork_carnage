@@ -10,10 +10,11 @@
  * 9 temporal rift.
  */
 
-import { INK, getEnvPalette } from "./palettes.js";
+import { INK, getEnvPalette, windowHour } from "./palettes.js";
 import { STATION_PAINTERS } from "./locker-art.js";
 import { rangePainters } from "./range-art.js";
 import { ROOM_PAINTERS } from "./rooms/index.js";
+import { paintDawnView } from "./rooms/civic-city.js";
 import {
   T, makeCanvas, rng, lin, rad, bevel, plate, rivet, lightStrip, led, hazard, vents, grit, grime, wallMips, guardBake,
   material, beginMaterial, useMaterial, bakeMaterial, ink, sink, raise, relief, emit, grey, fissure,
@@ -554,7 +555,7 @@ function paintParadox(ctx, p, r, act) {
   grime(ctx, r, p, 3);
 }
 
-function paintGlass(ctx, p, r, act) {
+function paintGlass(ctx, p, r, act, hour) {
   shell(ctx, p, r, { kickVents: true });
   const x = PIL + 10;
   const w = T - x * 2;
@@ -576,8 +577,10 @@ function paintGlass(ctx, p, r, act) {
   const sky = act === 2 ? ["#2a1a0e", "#4a3018", "#140c06"] : act >= 3 ? ["#1e0a1e", "#3a1234", "#0c040c"] : ["#0a2436", "#1d4d66", "#06131d"];
   ctx.fillStyle = lin(ctx, 0, gy, 0, gy + gh, [[0, sky[2]], [0.55, sky[1]], [1, sky[0]]]);
   ctx.fillRect(gx, gy, gw, gh);
-  // Distant structures and running lights behind the glass
-  for (let i = 0; i < 9; i++) {
+  // The prologue's morning (palettes.js windowHour), or the act's night with
+  // distant structures and running lights in it.
+  if (hour) paintDawnView(ctx, r, gx, gy, gw, gh, { hz: 0.84 });
+  else for (let i = 0; i < 9; i++) {
     const bw = 20 + r() * 50;
     const bh = 60 + r() * 180;
     const bx = gx + r() * gw;
@@ -724,7 +727,8 @@ export function paintWall(id, act, pal, salt = 0, mat = null) {
   const seed = id * 7919 + act * 104729 + salt * 15485863;
   if (mat) useMaterial(mat);
   try {
-    paint(ctx, p, rng(seed), act);
+    // The hour the windows show, by level (palettes.js windowHour).
+    paint(ctx, p, rng(seed), act, windowHour(act, salt));
     grit(ctx, T, T, 0.12);
   } finally {
     useMaterial(null);

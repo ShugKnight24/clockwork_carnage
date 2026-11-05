@@ -60,6 +60,23 @@ describe("active device", () => {
     expect(activeDevice(game)).toBe("gamepad");
   });
 
+  it("lets the keyboard back in past a resting trigger or a drifting stick", () => {
+    const game = fakeGame();
+    const resting = { ...idlePoll(), anyButton: true, moveX: 0.18 };
+    trackGamepad(game, resting);
+    expect(activeDevice(game)).toBe("gamepad");
+    noteInput(game, "keyboard");
+    for (let i = 0; i < 5; i++) trackGamepad(game, { ...resting, moveX: 0.18 + (i % 2) * 0.05 });
+    expect(activeDevice(game)).toBe("keyboard");
+    // Picking the pad up again still takes over: a stick pushed, or a new button.
+    trackGamepad(game, { ...resting, moveX: 0.9 });
+    expect(activeDevice(game)).toBe("gamepad");
+    noteInput(game, "keyboard");
+    trackGamepad(game, { ...resting, moveX: 0.9, anyButton: false });
+    trackGamepad(game, { ...resting, moveX: 0.9 });
+    expect(activeDevice(game)).toBe("gamepad");
+  });
+
   it("ignores an idle or unplugged pad", () => {
     expect(padActive(idlePoll())).toBe(false);
     expect(padActive({ ...idlePoll(), connected: false, anyButton: true })).toBe(false);

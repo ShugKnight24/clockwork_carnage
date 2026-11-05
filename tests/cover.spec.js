@@ -132,6 +132,36 @@ test("peeks over low cover and kills a target", async ({ page }) => {
   expect(p.inCover).toBe(true);
 });
 
+test("blind fire over low cover lands on a target the view cannot see", async ({ page }) => {
+  await quietLevel(page);
+  await debug(page, "godMode", true);
+  await coverAtCounter(page);
+  // Off to one side of the view and hidden by the counter: the reticle is
+  // only pointed its way, level, as a player down behind cover points it.
+  await page.evaluate(() => {
+    const d = window.ccDebug;
+    d.spawn("drone", 30.1, 46.5);
+    const g = d.game;
+    const t = g.entities[g.entities.length - 1];
+    t.speed = 0;
+    t.alertRange = 0;
+    t.state = "idle";
+    t.health = 1;
+    g.player.isAiming = false;
+    g.player.aimOffsetX = 0;
+    g.player.aimOffsetY = 0;
+  });
+  await play(page, 200);
+  expect((await player(page)).down).toBe(true);
+  const before = await page.evaluate(() => ({ kills: window.ccDebug.game.coverStats.blindFireKills, shots: window.ccDebug.game.shotsFired }));
+  await page.evaluate(() => window.ccDebug.fire(true));
+  await page.waitForFunction((n) => window.ccDebug.game.coverStats.blindFireKills > n, before.kills, { timeout: 30_000 });
+  await page.evaluate(() => window.ccDebug.fire(false));
+  expect((await player(page)).inCover).toBe(true);
+  // The first round lands; a little slack for a runner that fires a second before it stops.
+  expect(await page.evaluate(() => window.ccDebug.game.shotsFired)).toBeLessThanOrEqual(before.shots + 2);
+});
+
 test("down behind cover a frontal shot is stopped; peeking takes it", async ({ page }) => {
   await quietLevel(page);
   await coverAtCounter(page);

@@ -461,3 +461,36 @@ export const GLOW_STRENGTH = [0, 0.35, 0.8, 0.55, 0.7, 0.9, 0.25];
 
 /** Fog curve shared by walls, floor and ceiling so they meet seamlessly. */
 export const FOG_DENSITY = 0.085;
+
+// ── The prologue's hour ─────────────────────────────────────────────────────
+
+/**
+ * 06:30 on Certification Day, as the station's windows see it: the sun just
+ * up in the south-east, indigo overhead warming through rose to gold at the
+ * horizon, the city in silhouette with its lamps still on. Every view out
+ * of the prologue's HQ paints from this (the lobby's front glass, the
+ * offices' blinds, the atrium's glazing, the civic wing's curtain wall and
+ * the city behind it), so they all agree on the hour.
+ */
+export const PROLOGUE_DAWN = {
+  // Zenith to horizon.
+  sky: [[0, "#232658"], [0.3, "#3c3f7c"], [0.55, "#6e5e98"], [0.74, "#b07a9e"], [0.87, "#e0928e"], [0.95, "#f6b08a"], [1, "#ffd2a2"]],
+  // Under the horizon, where nothing nearer covers it.
+  ground: [[0, "#d8a8a4"], [0.3, "#a08498"], [1, "#5a5070"]],
+  // The air between here and the far towers.
+  haze: [214, 170, 172],
+  sun: "#fff6dc",
+  sunGlow: [[0, "rgba(255,240,200,0.95)"], [0.2, "rgba(255,206,150,0.6)"], [0.55, "rgba(255,160,130,0.22)"], [1, "rgba(255,140,120,0)"]],
+  // The low sun on east faces, and the stratus lit from under (alpha appended).
+  sunlit: "rgba(255,190,130,",
+  // Towers against the sky, near and far.
+  silhouette: [[42, 34, 62], [96, 78, 112]],
+  lamp: ["#ffe2a0", "#ffd07a", "#ffeccc"],
+};
+
+/**
+ * The hour a level's windows show: the prologue's dawn for act 1 outside
+ * the campaign (no env salt), null for the act's own night. The campaign's
+ * floors all come after the breach and keep theirs.
+ */
+export const windowHour = (act, salt) => (act === 1 && !salt ? PROLOGUE_DAWN : null);

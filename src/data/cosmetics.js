@@ -318,13 +318,20 @@ export const HELMET_STYLES = [
   { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
   { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
   // Appended, never inserted: saves store the index.
+  // `visor: false`: the head has no visor to fit, so the pick is neither drawn
+  // nor counted (see takesVisor).
   {
-    id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3,
+    id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3, visor: false,
     unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
   },
   { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { maxStaminaAdd: 10 } },
-  { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1 },
+  { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false },
 ];
+
+/** Whether the helmet at this index wears the visor pick (HELMET_STYLES[].visor). */
+export function takesVisor(helmetIndex) {
+  return (HELMET_STYLES[helmetIndex || 0] || HELMET_STYLES[0]).visor !== false;
+}
 
 export const VISOR_STYLES = [
   { id: "standard", name: "Wide Visor", desc: "Full lower-arc optics", tier: 1 },
@@ -348,17 +355,26 @@ export const SHOULDER_STYLES = [
 ];
 
 /**
- * Unlock rules for tiered gear (armor, helmet, visor, shoulders). Tier 1 is
- * standard issue. Rule shapes are evaluated in src/systems/unlocks.js.
+ * Unlock rules for tiered gear (armor, helmet, visor, shoulders, and the
+ * accessories in src/data/accessories.js). Tier 1 is standard issue. Spread
+ * over the campaign: MK II with Act I, MK III with Act II, so each act still
+ * has a wardrobe to earn. Rule shapes are evaluated in src/systems/unlocks.js.
  */
 export const TIER_UNLOCKS = {
-  2: { type: "tutorial", label: "Graduate Chronos Academy (tutorial)" },
+  2: {
+    type: "anyOf",
+    label: "Clear Act 1 or survive arena round 10",
+    rules: [
+      { type: "campaignActs", count: 1, label: "Clear Act 1", unit: "acts" },
+      { type: "arenaRound", count: 10, label: "Survive arena round 10", unit: "rounds" },
+    ],
+  },
   3: {
     type: "anyOf",
-    label: "Clear 3 campaign levels or survive arena round 5",
+    label: "Clear Act 2 or survive arena round 15",
     rules: [
-      { type: "campaignLevels", count: 3, label: "Clear 3 campaign levels", unit: "levels" },
-      { type: "arenaRound", count: 5, label: "Survive arena round 5", unit: "rounds" },
+      { type: "campaignActs", count: 2, label: "Clear Act 2", unit: "acts" },
+      { type: "arenaRound", count: 15, label: "Survive arena round 15", unit: "rounds" },
     ],
   },
 };
@@ -447,7 +463,7 @@ export const LOADOUT_CLASSES = [
     id: "corpsman",
     name: "Corpsman",
     desc: "Keeps the squad standing",
-    unlock: { type: "campaignLevels", count: 6, label: "Clear Act 2 of the campaign", unit: "levels" },
+    unlock: { type: "campaignActs", count: 2, label: "Clear Act 2 of the campaign", unit: "acts" },
     startWeapons: [0, 1],
     // Regen is the squad-support kit turned inward until there is a squad to
     // point it at. See src/systems/unlocks.js for how the class is earned.
@@ -550,7 +566,10 @@ export function gearBonuses(character) {
     if (!bonuses) return;
     for (const [stat, value] of Object.entries(bonuses)) out[stat] = (out[stat] || 0) + value;
   };
-  for (const [key, table] of GEAR_SLOTS) add(table()[character[key] || 0]?.bonuses);
+  for (const [key, table] of GEAR_SLOTS) {
+    if (key === "visorIndex" && !takesVisor(character.helmetIndex)) continue;
+    add(table()[character[key] || 0]?.bonuses);
+  }
   const acc = character.accessories || {};
   for (const { id } of ACCESSORY_SLOTS) add(accessoryItem(id, acc[id])?.bonuses);
   return out;

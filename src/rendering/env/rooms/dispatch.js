@@ -11,6 +11,7 @@ import { DISPATCH_WALLS as W } from "../../../data/levels/rooms/dispatch.js";
 import { letter } from "../locker-art.js";
 import { T, lin, plate, lightStrip, led, raise } from "../paint.js";
 import { onScreen, text, screen, lit } from "./east-kit.js";
+import { PROLOGUE_DAWN as DAWN } from "../palettes.js";
 
 const PLASTER = ["#c8c2b2", "#b8b2a2", "#a09a8a"];
 const DADO = ["#6a5a48", "#564838", "#382e22"];
@@ -150,11 +151,11 @@ function paintDutyBoard(ctx, p, r) {
   raise(20, 70, T - 40, 300, 6);
 }
 
-/** Window blinds: the slats, daylight between them. */
+/** Window blinds: the slats, the sunrise between them (palettes.js PROLOGUE_DAWN). */
 function paintBlinds(ctx, p, r) {
   officeWall(ctx, p, r);
   plate(ctx, 50, 60, T - 100, 230, p, { tones: STEEL, bevel: 3, ink: 2 });
-  ctx.fillStyle = lin(ctx, 0, 70, 0, 280, [[0, "#d8e8f8"], [1, "#9ab4cc"]]);
+  ctx.fillStyle = lin(ctx, 0, 0, 0, 280, DAWN.sky);
   ctx.fillRect(62, 72, T - 124, 206);
   lit(62, 72, T - 124, 206, 0.35, 10);
   for (let y = 76; y < 276; y += 14) {
