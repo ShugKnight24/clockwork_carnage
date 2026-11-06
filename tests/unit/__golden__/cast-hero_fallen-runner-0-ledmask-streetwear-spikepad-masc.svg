@@ -273,16 +273,6 @@
 <g transform="translate(30.8,-18.9) rotate(-2.5)">
 <path d="M4.6,-1 L7,1.8" fill="none" stroke="#c9ccc4" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
-<g transform="translate(30.2,-32.5) rotate(-2.5)">
-<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="0" cy="2" r="0.55"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="0" cy="2" r="0.55"/>
-</g>
-</g>
 <g transform="translate(30.6,-25.1) rotate(-2.5)">
 <path d="M-5.8,-4.2 L5.6,-4.2 L6.2,4.2 L-6,4.2 Z" fill="url(#steelDk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 </g>
@@ -291,14 +281,6 @@
 </g>
 <g transform="translate(30.6,-25.1) rotate(-2.5)">
 <path d="M-4,2.4 L-2.6,2.4 M-1.4,2.4 L0,2.4 M1.2,2.4 L2.6,2.4" fill="none" stroke="#9fb0c0" stroke-width="0.7" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-<g transform="translate(30.6,-25.1) rotate(-2.5)">
-<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width="0.45" stroke-linejoin="round"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width="0.45" stroke-linejoin="round"/>
-</g>
 </g>
 <path d="M29.4,-58.3 C34,-47.7 39.6,-46.6 39.6,-42.6 S39.2,-29.8 36.8,-25.4" fill="none" stroke="#04060b" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M29.4,-58.3 C34,-47.7 39.6,-46.6 39.6,-42.6 S39.2,-29.8 36.8,-25.4" fill="none" stroke="#2a2f36" stroke-width="1.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
@@ -378,12 +360,6 @@
 <path d="M26,31.2 C29.4,30 35.4,30 38.8,31.2" fill="none" stroke="#8a96a3" stroke-width="0.45" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M22.2,34.2 L42.6,34.2 L42.4,38.4 L22.4,38.4 Z" fill="#121418" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
 <path d="M23.8,37 L25.8,37 M28.8,37 L31.2,37 M33.6,37 L36,37 M39,37 L41,37" fill="none" stroke="#30343b" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M23,34.4 L41.8,34.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M23,34.4 L41.8,34.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
 <path d="M-13.5,-12.3C-12.7,-11.4 -10.6,-8.4 -8.8,-6.7C-7,-5 -5.3,-3.6 -2.9,-2C-0.4,-0.3 3.2,1.5 5.9,3C8.6,4.5 12,6.5 13.3,7.2C17.2,10.7 24.3,2.8 20.3,-0.7C20.1,-1.1 19.6,-2 18.9,-3.1C18.2,-4.1 17.8,-5.3 16.3,-7C14.7,-8.8 11.8,-11.1 9.6,-13.4C7.3,-15.6 4.7,-18.7 2.7,-20.6C0.7,-22.4 -1.6,-24 -2.4,-24.7C-8.6,-30.2 -19.7,-17.8 -13.5,-12.3Z" fill="url(#suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-13.5,-12.3C-12.7,-11.4 -10.6,-8.4 -8.8,-6.7C-7,-5 -5.3,-3.6 -2.9,-2C-0.4,-0.3 3.2,1.5 5.9,3C8.6,4.5 12,6.5 13.3,7.2C17.2,10.7 24.3,2.8 20.3,-0.7C20.1,-1.1 19.6,-2 18.9,-3.1C18.2,-4.1 17.8,-5.3 16.3,-7C14.7,-8.8 11.8,-11.1 9.6,-13.4C7.3,-15.6 4.7,-18.7 2.7,-20.6C0.7,-22.4 -1.6,-24 -2.4,-24.7C-8.6,-30.2 -19.7,-17.8 -13.5,-12.3Z" fill="url(#weave)"/>
 <path d="M-13.5,-12.3C-12.7,-11.4 -10.6,-8.4 -8.8,-6.7C-7,-5 -5.3,-3.6 -2.9,-2C-0.4,-0.3 3.2,1.5 5.9,3C8.6,4.5 12,6.5 13.3,7.2C17.2,10.7 24.3,2.8 20.3,-0.7C20.1,-1.1 19.6,-2 18.9,-3.1C18.2,-4.1 17.8,-5.3 16.3,-7C14.7,-8.8 11.8,-11.1 9.6,-13.4C7.3,-15.6 4.7,-18.7 2.7,-20.6C0.7,-22.4 -1.6,-24 -2.4,-24.7C-8.6,-30.2 -19.7,-17.8 -13.5,-12.3Z" fill="url(#cyl)"/>
@@ -464,12 +440,6 @@
 <path d="M13.2,36.2 C16.6,35 22.6,35 26,36.2" fill="none" stroke="#8a96a3" stroke-width="0.45" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M9.4,39.2 L29.8,39.2 L29.6,43.4 L9.6,43.4 Z" fill="#121418" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
 <path d="M11,42 L13,42 M16,42 L18.4,42 M20.8,42 L23.2,42 M26.2,42 L28.2,42" fill="none" stroke="#30343b" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M10.2,39.4 L29,39.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M10.2,39.4 L29,39.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
 <path d="M-9,-68 L9,-68 L16,-64 C19,-62 19.5,-57 18.5,-52 C17.5,-46 15,-40 14,-33 C13.7,-29 14,-24 14.8,-20 L15,-15 C10,-14 5,-13 0,-12 C-5,-13 -10,-14 -15,-15 L-14.6,-20 C-14,-24 -13.7,-29 -14,-33 C-15,-40 -17.5,-46 -18.5,-52 C-19.5,-57 -19,-62 -16,-64 Z" fill="url(#suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-9,-68 L9,-68 L16,-64 C19,-62 19.5,-57 18.5,-52 C17.5,-46 15,-40 14,-33 C13.7,-29 14,-24 14.8,-20 L15,-15 C10,-14 5,-13 0,-12 C-5,-13 -10,-14 -15,-15 L-14.6,-20 C-14,-24 -13.7,-29 -14,-33 C-15,-40 -17.5,-46 -18.5,-52 C-19.5,-57 -19,-62 -16,-64 Z" fill="url(#cyl)"/>
 <ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#shade)"/>
@@ -881,20 +851,6 @@
 <g transform="translate(21.3,-63) rotate(-74.7)">
 <path d="M-4.6,-1 L-7,1.8" fill="none" stroke="#c9ccc4" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
-<g transform="translate(8.3,-66.6) rotate(-74.7)">
-<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="-1.6" cy="11.6" r="0.7"/>
-<circle cx="-4.6" cy="6.4" r="0.55"/>
-<circle cx="1" cy="9.6" r="0.55"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="-1.6" cy="11.6" r="0.7"/>
-<circle cx="-4.6" cy="6.4" r="0.55"/>
-<circle cx="1" cy="9.6" r="0.55"/>
-</g>
-</g>
 <g transform="rotate(14 -12 -65)">
 <path d="M-11,-67.8 L-25,-70.6 C-27.6,-70.4 -29.8,-68.6 -30.6,-65.6 L-30.4,-55.6 L-17.2,-54.2 C-17.6,-59.4 -15.6,-64 -11,-65.8 Z" fill="url(#paint)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-11,-67.8 L-25,-70.6 C-27.6,-70.4 -29.8,-68.6 -30.6,-65.6 L-30.4,-55.6 L-17.2,-54.2 C-17.6,-59.4 -15.6,-64 -11,-65.8 Z" fill="url(#weave)" opacity="0.5"/>
@@ -969,6 +925,32 @@
 </g>
 <g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
 <rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
+</g>
+<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M10.2,39.4 L29,39.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M10.2,39.4 L29,39.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M23,34.4 L41.8,34.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M23,34.4 L41.8,34.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g transform="translate(8.3,-66.6) rotate(-74.7)">
+<g filter="url(#glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-1.6" cy="11.6" r="0.7"/>
+<circle cx="-4.6" cy="6.4" r="0.55"/>
+<circle cx="1" cy="9.6" r="0.55"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-1.6" cy="11.6" r="0.7"/>
+<circle cx="-4.6" cy="6.4" r="0.55"/>
+<circle cx="1" cy="9.6" r="0.55"/>
+</g>
 </g>
 <g data-acc="screen">
 <g transform="translate(14,-65) rotate(-74.74)">

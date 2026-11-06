@@ -43,7 +43,7 @@ vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOri
             legs: P.legs.map((leg, i) => mark(`leg-${i}`)).join(""),
             torso: mark("torso"),
             arms: P.arms.map((arm, i) => mark(`arm-${i}`)).join(""),
-            glow: mark("glow"),
+            glow: mark("glow") + P.arms.map((arm, i) => mark(`arm-glow-${i}`)).join(""),
           }),
         },
       },
@@ -169,6 +169,9 @@ describe("frames come from their art, standing and fallen", () => {
     const [, body, glow] = buildCastModel(look({ frame: "frame-fixture" }), "hero_fallen").layers.map((l) => l.markup);
     for (const tag of ["under", "leg-0", "leg-1", "torso", "arm-0", "arm-1"]) expect(count(body, tag), tag).toBe(1);
     expect(count(glow, "glow")).toBe(1);
+    // The free arm's light is drawn; the trapped arm's never shines through the body.
+    expect(count(glow, "arm-glow-0")).toBe(1);
+    expect(count(body + glow, "arm-glow-1")).toBe(0);
     // The trapped arm lies under the body, the free arm over it.
     expect(at(body, "under")).toBeLessThan(at(body, "arm-1"));
     expect(at(body, "arm-1")).toBeLessThan(at(body, "torso"));

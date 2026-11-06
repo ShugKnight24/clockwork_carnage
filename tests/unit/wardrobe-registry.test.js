@@ -342,6 +342,24 @@ describe("frames draw each limb on its own", () => {
   const layer = (key) => (id, P, c) => FRAME_ART[id].layers(P, c, { mix, ...idScope().kit(`frame-${id}`) })[key];
   const arms = layer("arms");
   const legs = layer("legs");
+  const glow = layer("glow");
+  // Top-level elements of a markup string, each with its children.
+  const elements = (markup) => {
+    const out = [];
+    let depth = 0;
+    let start = 0;
+    for (const m of markup.matchAll(/<(\/?)[a-zA-Z][^>]*?(\/?)>/g)) {
+      if (depth === 0 && !m[1]) start = m.index;
+      if (m[2]) {
+        if (depth === 0) out.push(markup.slice(start, m.index + m[0].length));
+      } else if (m[1]) {
+        depth--;
+        if (depth === 0) out.push(markup.slice(start, m.index + m[0].length));
+      } else depth++;
+    }
+    return out;
+  };
+  const counts = (list) => list.reduce((m, e) => m.set(e, (m.get(e) || 0) + 1), new Map());
   it.each(Object.keys(FRAME_ART))("%s", (id) => {
     for (const body of ["masc", "fem"]) {
       const c = buildAgentParts(lookFromIds({ frame: id, body })).look;
@@ -349,6 +367,14 @@ describe("frames draw each limb on its own", () => {
         const P = framePose(pose, c.fem);
         expect(arms(id, withArm(P, 0), c) + arms(id, withArm(P, 1), c), `arms ${body} ${pose}`).toBe(arms(id, P, c));
         expect(legs(id, withLeg(P, 0), c) + legs(id, withLeg(P, 1), c), `legs ${body} ${pose}`).toBe(legs(id, P, c));
+        // Light split by arm: each element of the whole figure's glow comes
+        // out of one side or both (light that is no arm's), as often as in
+        // the whole; nothing is lost, duplicated or made up.
+        if (pose === "fallen") continue;
+        const whole = counts(elements(glow(id, P, c)));
+        const [g0, g1] = [0, 1].map((i) => counts(elements(glow(id, withArm(P, i), c))));
+        const keys = new Set([...whole.keys(), ...g0.keys(), ...g1.keys()]);
+        for (const e of keys) expect(Math.max(g0.get(e) || 0, g1.get(e) || 0), `glow ${body} ${pose} ${e.slice(0, 80)}`).toBe(whole.get(e) || 0);
       }
     }
   });

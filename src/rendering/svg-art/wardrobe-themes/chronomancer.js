@@ -151,6 +151,7 @@ function vestment(P, c, K) {
 
   // Rune gauntlets: a dark plate down the forearm, a flared cuff at the
   // elbow end, runes cut into it that glow with the agent's energy.
+  let glow = "";
   const arms = P.arms
     .map((arm, i) => {
       const s = i === 0 ? -1 : 1;
@@ -160,21 +161,19 @@ function vestment(P, c, K) {
       const cuff = plateAt(lerp(el, wr, 0.14), el, wr, "M-7.6,-2 C-3,-3 3,-3 7.6,-2 L6.4,3 C2,2.2 -2,2.2 -6.4,3 Z", PAINT, 0.9);
       const band = plateAt(lerp(el, wr, 0.9), el, wr, "M-4.8,-1.4 L4.8,-1.4 L5,1.4 L-5,1.4 Z", PAINT, 0.6);
       let runes = "";
-      let lit = "";
       [0.38, 0.56, 0.74].forEach((t, j) => {
         const at = lerp(el, wr, t);
         const g = RUNES[(j + (s < 0 ? 0 : 3)) % RUNES.length];
         runes += lineAt(at, el, wr, g, "#05070c", 1.2, 0.9);
-        lit += energy(`<g transform="translate(${pt(...at)}) rotate(${rot})"><path d="${g}" fill="none" stroke-width=".5" stroke-linecap="round" stroke-linejoin="round"/></g>`, c.energy);
+        glow += energy(`<g transform="translate(${pt(...at)}) rotate(${rot})"><path d="${g}" fill="none" stroke-width=".5" stroke-linecap="round" stroke-linejoin="round"/></g>`, c.energy);
       });
-      // The runes' light rides the arm's own layer, at that arm's depth.
-      return plate + lineAt(lerp(el, wr, 0.3), el, wr, `M${f(-s * 4.6)},0 L${f(-s * 3.6)},14`, "#ffffff", 0.5, 0.3) + cuff + band + runes + lit;
+      return plate + lineAt(lerp(el, wr, 0.3), el, wr, `M${f(-s * 4.6)},0 L${f(-s * 3.6)},14`, "#ffffff", 0.5, 0.3) + cuff + band + runes;
     })
     .join("");
 
   // Chrono light: the crest's centre (the hourglass sand lights itself, so a
   // gun held across it covers it).
-  const glow = energy(`<circle cx="0" cy="-51" r=".9"/>`, c.energy);
+  glow += energy(`<circle cx="0" cy="-51" r=".9"/>`, c.energy);
   return { under, legs: "", torso, arms, glow };
 }
 

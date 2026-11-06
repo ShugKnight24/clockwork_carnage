@@ -1935,7 +1935,10 @@ export const withLeg = (P, i) => ({ ...P, legs: Object.assign([], { [i]: P.legs[
  * draws as standing (its layers, the stock layers it hides, its width and
  * shoulder scale), each limb wearing its own part of the frame at its own
  * depth: the arm under the body and the arm over it, the lower leg and the
- * upper leg across it.
+ * upper leg across it. The frame's light is the free arm's split (withArm),
+ * so the light of the arm trapped under the body never shines through it,
+ * as the stock trapped arm draws none; both legs lie in view, side by side
+ * below the hips, and keep theirs.
  */
 function fallenParts(c) {
   const map = { ...bodyMap(c), "#4a0c0c": c.cape[2], "#e05050": mix(c.cape[0], "#ffffff", 0.2), "#140202": mix(c.cape[3], "#000000", 0.5) };
@@ -1956,7 +1959,8 @@ function fallenParts(c) {
   // The frame, as buildAgentParts wears it (see HIDES).
   const K = { mix, ...scope.kit(`frame-${c.frame}`) };
   const fr = frameLayers(c.frame, P, c, K);
-  const [upperSleeve, trappedSleeve] = [0, 1].map((i) => frameLayers(c.frame, withArm(P, i), c, K).arms);
+  const [upperSide, trappedSide] = [0, 1].map((i) => frameLayers(c.frame, withArm(P, i), c, K));
+  const [upperSleeve, trappedSleeve] = [upperSide.arms, trappedSide.arms];
   const [upperLegKit, lowerLegKit] = [0, 1].map((i) => frameLayers(c.frame, withLeg(P, i), c, K).legs);
   const fs = frameShape(c.frame);
   const hides = (what) => frameHides(c.frame, what);
@@ -1988,7 +1992,7 @@ function fallenParts(c) {
     glow:
       recolor(limb(lowerLeg.glow + upperLeg.glow) + (fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW) + limb(upperArm.glow), map) +
       (hideKit ? "" : kit.glow) +
-      fr.glow +
+      upperSide.glow +
       acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),

@@ -339,12 +339,6 @@
 <path d="M-25.1,53.2 C-21.7,52 -15.7,52 -12.3,53.2" fill="none" stroke="#8a96a3" stroke-width="0.45" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-28.9,56.2 L-8.5,56.2 L-8.7,60.4 L-28.7,60.4 Z" fill="#121418" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
 <path d="M-27.3,59 L-25.3,59 M-22.3,59 L-19.9,59 M-17.5,59 L-15.1,59 M-12.1,59 L-10.1,59" fill="none" stroke="#30343b" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-28.1,56.4 L-9.3,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-28.1,56.4 L-9.3,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
 <path d="M8.6,34 C12.6,32.8 16.6,32.8 20.6,34 L21.2,51.6 C23.6,52.6 24.4,54.6 24.2,56.4 L5,56.4 C4.8,54.6 5.6,52.6 8,51.6 Z" fill="#1d1f24" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M8.6,34 C12.6,32.8 16.6,32.8 20.6,34 L21.2,51.6 C23.6,52.6 24.4,54.6 24.2,56.4 L5,56.4 C4.8,54.6 5.6,52.6 8,51.6 Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-cyl)" opacity="0.7"/>
 <path d="M9.8,35 C9.4,42 9.2,47 9,51" fill="none" stroke="#3a3e46" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -357,12 +351,6 @@
 <path d="M8.2,53.2 C11.6,52 17.6,52 21,53.2" fill="none" stroke="#8a96a3" stroke-width="0.45" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M4.4,56.2 L24.8,56.2 L24.6,60.4 L4.6,60.4 Z" fill="#121418" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
 <path d="M6,59 L8,59 M11,59 L13.4,59 M15.8,59 L18.2,59 M21.2,59 L23.2,59" fill="none" stroke="#30343b" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M5.2,56.4 L24,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M5.2,56.4 L24,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
-</g>
 <path d="M-8.1,-68 L8.1,-68 L14.4,-64 C17.3,-62 18.2,-57 17.3,-52 C15.4,-46 12.3,-40 11.7,-33 C12.4,-29 14.3,-24 16.6,-20 L17.1,-15 C11.5,-14 5.8,-13 0,-12 C-5.7,-13 -11.5,-14 -17.1,-15 L-16.4,-20 C-14.3,-24 -12.4,-29 -11.7,-33 C-12.3,-40 -15.4,-46 -17.3,-52 C-18.2,-57 -17.3,-62 -14.4,-64 Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-8.1,-68 L8.1,-68 L14.4,-64 C17.3,-62 18.2,-57 17.3,-52 C15.4,-46 12.3,-40 11.7,-33 C12.4,-29 14.3,-24 16.6,-20 L17.1,-15 C11.5,-14 5.8,-13 0,-12 C-5.7,-13 -11.5,-14 -17.1,-15 L-16.4,-20 C-14.3,-24 -12.4,-29 -11.7,-33 C-12.3,-40 -15.4,-46 -17.3,-52 C-18.2,-57 -17.3,-62 -14.4,-64 Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-cyl)"/>
 <ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-shade)"/>
@@ -591,20 +579,6 @@
 <g transform="translate(-17.2,-33.4) rotate(-79)">
 <path d="M-4.6,-1 L-7,1.8" fill="none" stroke="#c9ccc4" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
-<g transform="translate(-23,-34.5) rotate(-79)">
-<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="-1.6" cy="11.6" r="0.7"/>
-<circle cx="-4.6" cy="6.4" r="0.55"/>
-<circle cx="1" cy="9.6" r="0.55"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="-1.6" cy="11.6" r="0.7"/>
-<circle cx="-4.6" cy="6.4" r="0.55"/>
-<circle cx="1" cy="9.6" r="0.55"/>
-</g>
-</g>
 <path d="M10.9,-61.9C11.4,-60 13,-53.6 13.8,-50.5C14.6,-47.3 14.5,-45.5 15.5,-42.9C16.4,-40.3 18.4,-36.8 19.4,-34.6C20.4,-32.5 21.3,-30.8 21.6,-30.1C23.3,-24.6 34.2,-28 32.5,-33.5C32.2,-34.8 31.5,-38.7 31,-41.8C30.5,-44.9 30.1,-48.8 29.4,-51.9C28.8,-54.9 28.2,-57.6 27.4,-60C26.5,-62.4 25,-65.1 24.5,-66.2C22.4,-73 8.7,-68.7 10.9,-61.9Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-paint)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M10.9,-61.9C11.4,-60 13,-53.6 13.8,-50.5C14.6,-47.3 14.5,-45.5 15.5,-42.9C16.4,-40.3 18.4,-36.8 19.4,-34.6C20.4,-32.5 21.3,-30.8 21.6,-30.1C23.3,-24.6 34.2,-28 32.5,-33.5C32.2,-34.8 31.5,-38.7 31,-41.8C30.5,-44.9 30.1,-48.8 29.4,-51.9C28.8,-54.9 28.2,-57.6 27.4,-60C26.5,-62.4 25,-65.1 24.5,-66.2C22.4,-73 8.7,-68.7 10.9,-61.9Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-weave)"/>
 <path d="M10.9,-61.9C11.4,-60 13,-53.6 13.8,-50.5C14.6,-47.3 14.5,-45.5 15.5,-42.9C16.4,-40.3 18.4,-36.8 19.4,-34.6C20.4,-32.5 21.3,-30.8 21.6,-30.1C23.3,-24.6 34.2,-28 32.5,-33.5C32.2,-34.8 31.5,-38.7 31,-41.8C30.5,-44.9 30.1,-48.8 29.4,-51.9C28.8,-54.9 28.2,-57.6 27.4,-60C26.5,-62.4 25,-65.1 24.5,-66.2C22.4,-73 8.7,-68.7 10.9,-61.9Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-cyl)"/>
@@ -637,16 +611,6 @@
 <g transform="translate(20.9,-22) rotate(31.3)">
 <path d="M4.6,-1 L7,1.8" fill="none" stroke="#c9ccc4" stroke-width="0.9" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
-<g transform="translate(25.7,-29.8) rotate(31.3)">
-<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="0" cy="2" r="0.55"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="0" cy="2" r="0.55"/>
-</g>
-</g>
 <g transform="translate(23.1,-25.6) rotate(31.3)">
 <path d="M-5.8,-4.2 L5.6,-4.2 L6.2,4.2 L-6,4.2 Z" fill="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-steelDk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 </g>
@@ -655,14 +619,6 @@
 </g>
 <g transform="translate(23.1,-25.6) rotate(31.3)">
 <path d="M-4,2.4 L-2.6,2.4 M-1.4,2.4 L0,2.4 M1.2,2.4 L2.6,2.4" fill="none" stroke="#9fb0c0" stroke-width="0.7" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-<g transform="translate(23.1,-25.6) rotate(31.3)">
-<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
-<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width="0.45" stroke-linejoin="round"/>
-</g>
-<g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
-<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width="0.45" stroke-linejoin="round"/>
-</g>
 </g>
 <path d="M28,-56.5 C32.2,-43.4 37.6,-40.5 37.6,-36.5 S30.8,-26.7 28.4,-22.3" fill="none" stroke="#04060b" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M28,-56.5 C32.2,-43.4 37.6,-40.5 37.6,-36.5 S30.8,-26.7 28.4,-22.3" fill="none" stroke="#2a2f36" stroke-width="1.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
@@ -824,6 +780,50 @@
 </g>
 <g fill="#b8fff5" stroke="#b8fff5" opacity="0.9">
 <rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
+</g>
+<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M-28.1,56.4 L-9.3,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M-28.1,56.4 L-9.3,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M5.2,56.4 L24,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M5.2,56.4 L24,56.4" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+</g>
+<g transform="translate(-23,-34.5) rotate(-79)">
+<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-1.6" cy="11.6" r="0.7"/>
+<circle cx="-4.6" cy="6.4" r="0.55"/>
+<circle cx="1" cy="9.6" r="0.55"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M-3.4,0 L-3.4,5 L-1.6,7 L-1.6,11 M-3.4,5 L-4.4,6.2 M2.6,1 L2.6,4.4 L1,6 L1,9" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-1.6" cy="11.6" r="0.7"/>
+<circle cx="-4.6" cy="6.4" r="0.55"/>
+<circle cx="1" cy="9.6" r="0.55"/>
+</g>
+</g>
+<g transform="translate(25.7,-29.8) rotate(31.3)">
+<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="2" r="0.55"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="2" r="0.55"/>
+</g>
+</g>
+<g transform="translate(23.1,-25.6) rotate(31.3)">
+<g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#00ffdd" stroke="#00ffdd">
+<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width="0.45" stroke-linejoin="round"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width="0.45" stroke-linejoin="round"/>
+</g>
 </g>
 <g transform="translate(-18,-47) rotate(36)">
 <g filter="url(#runner-0-ledmask-streetwear-spikepad-fem-hero-glow)" fill="#9ff0ff" stroke="#9ff0ff">

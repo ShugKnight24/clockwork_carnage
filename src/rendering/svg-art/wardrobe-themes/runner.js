@@ -30,6 +30,8 @@ function streetwear(P, c, K) {
   const { mix } = K;
   const lining = mix(c.pal.dark, "#000000", 0.45);
   const hot = c.energy;
+  let glow = "";
+
   // Behind the body: the back of the popped collar standing up round the neck.
   const collarBack = "M-12.6,-64.6 L-13.8,-79.6 C-9,-82.4 9,-82.4 13.8,-79.6 L12.6,-64.6 Z";
   const under =
@@ -82,8 +84,7 @@ function streetwear(P, c, K) {
         line(`M${f(ax - 6.4)},${f(y + 3.2)} C${f(ax - 3)},${f(y + 2)} ${f(ax + 3)},${f(y + 2)} ${f(ax + 6.4)},${f(y + 3.2)}`, "#ffffff", 0.45, 0.35) +
         shape(sole, "#121418", 0.9) +
         line(`M${f(ax - 8.6)},${f(y + 9)} L${f(ax - 6.6)},${f(y + 9)} M${f(ax - 3.6)},${f(y + 9)} L${f(ax - 1.2)},${f(y + 9)} M${f(ax + 1.2)},${f(y + 9)} L${f(ax + 3.6)},${f(y + 9)} M${f(ax + 6.6)},${f(y + 9)} L${f(ax + 8.6)},${f(y + 9)}`, "#30343b", 0.9, 1);
-      // The lit welt rides the leg's own layer, at that leg's depth.
-      out += energy(`<path d="M${pt(ax - 9.4, y + 6.4)} L${pt(ax + 9.4, y + 6.4)}" fill="none" stroke-width=".7" stroke-linecap="round"/>`, hot);
+      glow += energy(`<path d="M${pt(ax - 9.4, y + 6.4)} L${pt(ax + 9.4, y + 6.4)}" fill="none" stroke-width=".7" stroke-linecap="round"/>`, hot);
       return out;
     })
     .join("");
@@ -161,8 +162,7 @@ function streetwear(P, c, K) {
         s < 0
           ? `<path d="M${f(s * 3.4)},0 L${f(s * 3.4)},5 L${f(s * 1.6)},7 L${f(s * 1.6)},11 M${f(s * 3.4)},5 L${f(s * 4.4)},6.2 M${f(-s * 2.6)},1 L${f(-s * 2.6)},4.4 L${f(-s * 1)},6 L${f(-s * 1)},9" fill="none" stroke-width=".55" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${f(s * 1.6)}" cy="11.6" r=".7"/><circle cx="${f(s * 4.6)}" cy="6.4" r=".55"/><circle cx="${f(-s * 1)}" cy="9.6" r=".55"/>`
           : `<path d="M-2.6,0.4 L-2.6,2.6 L-1,4.2 M2.8,0.4 L2.8,3 L1.4,4.4" fill="none" stroke-width=".55" stroke-linecap="round" stroke-linejoin="round"/><circle cx="0" cy="2" r=".55"/>`;
-      // The ink's light rides the arm's own layer, at that arm's depth.
-      out += `<g transform="translate(${pt(...a)}) rotate(${f(heading(el, wr) * -1)})">` + energy(ink, hot) + `</g>`;
+      glow += `<g transform="translate(${pt(...a)}) rotate(${f(heading(el, wr) * -1)})">` + energy(ink, hot) + `</g>`;
       if (s > 0) {
         // The deck: a slab strapped on the forearm, a lit screen, keys.
         const dk = lerp(el, wr, 0.56);
@@ -170,7 +170,7 @@ function streetwear(P, c, K) {
           plateAt(dk, el, wr, "M-5.8,-4.2 L5.6,-4.2 L6.2,4.2 L-6,4.2 Z", STEEL_DK, 1) +
           plateAt(dk, el, wr, "M-4.6,-3 L4.4,-3 L4.6,0.6 L-4.6,0.6 Z", "#05080d", 0.5) +
           lineAt(dk, el, wr, "M-4,2.4 L-2.6,2.4 M-1.4,2.4 L0,2.4 M1.2,2.4 L2.6,2.4", "#9fb0c0", 0.7, 0.9);
-        out += `<g transform="translate(${pt(...dk)}) rotate(${f(heading(el, wr) * -1)})">` +
+        glow += `<g transform="translate(${pt(...dk)}) rotate(${f(heading(el, wr) * -1)})">` +
           energy(`<path d="M-3.6,-1.2 L-2.2,-1.2 L-1.4,-2.2 L0.2,0 L1.2,-1.6 L3.4,-1.6" fill="none" stroke-width=".45" stroke-linejoin="round"/>`, hot) +
           `</g>`;
         // The cable: out from behind the shoulder pad, down the outside of
@@ -188,7 +188,7 @@ function streetwear(P, c, K) {
     })
     .join("");
 
-  return { under, legs, torso, arms, glow: "" };
+  return { under, legs, torso, arms, glow };
 }
 
 // ── Helmet: LED mask ───────────────────────────────────────────────────────
