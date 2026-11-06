@@ -60,6 +60,35 @@ test("a hair colour picked in the showroom changes the figure and survives a rel
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).hairColor)).toBe("pink");
 });
 
+test("presets and looks saved before hair colour keep the hair colour picked", async ({ page }) => {
+  await openCreator(page);
+  const ch = () => page.evaluate(() => ({ ...window.ccDebug.game.character }));
+  const colorIdx = (id) => page.evaluate(async (k) => (await import("/src/data/cosmetics.js")).HAIR_COLORS.findIndex((e) => e.id === k), id);
+  await tab(page, "face").click();
+  await opt(page, "hairColor", await colorIdx("pink")).click();
+  // A preset sets the cut, never the colour.
+  await room(page).locator('.preset[data-preset="0"]').click();
+  expect(await ch()).toMatchObject({ hair: "short", hairColor: "pink" });
+  // Two looks saved before hair colour: one of table positions, one of ids.
+  await page.evaluate(() => {
+    localStorage.setItem("cc_saved_looks", JSON.stringify([
+      { name: "Old", look: { colorIndex: 3, hairIndex: 12 } },
+      { name: "Mid", look: { version: 2, color: "solar_gold", hair: "afro" } },
+    ]));
+    document.querySelector("agent-showroom").renderLooks();
+  });
+  await room(page).locator(".look .preset").nth(0).click();
+  expect(await ch()).toMatchObject({ color: "void_purple", hair: "long", hairColor: "pink" });
+  await room(page).locator(".look .preset").nth(1).click();
+  expect(await ch()).toMatchObject({ color: "solar_gold", hair: "afro", hairColor: "pink" });
+  // A look saved with a hair colour wears it again.
+  await room(page).locator(".save-look").click();
+  await opt(page, "hairColor", await colorIdx("teal")).click();
+  expect((await ch()).hairColor).toBe("teal");
+  await room(page).locator(".look .preset").nth(2).click();
+  expect((await ch()).hairColor).toBe("pink");
+});
+
 test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));

@@ -64,6 +64,8 @@ const CAMERAS = ["full", "bust", "face"];
 const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
 const gear = (items) => ({ ...DEFAULT_ACCESSORIES, ...items });
 
+// Presets set no body or hair colour: those are the player's own picks, and
+// wearing a preset keeps them (applyPreset spreads over the current look).
 const PRESETS = [
   { name: "Regulation", ch: { color: "chrono_teal", skinTone: "warm_light", hair: "short", eye: "blue", armor: "standard", helmet: "standard", visor: "standard", shoulder: "pads", weaponSkin: "default",
     badge: presetBadge("p_clock", ["chest", "shoulder"]), accessories: gear({ waist: "belt", neck: "tags" }) } },
@@ -237,12 +239,15 @@ const SECTION_NOTES = {
  * the cc_character version they were written in; one saved before the look
  * moved to ids holds table positions and goes through the same migration as
  * the character save. Any id its table no longer knows reads as the default.
+ * A field the look does not hold is left out, so wearing it keeps the
+ * current pick: a look saved before hair colour existed keeps the hair
+ * colour the player has now, as one saved before body types keeps the body.
  */
 function readLook(raw) {
   const m = migrateCharacterSave(raw);
   const look = {};
   for (const k of LOOK_FIELDS) {
-    if (!(k in m)) continue;
+    if (!(k in m)) continue; // not saved with this look: the current pick stays
     look[k] = k in LOOK_TABLES ? pieceOf(m, k).id : m[k];
   }
   return look;
