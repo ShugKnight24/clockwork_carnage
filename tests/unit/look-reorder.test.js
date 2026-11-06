@@ -69,7 +69,7 @@ describe("unlock state after a reorder", () => {
     expect(unlockedIds("armor", ARMOR_STYLES, ctx)).toEqual(["standard"]);
     expect(lockedPairs(ctx)).toEqual([
       "armor:heavy", "armor:howitzer", "armor:pathfinder", "armor:recon", "armor:reliquary", "armor:stealth", "armor:tech", "armor:trencher",
-      "helmet:angular", "helmet:brim", "helmet:bucket", "helmet:clockface", "helmet:cockpit", "helmet:crested", "helmet:crusader", "helmet:kabuto", "helmet:ledmask", "helmet:mohawk", "helmet:ordnance", "helmet:pilot", "helmet:porthole", "helmet:reaper", "helmet:sealed", "helmet:wide",
+      "helmet:angular", "helmet:brim", "helmet:bubble", "helmet:bucket", "helmet:clockface", "helmet:cockpit", "helmet:crested", "helmet:crusader", "helmet:kabuto", "helmet:ledmask", "helmet:mohawk", "helmet:ordnance", "helmet:pilot", "helmet:porthole", "helmet:reaper", "helmet:sealed", "helmet:wide",
     ]);
   });
 
@@ -79,7 +79,7 @@ describe("unlock state after a reorder", () => {
     expect(unlockedIds("armor", ARMOR_STYLES, ctx)).toEqual(["pathfinder", "recon", "standard", "stealth"]);
     expect(lockedPairs(ctx)).toEqual([
       "armor:heavy", "armor:howitzer", "armor:reliquary", "armor:tech", "armor:trencher",
-      "helmet:brim", "helmet:bucket", "helmet:clockface", "helmet:cockpit", "helmet:crested", "helmet:crusader", "helmet:kabuto", "helmet:ledmask", "helmet:mohawk", "helmet:ordnance", "helmet:porthole",
+      "helmet:brim", "helmet:bubble", "helmet:bucket", "helmet:clockface", "helmet:cockpit", "helmet:crested", "helmet:crusader", "helmet:kabuto", "helmet:ledmask", "helmet:mohawk", "helmet:ordnance", "helmet:porthole",
     ]);
   });
 

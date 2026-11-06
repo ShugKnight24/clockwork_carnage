@@ -143,13 +143,13 @@ describe("helmets", () => {
   });
 
   it("FACE_HELMETS equals the open helmets, derived from the data and read-only", () => {
-    expect([...FACE_HELMETS].sort()).toEqual(["brim", "ledmask", "mohawk", "wide"]);
+    expect([...FACE_HELMETS].sort()).toEqual(["brim", "bubble", "ledmask", "mohawk", "wide"]);
     expect([...FACE_HELMETS].sort()).toEqual(HELMET_STYLES.filter((e) => e.face === true).map((e) => e.id).sort());
     expect(() => FACE_HELMETS.add("standard")).toThrow();
     expect(() => FACE_HELMETS.delete("wide")).toThrow();
     expect(() => FACE_HELMETS.clear()).toThrow();
     expect(FACE_HELMETS.has("wide")).toBe(true);
-    expect(FACE_HELMETS.size).toBe(4);
+    expect(FACE_HELMETS.size).toBe(5);
   });
 
   it("throws on an unknown helmet rather than drawing another", () => {
@@ -279,6 +279,15 @@ describe("the Abyssal Diver theme", () => {
     expect(FACE_HELMETS.has("porthole")).toBe(false);
     expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true });
     expect(rigAnchors(STAND, [0, 0], "standing", "porthole").helmet).toEqual({ x: -10.4, y: -91.6, rot: -20, size: 3.8 });
+  });
+});
+
+describe("the Void Ranger theme", () => {
+  it("the pressure suit covers the kit, collar and limb light; the bubble is open glass that takes no gear", () => {
+    expect([...FRAME_ART.spacesuit.shape.hides]).toEqual(["kit", "collar", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "bubble")).toMatchObject({ face: true, visor: false });
+    expect(helmetSeats("bubble")).toEqual({ crown: false, brow: false, side: false });
+    expect(HELMET_ART.bubble.anchors.badge).toBe(false);
   });
 });
 
