@@ -230,12 +230,12 @@
 <path d="M8.8,-26.2 C7,-24.2 3.6,-23 1,-22.8" fill="none" stroke="#4f8f7c" stroke-width="0.8" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <path d="M-9,-68 L9,-68 L10,-38 L-10,-38 Z" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-frame-clockwork-brass-dk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
-<path d="M0,-40 L0,8.4" fill="none" stroke="#04060b" stroke-width="2.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M0,-40 L0,4.4" fill="none" stroke="#c8923a" stroke-width="1.1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="0" cy="8.4" r="5.6" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-frame-clockwork-brass)" stroke="#04060b" stroke-width="0.9"/>
-<circle cx="0" cy="8.4" r="3.2" fill="none" stroke="#2a1a06" stroke-width="0.5" opacity="0.7"/>
-<path d="M-3.4,6.8 C-2.6,4.8 -0.6,4.2 0.6,4.2" fill="none" stroke="#fff1c2" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M4.4,9.4 C3.4,12 1,13.2 -1,13.2" fill="none" stroke="#4f8f7c" stroke-width="0.8" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-40 L0,34" fill="none" stroke="#04060b" stroke-width="2.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-40 L0,30" fill="none" stroke="#c8923a" stroke-width="1.1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="34" r="5.6" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-frame-clockwork-brass)" stroke="#04060b" stroke-width="0.9"/>
+<circle cx="0" cy="34" r="3.2" fill="none" stroke="#2a1a06" stroke-width="0.5" opacity="0.7"/>
+<path d="M-3.4,32.4 C-2.6,30.4 -0.6,29.8 0.6,29.8" fill="none" stroke="#fff1c2" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4.4,35 C3.4,37.6 1,38.8 -1,38.8" fill="none" stroke="#4f8f7c" stroke-width="0.8" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-17,-20.2C-17.3,-18.9 -18.6,-14.9 -19.1,-12.1C-19.6,-9.3 -19.8,-6.8 -19.8,-3.4C-19.8,0 -19.2,4.6 -19,8.2C-18.7,11.7 -18.4,16.2 -18.3,17.8C-19,23.4 -7.9,24.9 -7.1,19.3C-6.9,18.8 -6.4,17.7 -5.9,16.4C-5.4,15.1 -4.6,13.9 -4,11.3C-3.4,8.7 -3,4.4 -2.4,0.8C-1.7,-2.8 -0.5,-7.3 -0.1,-10.4C0.4,-13.5 0.4,-16.7 0.5,-18C1.6,-26.7 -15.8,-29 -17,-20.2Z" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-17,-20.2C-17.3,-18.9 -18.6,-14.9 -19.1,-12.1C-19.6,-9.3 -19.8,-6.8 -19.8,-3.4C-19.8,0 -19.2,4.6 -19,8.2C-18.7,11.7 -18.4,16.2 -18.3,17.8C-19,23.4 -7.9,24.9 -7.1,19.3C-6.9,18.8 -6.4,17.7 -5.9,16.4C-5.4,15.1 -4.6,13.9 -4,11.3C-3.4,8.7 -3,4.4 -2.4,0.8C-1.7,-2.8 -0.5,-7.3 -0.1,-10.4C0.4,-13.5 0.4,-16.7 0.5,-18C1.6,-26.7 -15.8,-29 -17,-20.2Z" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-weave)"/>
 <path d="M-17,-20.2C-17.3,-18.9 -18.6,-14.9 -19.1,-12.1C-19.6,-9.3 -19.8,-6.8 -19.8,-3.4C-19.8,0 -19.2,4.6 -19,8.2C-18.7,11.7 -18.4,16.2 -18.3,17.8C-19,23.4 -7.9,24.9 -7.1,19.3C-6.9,18.8 -6.4,17.7 -5.9,16.4C-5.4,15.1 -4.6,13.9 -4,11.3C-3.4,8.7 -3,4.4 -2.4,0.8C-1.7,-2.8 -0.5,-7.3 -0.1,-10.4C0.4,-13.5 0.4,-16.7 0.5,-18C1.6,-26.7 -15.8,-29 -17,-20.2Z" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-cyl)"/>
@@ -885,6 +885,11 @@
 <circle cx="0" cy="-82.4" r="11.2" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-helmet-clockface-brass-dk)" stroke="#2a1a06" stroke-width="0.5"/>
 <circle cx="0" cy="-82.4" r="9.7" fill="#c8923a" stroke="#04060b" stroke-width="0.6"/>
 <circle cx="0" cy="-82.4" r="9.2" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-helmet-clockface-dial)" stroke="#04060b" stroke-width="0.5"/>
+<circle cx="0" cy="-82.4" r="8.9" fill="none" stroke="#05080a" stroke-width="1.2"/>
+<path d="M3.6,-88.7 L4.2,-89.8 M6.3,-86.1 L7.4,-86.6 M6.3,-78.8 L7.4,-78.1 M3.6,-76.1 L4.2,-75 M-3.6,-76.1 L-4.2,-75 M-6.3,-78.7 L-7.4,-78.1 M-6.3,-86.1 L-7.4,-86.6 M-3.7,-88.7 L-4.3,-89.8" fill="none" stroke="#d8e2df" stroke-width="0.55" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-88.6 L0,-90.9 M6.2,-82.4 L8.5,-82.4 M0,-76.2 L0,-73.9 M-6.2,-82.4 L-8.5,-82.4" fill="none" stroke="#04060b" stroke-width="1.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1.1,-81.6 L-4.1,-85.3" fill="none" stroke="#04060b" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-1.2,-81.7 L6.3,-86.3" fill="none" stroke="#04060b" stroke-width="1.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-11.8,-78.4 A12.2,12.2 0 0 0 6,-71" fill="none" stroke="#4f8f7c" stroke-width="1.2" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-11.6,-85.4 A12,12 0 0 1 -2,-94.3" fill="none" stroke="#fff1c2" stroke-width="0.8" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 <ellipse cx="-6.4" cy="-91.2" rx="3.6" ry="1.8" fill="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-sheen)"/>
@@ -915,13 +920,13 @@
 <circle cx="3.2" cy="-81.6" r="0.45"/>
 </g>
 <g filter="url(#horologist-0-clockface-clockwork-gearrim-masc-hero-glow)" fill="#ff4df2" stroke="#ff4df2">
-<path d="M0,-88.6 L0,-90.9 M3.6,-88.7 L4.2,-89.8 M6.3,-86.1 L7.4,-86.6 M6.2,-82.4 L8.5,-82.4 M6.3,-78.8 L7.4,-78.1 M3.6,-76.1 L4.2,-75 M0,-76.2 L0,-73.9 M-3.6,-76.1 L-4.2,-75 M-6.3,-78.7 L-7.4,-78.1 M-6.2,-82.4 L-8.5,-82.4 M-6.3,-86.1 L-7.4,-86.6 M-3.7,-88.7 L-4.3,-89.8" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+<path d="M0,-88.6 L0,-90.9 M6.2,-82.4 L8.5,-82.4 M0,-76.2 L0,-73.9 M-6.2,-82.4 L-8.5,-82.4" fill="none" stroke-width="0.75" stroke-linecap="round"/>
 <path d="M1.1,-81.6 L-4.1,-85.3" fill="none" stroke-width="1.1" stroke-linecap="round"/>
 <path d="M-1.2,-81.7 L6.3,-86.3" fill="none" stroke-width="0.7" stroke-linecap="round"/>
 <circle cx="0" cy="-82.4" r="0.9"/>
 </g>
 <g fill="#bffcff" stroke="#bffcff" opacity="0.9">
-<path d="M0,-88.6 L0,-90.9 M3.6,-88.7 L4.2,-89.8 M6.3,-86.1 L7.4,-86.6 M6.2,-82.4 L8.5,-82.4 M6.3,-78.8 L7.4,-78.1 M3.6,-76.1 L4.2,-75 M0,-76.2 L0,-73.9 M-3.6,-76.1 L-4.2,-75 M-6.3,-78.7 L-7.4,-78.1 M-6.2,-82.4 L-8.5,-82.4 M-6.3,-86.1 L-7.4,-86.6 M-3.7,-88.7 L-4.3,-89.8" fill="none" stroke-width="0.7" stroke-linecap="round"/>
+<path d="M0,-88.6 L0,-90.9 M6.2,-82.4 L8.5,-82.4 M0,-76.2 L0,-73.9 M-6.2,-82.4 L-8.5,-82.4" fill="none" stroke-width="0.75" stroke-linecap="round"/>
 <path d="M1.1,-81.6 L-4.1,-85.3" fill="none" stroke-width="1.1" stroke-linecap="round"/>
 <path d="M-1.2,-81.7 L6.3,-86.3" fill="none" stroke-width="0.7" stroke-linecap="round"/>
 <circle cx="0" cy="-82.4" r="0.9"/>

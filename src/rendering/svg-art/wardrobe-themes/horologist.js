@@ -69,8 +69,9 @@ function gear(B, cx, cy, r, n, o = {}) {
 function clockwork(P, c, K) {
   const B = brass(K);
   const { BRASS, BRASS_DK } = B;
-  // Behind the body: a brass spine plate, the pendulum swinging below it and
-  // the wind-up key standing over the right shoulder.
+  // Behind the body: a brass spine plate, the wind-up key standing over the
+  // right shoulder and a long-case pendulum hanging from the plate, its rod
+  // behind the hips and its bob low between the shins, clear of them.
   const key =
     `<g transform="translate(5,-63) rotate(28)">` +
     shape("M-1.3,0 L1.3,0 L1.1,-20 L-1.1,-20 Z", STEEL_DK, 0.8) +
@@ -83,7 +84,7 @@ function clockwork(P, c, K) {
     line("M-9.4,-30.6 C-9,-32.8 -6.6,-33.6 -4.8,-32.6", BRASS_HI, 0.6, 0.8) +
     line("M8.8,-26.2 C7,-24.2 3.6,-23 1,-22.8", PATINA, 0.8, 0.7) +
     `</g>`;
-  const bob = [0, 8.4];
+  const bob = [0, 34];
   const pendulum =
     line(`M0,-40 L${pt(...bob)}`, INK, 2.2, 1) +
     line(`M0,-40 L${pt(bob[0], bob[1] - 4)}`, "#c8923a", 1.1, 1) +
@@ -163,18 +164,22 @@ function clockface(c, K) {
   const cy = -82.4;
   const R = 12.8;
   const face = 9.2;
+  // Hour marks: the quarters long and lit, the rest short painted ticks.
   const ticks = [];
+  const quarters = [];
   for (let i = 0; i < 12; i++) {
     const a = (i * Math.PI) / 6;
     const big = i % 3 === 0;
     const r0 = big ? face - 3 : face - 1.9;
     const r1 = face - 0.7;
-    ticks.push(`M${pt(cx + Math.sin(a) * r0, cy - Math.cos(a) * r0)} L${pt(cx + Math.sin(a) * r1, cy - Math.cos(a) * r1)}`);
+    (big ? quarters : ticks).push(`M${pt(cx + Math.sin(a) * r0, cy - Math.cos(a) * r0)} L${pt(cx + Math.sin(a) * r1, cy - Math.cos(a) * r1)}`);
   }
-  const hand = (deg, len, w) => {
+  const hand = (deg, len) => {
     const a = (deg * Math.PI) / 180;
     return `M${pt(cx - Math.sin(a) * 1.4, cy + Math.cos(a) * 1.4)} L${pt(cx + Math.sin(a) * len, cy - Math.cos(a) * len)}`;
   };
+  const hours = hand(305, 5);
+  const minutes = hand(58, 7.4);
   // Knurled crown and stem on top, a bow ring through it.
   const crown =
     shape(`M-1.1,${f(cy - R - 0.2)} L1.1,${f(cy - R - 0.2)} L1,${f(cy - R - 3)} L-1,${f(cy - R - 3)} Z`, STEEL_DK, 0.6) +
@@ -192,6 +197,14 @@ function clockface(c, K) {
     `<circle cx="${cx}" cy="${cy}" r="${f(R - 1.6)}" fill="${BRASS_DK}" stroke="${GEAR_INK}" stroke-width=".5"/>` +
     `<circle cx="${cx}" cy="${cy}" r="${f(face + 0.5)}" fill="#c8923a" stroke="${INK}" stroke-width=".6"/>` +
     `<circle cx="${cx}" cy="${cy}" r="${face}" fill="url(#${dial})" stroke="${INK}" stroke-width=".5"/>` +
+    // A dark chapter ring parts the dial from the brass, so the light on
+    // it reads whatever the palette (a gold one would melt into the case).
+    `<circle cx="${cx}" cy="${cy}" r="${f(face - 0.3)}" fill="none" stroke="#05080a" stroke-width="1.2"/>` +
+    // Painted marks and the hands' dark backing, crisp under the light.
+    line(ticks.join(" "), "#d8e2df", 0.55, 0.85) +
+    line(quarters.join(" "), INK, 1.5, 1) +
+    line(hours, INK, 2, 1) +
+    line(minutes, INK, 1.5, 1) +
     // Patina gathering low on the case, the shine high on the left.
     line(`M${pt(cx - R + 1, cy + 4)} A${R - 0.6},${R - 0.6} 0 0 0 ${pt(cx + 6, cy + R - 1.4)}`, PATINA, 1.2, 0.55) +
     line(`M${pt(cx - R + 1.2, cy - 3)} A${R - 0.8},${R - 0.8} 0 0 1 ${pt(cx - 2, cy - R + 0.9)}`, BRASS_HI, 0.8, 0.85) +
@@ -204,9 +217,9 @@ function clockface(c, K) {
   const glow =
     K.eyeGlow(c, 0.35, true) +
     energy(
-      `<path d="${ticks.join(" ")}" fill="none" stroke-width=".7" stroke-linecap="round"/>` +
-        `<path d="${hand(305, 5, 1)}" fill="none" stroke-width="1.1" stroke-linecap="round"/>` +
-        `<path d="${hand(58, 7.4, 1)}" fill="none" stroke-width=".7" stroke-linecap="round"/>` +
+      `<path d="${quarters.join(" ")}" fill="none" stroke-width=".75" stroke-linecap="round"/>` +
+        `<path d="${hours}" fill="none" stroke-width="1.1" stroke-linecap="round"/>` +
+        `<path d="${minutes}" fill="none" stroke-width=".7" stroke-linecap="round"/>` +
         `<circle cx="${cx}" cy="${cy}" r=".9"/>`,
       c.energy,
     );
