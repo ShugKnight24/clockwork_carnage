@@ -75,6 +75,7 @@ describe("agent rig golden snapshots", () => {
     const fallen = GOLDEN_MATRIX.filter((e) => e.kind === "cast" && e.opts.key === "hero_fallen");
     expect(fallen.some(open), "fallen open helmet").toBe(true);
     expect(fallen.some((e) => !open(e) && !visorless(e)), "fallen closed helmet").toBe(true);
+    for (const { id } of BODY_FRAMES) expect(fallen.some((e) => e.ids.frame === id), `fallen frame ${id}`).toBe(true);
     for (const helmet of HELMET_STYLES.filter((h) => h.visor === false)) {
       expect(fallen.some((e) => e.ids.helmet === helmet.id), `fallen ${helmet.id}`).toBe(true);
     }

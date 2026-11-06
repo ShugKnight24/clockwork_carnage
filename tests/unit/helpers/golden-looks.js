@@ -102,7 +102,6 @@ const THEME_LOOKS = THEMES.flatMap((t, k) => {
     return { name: `${t.id}-${j}-${look.helmet}-${look.frame}-${look.shoulder}`, look };
   });
 });
-const VISORLESS = new Set(WARDROBE_THEMES.flatMap((t) => t.helmets.filter((e) => e.visor === false).map((e) => e.id)));
 
 const pad = (n) => String(n).padStart(2, "0");
 const lookName = (i) => {
@@ -145,16 +144,23 @@ function buildMatrix() {
   out.push({ name: `real-${lookName(2)}-fem-hero`, ids: { ...PIECE_LOOKS[2], body: "fem" }, opts: { pose: "hero", realistic: true }, kind: "svg" });
   out.push({ name: `real-cast-hero_fallen-${lookName(6)}-masc`, ids: { ...PIECE_LOOKS[6], body: "masc" }, opts: { key: "hero_fallen", realistic: true }, kind: "cast" });
   out.push({ name: `bust-peek-${lookName(1)}-masc`, ids: { ...PIECE_LOOKS[1], body: "masc" }, opts: { pose: "bust", peek: true }, kind: "svg" });
+  // The fallen agent in every Field Issue frame the helmets above left out,
+  // so each frame's fallen silhouette is drawn (appended: no id moves).
+  const downFrames = new Set(out.filter((e) => e.opts.key === "hero_fallen").map((e) => e.ids.frame));
+  for (const frame of ids(ISSUE.frames).filter((id) => !downFrames.has(id))) {
+    const i = PIECE_LOOKS.findIndex((l) => l.frame === frame);
+    out.push({ name: `cast-hero_fallen-${lookName(i)}-masc`, ids: { ...PIECE_LOOKS[i], body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
+  }
   // Field Issue entries take their ids from their place in the matrix.
   const issue = out.map((e, n) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `g${n}-` } } : e));
   // The other themes, last, each entry's ids prefixed by its own name so no
-  // other entry moves them; their visorless helmets fallen too, as above.
+  // other entry moves them; every look fallen too, as above.
   const themed = [];
   for (const { name, look } of THEME_LOOKS) {
     for (const body of ids(BODY_TYPES)) {
       for (const pose of ["idle", "hero"]) themed.push({ name: `${name}-${body}-${pose}`, ids: { ...look, body }, opts: { pose }, kind: "svg" });
     }
-    if (VISORLESS.has(look.helmet)) themed.push({ name: `cast-hero_fallen-${name}-masc`, ids: { ...look, body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
+    themed.push({ name: `cast-hero_fallen-${name}-masc`, ids: { ...look, body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
   }
   return [...issue, ...themed.map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
 }

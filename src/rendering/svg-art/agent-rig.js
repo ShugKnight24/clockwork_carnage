@@ -1587,6 +1587,20 @@ function badgeAt(c, a, detail = "high") {
 
 const wears = (c, where) => c.badge.placements.includes(where);
 
+/**
+ * The shoulder piece the look's frame wears on side `s`, and the scale the
+ * frame grows it by about its joint: the frame's `shoulder`, as far as the
+ * piece allows (maxShoulderScale). A frame with its own right shoulder piece
+ * (rightShoulder: the Strider's bare cap) wears it whatever the pick; a
+ * frame that hides the shoulders wears none (null).
+ */
+function frameShoulder(c, s, tilt, scope) {
+  if (frameHides(c.frame, "shoulders")) return null;
+  const fs = frameShape(c.frame);
+  const id = fs.rightShoulder && s > 0 ? fs.rightShoulder : c.shoulder;
+  return { markup: shoulder(c, s, tilt, scope, id), scale: Math.min(fs.shoulder, shoulderArt(id).maxShoulderScale ?? Infinity) };
+}
+
 /** Gorget, with the bare neck above it when the face shows; `plate: false` leaves off the gorget (a frame that hides the collar). */
 const collarOf = (c, showFace, map, plate = true) =>
   (showFace ? shape(NECK, "url(#skin)", 1) + `<path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="${c.skin.shadow}" opacity=".5"/>` : "") +
@@ -1637,16 +1651,14 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const hides = (what) => frameHides(c.frame, what);
   const collar = collarOf(c, showFace, map, !hides("collar"));
   const hideKit = hides("kit");
-  // Shoulders scale about their joint with the frame, as far as the piece
-  // allows (maxShoulderScale); a frame with its own right shoulder piece
-  // (rightShoulder: the Strider's bare cap) wears it whatever the pick.
+  // Shoulders scale about their joint with the frame (frameShoulder) and
+  // the build.
   const shoulderAt = (s, t) => {
-    if (hides("shoulders")) return "";
-    const id = fs.rightShoulder && s > 0 ? fs.rightShoulder : c.shoulder;
-    const inner = shoulder(c, s, t, scope, id);
-    const k = Math.min(fs.shoulder, shoulderArt(id).maxShoulderScale ?? Infinity) * B.shoulder;
+    const worn = frameShoulder(c, s, t, scope);
+    if (!worn) return "";
+    const k = worn.scale * B.shoulder;
     const dx = s * 20 * (B.sh - 1);
-    return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
+    return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${worn.markup}</g>`;
   };
   // The torso and what sits on it take the build's shape; limbs already
   // carry it through their joints and thickness.
@@ -1899,9 +1911,19 @@ const visorCracks = (c) =>
   line("M4.4,-89.2 L6.2,-86.6 L5.4,-85.6 M6.2,-86.6 L8.6,-86.8", INK, 0.55, 0.9);
 
 /**
+ * The pose with one arm only, the other side left a hole in P.arms (frames
+ * walk P.arms with map, which skips it): the fallen agent draws each arm's
+ * frame layer at that arm's own depth.
+ */
+const withArm = (P, i) => ({ ...P, arms: Object.assign([], { [i]: P.arms[i] }) });
+
+/**
  * The customised agent down on the floor, in the rig coordinates of the stock
  * hero_fallen (models/hero.js): same limbs, damage and cape, dressed in the
- * character's armour, shoulders, helmet, gear and colours.
+ * character's frame, armour, shoulders, helmet, gear and colours. The frame
+ * draws as standing (its layers, the stock layers it hides, its width and
+ * shoulder scale), with the arm under the body and the arm over it each
+ * wearing its own sleeve.
  */
 function fallenParts(c) {
   const map = { ...bodyMap(c), "#4a0c0c": c.cape[2], "#e05050": mix(c.cape[0], "#ffffff", 0.2), "#140202": mix(c.cape[3], "#000000", 0.5) };
@@ -1919,25 +1941,42 @@ function fallenParts(c) {
   const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
   // The free arm lies on top of the body, so its vambrace badge rides with it.
   const armBadge = wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "";
+  // The frame, as buildAgentParts wears it (see HIDES).
+  const K = { mix, ...scope.kit(`frame-${c.frame}`) };
+  const fr = frameLayers(c.frame, P, c, K);
+  const [upperSleeve, trappedSleeve] = [0, 1].map((i) => frameLayers(c.frame, withArm(P, i), c, K).arms);
+  const fs = frameShape(c.frame);
+  const hides = (what) => frameHides(c.frame, what);
+  const hideKit = hides("kit");
+  const capeOff = acc.replacesCape || c.capeOff || hides("cape");
+  const shoulderAt = (s, tilt) => {
+    const worn = frameShoulder(c, s, tilt, scope);
+    if (!worn) return "";
+    if (worn.scale === 1) return worn.markup;
+    return `<g transform="translate(${f(s * 14)},-64) scale(${f(worn.scale)}) translate(${f(-s * 14)},64)">${worn.markup}</g>`;
+  };
+  const limb = (glow) => (hides("limbGlow") ? "" : glow);
   return {
-    width: ARMOR_WIDTH[c.armor] || 1,
-    pool: acc.replacesCape || c.capeOff ? "" : recolor(fallenCape(), map),
+    width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
+    pool: capeOff ? "" : recolor(fallenCape(), map),
     under:
       kit.back +
       acc.back +
-      recolor(trappedArm.body + lowerLeg.body + upperLeg.body + torso(), map) +
-      chestTrim(c) +
-      insignia(c) +
-      kit.front +
-      variantTrim(c) +
+      recolor(fr.under + trappedArm.body + trappedSleeve + lowerLeg.body + upperLeg.body + fr.legs + torso({ hips: !hides("hips") }) + fr.torso, map) +
+      (fs.softTorso || hideKit ? "" : chestTrim(c)) +
+      (hideKit ? "" : insignia(c) + kit.front + variantTrim(c)) +
       fallenDamage() +
-      recolor(shoulder(c, 1, -4, scope), map) +
+      recolor(shoulderAt(1, -4), map) +
       (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
-      collarOf(c, showFace, map) +
+      collarOf(c, showFace, map, !hides("collar")) +
       acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
-    over: recolor((acc.replacesCape || c.capeOff ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14, scope), map) + leftBadge + armBadge + acc.top,
-    glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow + acc.glow,
+    over: recolor((capeOff ? "" : capeFlap()) + upperArm.body + upperSleeve + shoulderAt(-1, 14), map) + leftBadge + armBadge + acc.top,
+    glow:
+      recolor(limb(lowerLeg.glow + upperLeg.glow) + (fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW) + limb(upperArm.glow), map) +
+      (hideKit ? "" : kit.glow) +
+      fr.glow +
+      acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),
     capeIn:

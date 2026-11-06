@@ -2,7 +2,7 @@
 // ("hides-<word>", the standard frame hiding one word) are added to the
 // Field Issue theme's data and art modules for this file only.
 import { describe, it, expect, vi } from "vitest";
-import { buildAgentParts } from "../../src/rendering/svg-art/agent-rig.js";
+import { buildAgentParts, buildCastModel } from "../../src/rendering/svg-art/agent-rig.js";
 import { torso } from "../../src/rendering/svg-art/models/hero.js";
 import { HIDES, validateWardrobe } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
@@ -23,6 +23,8 @@ vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOri
 
 const parts = (frame, ids = {}) => buildAgentParts(lookFromIds({ frame, ...ids }), { pose: "idle" });
 const count = (markup, s) => markup.split(s).length - 1;
+/** The fallen agent's layers by role: [floor, body, glow, head glow, sparks]. */
+const fallen = (frame, ids = {}) => buildCastModel(lookFromIds({ frame, ...ids }), "hero_fallen").layers.map((l) => l.markup);
 
 describe("the rig honours every hides word", () => {
   it("registers a fixture for every word", () => {
@@ -83,5 +85,37 @@ describe("the rig honours every hides word", () => {
     expect(stock.cape).not.toBe("");
     expect(parts("hides-cape").cape).toBe("");
     expect(parts("hides-limbGlow").glow.length).toBeLessThan(stock.glow.length);
+  });
+});
+
+describe("the fallen agent honours every hides word", () => {
+  it("hips: leaves off the belt's hip plates", () => {
+    const cyl = (m) => count(m, 'fill="url(#cyl)"');
+    expect(cyl(fallen("hides-hips")[1])).toBe(cyl(fallen("standard")[1]) - 1);
+  });
+
+  it("collar: drops the gorget, keeps the bare neck under an open helmet", () => {
+    const [stock, hidden] = ["standard", "hides-collar"].map((f) => fallen(f, { helmet: "wide" })[1]);
+    expect(count(hidden, "url(#skin)")).toBe(count(stock, "url(#skin)"));
+    expect(count(hidden, "url(#steel)")).toBeLessThan(count(stock, "url(#steel)"));
+  });
+
+  it("kit: drops the chest kit, insignia and core light; keeps the belt light", () => {
+    const ids = { armor: "recon" };
+    const [stock, hidden] = ["standard", "hides-kit"].map((f) => fallen(f, ids));
+    const INSIGNIA = 'scale(.62)" stroke-width=".9"';
+    expect(count(stock[1], INSIGNIA)).toBe(1);
+    expect(count(hidden[1], INSIGNIA)).toBe(0);
+    expect(stock[2]).toContain('cy="-54" r="1.7"');
+    expect(hidden[2]).not.toContain('cy="-54" r="1.7"');
+    expect(hidden[2]).toContain('y="-26" width="3.6" height="2.2"');
+  });
+
+  it("shoulders, cape, limbGlow: drop their stock layers", () => {
+    const stock = fallen("standard");
+    expect(fallen("hides-shoulders")[1].length).toBeLessThan(stock[1].length);
+    expect(stock[1]).toContain("url(#capeIn)");
+    expect(fallen("hides-cape")[1]).not.toContain("url(#capeIn)");
+    expect(fallen("hides-limbGlow")[2].length).toBeLessThan(stock[2].length);
   });
 });

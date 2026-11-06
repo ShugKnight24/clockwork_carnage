@@ -19,6 +19,7 @@ vi.mock("../../src/data/wardrobe-themes/issue.js", async (importOriginal) => {
   return {
     default: {
       ...issue,
+      frames: [...issue.frames, entry("frame-fixture")],
       helmets: [...issue.helmets, entry("anchor-fixture"), entry("badgeless-fixture")],
       shoulders: [...issue.shoulders, entry("shoulder-fixture"), entry("capped-fixture")],
     },
@@ -29,9 +30,23 @@ vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOri
   const { default: issue } = await importOriginal();
   const head = (tag) => () => ({ front: `<g data-fixture="${tag}-front"/>`, glow: `<g data-fixture="${tag}-glow"/>` });
   const pad = (tag) => (c, s) => `<g data-fixture="${tag}${s < 0 ? "-left" : "-right"}"/>`;
+  const mark = (tag) => `<g data-fixture="frame-${tag}"/>`;
   return {
     default: {
       ...issue,
+      frames: {
+        ...issue.frames,
+        "frame-fixture": {
+          shape: { width: 1.3, shoulder: 1, hides: [] },
+          layers: (P) => ({
+            under: mark("under"),
+            legs: P.legs.map((leg, i) => mark(`leg-${i}`)).join(""),
+            torso: mark("torso"),
+            arms: P.arms.map((arm, i) => mark(`arm-${i}`)).join(""),
+            glow: mark("glow"),
+          }),
+        },
+      },
       helmets: {
         ...issue.helmets,
         "anchor-fixture": { anchors: ANCHORS, seats: { brow: false }, paint: head("anchor") },
@@ -143,5 +158,25 @@ describe("shoulders come from their art", () => {
   it("a frame that hides the shoulders draws neither", () => {
     const body = buildAgentParts(look({ shoulder: "shoulder-fixture", frame: "operator" })).body;
     expect(body).not.toContain(`data-fixture="shoulder`);
+  });
+});
+
+describe("frames come from their art, standing and fallen", () => {
+  const at = (markup, tag) => markup.indexOf(`data-fixture="frame-${tag}"`);
+  const count = (markup, tag) => markup.split(`data-fixture="frame-${tag}"`).length - 1;
+
+  it("the fallen agent wears every layer of the frame, each arm once at its own depth", () => {
+    const [, body, glow] = buildCastModel(look({ frame: "frame-fixture" }), "hero_fallen").layers.map((l) => l.markup);
+    for (const tag of ["under", "leg-0", "leg-1", "torso", "arm-0", "arm-1"]) expect(count(body, tag), tag).toBe(1);
+    expect(count(glow, "glow")).toBe(1);
+    // The trapped arm lies under the body, the free arm over it.
+    expect(at(body, "under")).toBeLessThan(at(body, "arm-1"));
+    expect(at(body, "arm-1")).toBeLessThan(at(body, "torso"));
+    expect(at(body, "torso")).toBeLessThan(at(body, "arm-0"));
+  });
+
+  it("the fallen agent takes the frame's width", () => {
+    const [, body] = buildCastModel(look({ frame: "frame-fixture" }), "hero_fallen").layers.map((l) => l.markup);
+    expect(body).toContain('transform="scale(1.3 1)"');
   });
 });

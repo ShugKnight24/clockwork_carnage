@@ -16,7 +16,9 @@
  *       armoured body. `under` sits behind the body (packs, coat tails),
  *       `legs`/`torso`/`arms` over their stock parts, `glow` is energy light.
  *       Helpers: ../frame-kit.js and ../models/hero.js by import; K is the
- *       rig's kit (K.mix blends two hex colours).
+ *       rig's kit (K.mix blends two hex colours). The fallen agent also
+ *       asks for each arm on its own, the other side a hole in P.arms, so
+ *       walk P.arms (and P.legs) with map and never index them.
  *
  *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors, seats? } }
  *     paint: the whole head under the helmet (not called for a face peek,
