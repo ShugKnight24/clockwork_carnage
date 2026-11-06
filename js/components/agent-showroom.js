@@ -28,7 +28,8 @@ import {
   WEAPON_SKINS,
   takesVisor,
 } from "../../src/data/cosmetics.js";
-import { FRAME_SHAPE } from "../../src/rendering/svg-art/frames.js";
+import { frameShape } from "../../src/rendering/svg-art/frames.js";
+import { frameHides } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import * as Skins from "../../src/data/weapon-skins.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
@@ -247,12 +248,11 @@ function readLook(raw) {
 const previewChanges = (ch, p) => (p.key === "armorVariant" ? { armorVariant: p.value } : withIndex(ch, p.key, p.value));
 const previewedValue = (ch, key) => (key === "armorVariant" ? ch.armorVariant | 0 : getIndex(ch, key));
 
-/** Why the frame overrides the shoulder pick (its FRAME_SHAPE flags), or "". */
+/** Why the frame overrides the shoulder pick (it hides shoulders, or keeps the right one bare), or "". */
 function shoulderNote(ch) {
   const frame = pieceOf(ch, "frame");
-  const shape = FRAME_SHAPE[frame.id] || {};
-  if (shape.noShoulders) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
-  if (shape.bareRight) return `${frame.name} keeps the right shoulder bare: this pick fits the left.`;
+  if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
+  if (frameShape(frame.id).bareRight) return `${frame.name} keeps the right shoulder bare: this pick fits the left.`;
   return "";
 }
 
