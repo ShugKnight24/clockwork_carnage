@@ -330,6 +330,6 @@ export default {
     },
   },
   shoulders: {
-    patches: { paint: patches },
+    patches: { paint: patches, maxShoulderScale: 1.08 },
   },
 };

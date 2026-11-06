@@ -336,6 +336,6 @@ export default {
     brim: { anchors: { top: -101.8, half: 11.6, rail: -81.8, badge: false }, paint: brim },
   },
   shoulders: {
-    poncho: { paint: poncho },
+    poncho: { paint: poncho, maxShoulderScale: 1.06 },
   },
 };
