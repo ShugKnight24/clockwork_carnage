@@ -214,7 +214,7 @@ describe("the Exo-Frame theme", () => {
 
 // The themes in creator order; the spike's later themes join as they are ported.
 const THEME_ORDER = ["issue", "exo", "marshal", "ronin", "horologist", "runner", "diver", "ranger", "chronomancer"];
-const PORTED = ["issue", "exo", "marshal", "ronin"];
+const PORTED = ["issue", "exo", "marshal", "ronin", "horologist"];
 
 describe("the spike themes", () => {
   const spike = () => WARDROBE_THEMES.filter((t) => !["issue", "exo"].includes(t.id));
@@ -250,6 +250,17 @@ describe("the Ronin theme", () => {
     expect(FACE_HELMETS.has("kabuto")).toBe(false);
     expect(helmetSeats("kabuto")).toEqual({ crown: false, brow: false, side: true });
     expect(rigAnchors(STAND, [0, 0], "standing", "kabuto").helmet).toEqual({ x: -15.6, y: -86.8, rot: -12, size: 3.8 });
+  });
+});
+
+describe("the Horologist theme", () => {
+  it("wears brass plate over the suit, the clockface's winding crown and dial take the crown and brow, the badge rides the bezel", () => {
+    expect([...FRAME_ART.clockwork.shape.hides]).toEqual([]);
+    expect(FRAME_ART.clockwork.shape.softTorso).toBe(true);
+    expect(HELMET_STYLES.find((e) => e.id === "clockface").visor).toBe(false);
+    expect(FACE_HELMETS.has("clockface")).toBe(false);
+    expect(helmetSeats("clockface")).toEqual({ crown: false, brow: false, side: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "clockface").helmet).toEqual({ x: -7.9, y: -90.3, rot: -10, size: 3.2 });
   });
 });
 
