@@ -326,15 +326,15 @@ const SHOULDERS = Object.fromEntries(Object.entries(SHOULDER_PAINTERS).map(([id,
 export default {
   id: "issue",
   frames: {
-    standard: { shape: { width: 1, shoulder: 1, hides: [] }, layers: () => NONE },
+    standard: { shape: { width: 1, shoulder: 1 }, layers: () => NONE },
     // The right shoulder stays bare (the soft cap) for the asymmetric kit.
-    strider: { shape: { width: 0.93, shoulder: 0.92, rightShoulder: "none", hides: [] }, layers: strider },
-    vanguard: { shape: { width: 1, shoulder: 1.04, hides: [] }, layers: vanguard },
+    strider: { shape: { width: 0.93, shoulder: 0.92, rightShoulder: "none" }, layers: strider },
+    vanguard: { shape: { width: 1, shoulder: 1.04 }, layers: vanguard },
     // softTorso: fabric over the chest, so no chest trim or core light;
     // sleeves and wraps cover the limbs' energy channels (limbGlow).
-    operator: { shape: { width: 0.97, shoulder: 1, softTorso: true, hides: ["shoulders", "limbGlow"] }, layers: operator },
-    wraith: { shape: { width: 1, shoulder: 0.96, hides: ["cape", "limbGlow"] }, layers: wraith },
-    breacher: { shape: { width: 1.04, shoulder: 1.12, hides: [] }, layers: breacher },
+    operator: { shape: { width: 0.97, shoulder: 1, softTorso: true }, layers: operator },
+    wraith: { shape: { width: 1, shoulder: 0.96 }, layers: wraith },
+    breacher: { shape: { width: 1.04, shoulder: 1.12 }, layers: breacher },
   },
   helmets: HELMETS,
   shoulders: SHOULDERS,

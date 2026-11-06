@@ -37,7 +37,7 @@ vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOri
       frames: {
         ...issue.frames,
         "frame-fixture": {
-          shape: { width: 1.3, shoulder: 1, hides: [] },
+          shape: { width: 1.3, shoulder: 1 },
           layers: (P) => ({
             under: mark("under"),
             legs: P.legs.map((leg, i) => mark(`leg-${i}`)).join(""),

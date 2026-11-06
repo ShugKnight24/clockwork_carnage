@@ -330,7 +330,7 @@ export default {
   frames: {
     // Laced plate over the chest: no chest trim; the crest fitting carries
     // its own core light.
-    lamellar: { shape: { width: 1.04, shoulder: 1.02, softTorso: true, hides: [] }, layers: lamellar },
+    lamellar: { shape: { width: 1.04, shoulder: 1.02, softTorso: true }, layers: lamellar },
   },
   helmets: {
     // The crescent crest holds the crown and its clock fitting the brow, so

@@ -22,6 +22,10 @@ import { idScope } from "../../src/rendering/svg-art/id-scope.js";
 import { STAND } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
 
+/** A frame's data entry, where its `hides` lives. */
+const FRAME = (id) => BODY_FRAMES.find((e) => e.id === id);
+const hidesOf = (id) => [...(FRAME(id).hides || [])];
+
 const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
 const LEGACY_HELMETS = ["standard", "wide", "angular", "mohawk", "crested", "ordnance", "bucket", "crusader", "sealed", "reaper", "pilot", "bandana"];
 const LEGACY_SHOULDERS = ["none", "pads", "spikes", "pauldrons", "armored", "slab", "dome", "ordnance", "layered"];
@@ -83,9 +87,9 @@ describe("wardrobe registries", () => {
   });
 
   it("carries the legacy flags as hides words", () => {
-    expect(FRAME_ART.operator.shape.hides).toEqual(["shoulders", "limbGlow"]);
-    expect(FRAME_ART.wraith.shape.hides).toEqual(["cape", "limbGlow"]);
-    for (const id of ["standard", "strider", "vanguard", "breacher"]) expect(FRAME_ART[id].shape.hides).toEqual([]);
+    expect(hidesOf("operator")).toEqual(["shoulders", "limbGlow"]);
+    expect(hidesOf("wraith")).toEqual(["cape", "limbGlow"]);
+    for (const id of ["standard", "strider", "vanguard", "breacher"]) expect(hidesOf(id)).toEqual([]);
     expect(frameHides("operator", "shoulders")).toBe(true);
     expect(frameHides("wraith", "cape")).toBe(true);
     expect(frameHides("wraith", "shoulders")).toBe(false);
@@ -109,7 +113,6 @@ describe("wardrobe registries", () => {
     for (const art of Object.values(FRAME_ART)) {
       expect(Object.isFrozen(art)).toBe(true);
       expect(Object.isFrozen(art.shape)).toBe(true);
-      expect(Object.isFrozen(art.shape.hides)).toBe(true);
     }
   });
 
@@ -120,6 +123,15 @@ describe("wardrobe registries", () => {
 
   it("rejects a hides word outside the vocabulary", () => {
     expect(() => frameHides("standard", "helmet")).toThrow(/helmet/);
+  });
+
+  it("keeps hides on the frame's data entry, never on its art", () => {
+    for (const [id, art] of Object.entries(FRAME_ART)) expect("hides" in art.shape, id).toBe(false);
+    const art = [{ id: "issue", frames: { standard: { shape: { width: 1, shoulder: 1, hides: [] }, layers: () => ({}) } } }];
+    const themes = [{ id: "issue", frames: [{ id: "standard", hides: ["helmet"] }], helmets: [], shoulders: [] }];
+    const errors = validateWardrobe(themes, art, {});
+    expect(errors).toContain('frames: art "standard" declares shape.hides, which belongs on its data entry');
+    expect(errors).toContain('frames: "standard" hides unknown layer "helmet"');
   });
 });
 
@@ -216,7 +228,8 @@ describe("the Exo-Frame theme", () => {
   });
 
   it("grows the silhouette, hides no stock layer, and seats the cockpit's gear on its cage and sensor blocks", () => {
-    expect({ ...FRAME_ART.exo.shape, hides: [...FRAME_ART.exo.shape.hides] }).toEqual({ width: 1.14, shoulder: 1.2, hides: [] });
+    expect({ ...FRAME_ART.exo.shape }).toEqual({ width: 1.14, shoulder: 1.2 });
+    expect(hidesOf("exo")).toEqual([]);
     expect(helmetSeats("cockpit")).toEqual({ crown: true, brow: true, side: true });
     const A = rigAnchors(STAND, [0, 0], "standing", "cockpit");
     expect(A.crown.y).toBeCloseTo(-100.8, 10);
@@ -247,7 +260,7 @@ describe("the spike themes", () => {
   });
 
   it("the Marshal's duster covers the kit, the cape and the limb light; the brim is an open hat with no brow seat", () => {
-    expect([...FRAME_ART.duster.shape.hides]).toEqual(["kit", "cape", "limbGlow"]);
+    expect(hidesOf("duster")).toEqual(["kit", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "brim")).toMatchObject({ face: true, visor: false });
     expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true });
     expect(HELMET_ART.brim.anchors.badge).toBe(false);
@@ -256,7 +269,7 @@ describe("the spike themes", () => {
 
 describe("the Ronin theme", () => {
   it("wears the laced plate over the suit, the kabuto's crest and fitting take the crown and brow, the badge rides the wing", () => {
-    expect([...FRAME_ART.lamellar.shape.hides]).toEqual([]);
+    expect(hidesOf("lamellar")).toEqual([]);
     expect(FRAME_ART.lamellar.shape.softTorso).toBe(true);
     expect(HELMET_STYLES.find((e) => e.id === "kabuto").visor).toBe(false);
     expect(FACE_HELMETS.has("kabuto")).toBe(false);
@@ -267,7 +280,7 @@ describe("the Ronin theme", () => {
 
 describe("the Horologist theme", () => {
   it("wears brass plate over the suit, the clockface's winding crown and dial take the crown and brow, the badge rides the bezel", () => {
-    expect([...FRAME_ART.clockwork.shape.hides]).toEqual([]);
+    expect(hidesOf("clockwork")).toEqual([]);
     expect(FRAME_ART.clockwork.shape.softTorso).toBe(true);
     expect(HELMET_STYLES.find((e) => e.id === "clockface").visor).toBe(false);
     expect(FACE_HELMETS.has("clockface")).toBe(false);
@@ -278,7 +291,7 @@ describe("the Horologist theme", () => {
 
 describe("the Neon Runner theme", () => {
   it("the jacket covers the kit, collar and limb light; the LED mask is a bare face with no crown seat", () => {
-    expect([...FRAME_ART.streetwear.shape.hides]).toEqual(["kit", "collar", "limbGlow"]);
+    expect(hidesOf("streetwear")).toEqual(["kit", "collar", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "ledmask")).toMatchObject({ face: true, visor: false });
     expect(helmetSeats("ledmask")).toEqual({ crown: false, brow: true, side: true });
     expect(HELMET_ART.ledmask.anchors.badge).toBe(false);
@@ -287,7 +300,7 @@ describe("the Neon Runner theme", () => {
 
 describe("the Abyssal Diver theme", () => {
   it("the canvas suit covers the kit, collar, cape and limb light; the porthole is sealed, its crown and brow taken", () => {
-    expect([...FRAME_ART.diving.shape.hides]).toEqual(["kit", "collar", "cape", "limbGlow"]);
+    expect(hidesOf("diving")).toEqual(["kit", "collar", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "porthole").visor).toBe(false);
     expect(FACE_HELMETS.has("porthole")).toBe(false);
     expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true });
@@ -297,7 +310,7 @@ describe("the Abyssal Diver theme", () => {
 
 describe("the Void Ranger theme", () => {
   it("the pressure suit covers the kit, collar and limb light; the bubble is open glass that takes no gear", () => {
-    expect([...FRAME_ART.spacesuit.shape.hides]).toEqual(["kit", "collar", "limbGlow"]);
+    expect(hidesOf("spacesuit")).toEqual(["kit", "collar", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "bubble")).toMatchObject({ face: true, visor: false });
     expect(helmetSeats("bubble")).toEqual({ crown: false, brow: false, side: false });
     expect(HELMET_ART.bubble.anchors.badge).toBe(false);
@@ -306,7 +319,7 @@ describe("the Void Ranger theme", () => {
 
 describe("the Chronomancer theme", () => {
   it("the robe covers the kit, cape and limb light; the hood's halo and hollow take the crown and brow, the badge rides the clasp", () => {
-    expect([...FRAME_ART.vestment.shape.hides]).toEqual(["kit", "cape", "limbGlow"]);
+    expect(hidesOf("vestment")).toEqual(["kit", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "hood").visor).toBe(false);
     expect(FACE_HELMETS.has("hood")).toBe(false);
     expect(helmetSeats("hood")).toEqual({ crown: false, brow: false, side: true });
@@ -496,7 +509,7 @@ describe("shoulders", () => {
 
 describe("validateWardrobe", () => {
   const entry = (id) => ({ id, name: id, desc: id });
-  const art = (hides = []) => ({ shape: { width: 1, shoulder: 1, hides }, layers: () => ({ under: "", legs: "", torso: "", arms: "", glow: "" }) });
+  const art = () => ({ shape: { width: 1, shoulder: 1 }, layers: () => ({ under: "", legs: "", torso: "", arms: "", glow: "" }) });
   const theme = (id, frames, helmets = [], shoulders = []) => ({ id, name: id, frames: frames.map(entry), helmets: helmets.map(entry), shoulders: shoulders.map(entry) });
   const BADGE = { x: -8.6, y: -90, rot: -8, size: 4.6 };
   const helm = (anchors = { top: -95, half: 11.2, rail: -86.4, badge: BADGE }) => ({ paint: () => ({ front: "", glow: "" }), anchors });
@@ -515,7 +528,8 @@ describe("validateWardrobe", () => {
   });
 
   it("reports an unknown hides word", () => {
-    const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: art(["cape", "boots"]) } }]);
+    const t = theme("a", ["x"]);
+    const msgs = validateWardrobe([{ ...t, frames: [{ ...t.frames[0], hides: ["cape", "boots"] }] }], [{ id: "a", frames: { x: art() } }]);
     expect(msgs).toHaveLength(1);
     expect(msgs[0]).toMatch(/"boots"/);
   });
@@ -533,7 +547,7 @@ describe("validateWardrobe", () => {
 
   it("reports a rightShoulder that is not a shoulder id", () => {
     const run = (rightShoulder) =>
-      validateWardrobe([theme("a", ["x"], [], ["p"])], [{ id: "a", frames: { x: { ...art(), shape: { width: 1, shoulder: 1, hides: [], rightShoulder } } }, shoulders: { p: pad() } }]);
+      validateWardrobe([theme("a", ["x"], [], ["p"])], [{ id: "a", frames: { x: { ...art(), shape: { width: 1, shoulder: 1, rightShoulder } } }, shoulders: { p: pad() } }]);
     expect(run(undefined)).toEqual([]);
     expect(run("p")).toEqual([]);
     expect(run("q")).toEqual([expect.stringMatching(/frames: "x" shape\.rightShoulder "q" is not a shoulder/)]);
@@ -545,7 +559,7 @@ describe("validateWardrobe", () => {
   });
 
   it("reports a width or shoulder that is not a finite number", () => {
-    const bad = { ...art(), shape: { width: Number.NaN, shoulder: "1", hides: [] } };
+    const bad = { ...art(), shape: { width: Number.NaN, shoulder: "1" } };
     const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: bad } }]);
     expect(msgs).toHaveLength(2);
     expect(msgs.some((m) => /shape\.width/.test(m))).toBe(true);

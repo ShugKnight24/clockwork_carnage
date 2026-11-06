@@ -5,13 +5,14 @@
  * its id the same as its data module's.
  *
  *   frames: { [id]: { shape, layers(P, c, K) -> { under, legs, torso, arms, glow } } }
- *     shape: { width, shoulder, softTorso?, rightShoulder?, hides: string[] }
+ *     shape: { width, shoulder, softTorso?, rightShoulder? }
  *       width, shoulder — silhouette scales (1 is the issued suit)
  *       softTorso       — fabric over the chest: no chest trim, belt-only core light
  *       rightShoulder   — a shoulder id the frame always wears on the right,
  *                         whatever the pick (the left still takes the pick)
- *       hides           — the stock rig layers the frame replaces, words from
- *                         HIDES (see there for what each one removes)
+ *     Which stock layers the frame replaces (`hides`) is on its data entry,
+ *       not here (src/data/wardrobe-themes/index.js documents it): whether
+ *       the shoulder pick is worn decides whether it counts.
  *     layers: drawn from the pose's joints (P.arms, P.legs) over the
  *       armoured body. `under` sits behind the body (packs, coat tails),
  *       `legs`/`torso`/`arms` over their stock parts, `glow` is energy light.
@@ -101,7 +102,7 @@
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
-import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS } from "../../../data/wardrobe-themes/index.js";
+import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS, HIDES } from "../../../data/wardrobe-themes/index.js";
 import { ACCESSORIES, FACE_SLOTS, TINT_HEX } from "../../../data/accessories.js";
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
@@ -116,21 +117,6 @@ import chronomancer from "./chronomancer.js";
 
 /** Art modules, one per data theme, in the data registry's order; frozen through. */
 const ART_THEMES = deepFreeze([issue, exo, marshal, ronin, horologist, runner, diver, ranger, chronomancer]);
-
-/**
- * The stock rig layers a frame may hide (shape.hides), and what each removes:
- *   kit       — the armour's chest kit and its light (gear front and glow),
- *               the plate and variant trims, the chest seams, the origin
- *               insignia and the chest core light (the belt light stays).
- *               Gear on the back and the player's badge still draw: the
- *               badge is placed on whatever the frame wears.
- *   collar    — the gorget plate; the bare neck under an open helmet stays
- *   hips      — the belt's hip plates (centre plate and both tassets)
- *   shoulders — both shoulder pieces
- *   cape      — the cape
- *   limbGlow  — the energy channels along the arms and legs
- */
-export const HIDES = Object.freeze(["kit", "collar", "hips", "shoulders", "cape", "limbGlow"]);
 
 /** Frame art by frame id. */
 export const FRAME_ART = Object.freeze(Object.assign({}, ...ART_THEMES.map((t) => t.frames || {})));
@@ -171,20 +157,10 @@ export function shoulderArt(id) {
   return art;
 }
 
-// The helmets' accessory seats and face room live on their data entries
-// (src/data/wardrobe-themes/index.js), where the data layer can read them;
-// re-exported here for the art's readers.
-export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock } from "../../../data/wardrobe-themes/index.js";
-
-/**
- * Whether a frame replaces one of the rig's stock layers.
- * @param {string} id frame id
- * @param {string} what a word from HIDES
- */
-export function frameHides(id, what) {
-  if (!HIDES.includes(what)) throw new Error(`frameHides: "${what}" is not a hides word (${HIDES.join(", ")})`);
-  return frameArt(id).shape.hides.includes(what);
-}
+// The helmets' accessory seats and face room, and the stock layers a frame
+// hides, live on their data entries (src/data/wardrobe-themes/index.js),
+// where the data layer can read them; re-exported here for the art's readers.
+export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock, HIDES, frameHides } from "../../../data/wardrobe-themes/index.js";
 
 /** The anchor numbers every helmet's art declares. */
 const HELMET_ANCHORS = ["top", "half", "rail"];
@@ -225,8 +201,13 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
     for (const [id, theme] of seen) if (!art.has(id)) errors.push(`${table}: "${id}" (theme "${theme}") has no art`);
     for (const [id, theme] of art) if (!seen.has(id)) errors.push(`${table}: art "${id}" (theme "${theme}") has no entry`);
   }
-  // Seats and face room, on the data entries.
+  // Hides, seats and face room, on the data entries.
   for (const t of themes) {
+    for (const e of t.frames || []) {
+      if (e.hides === undefined) continue;
+      if (!Array.isArray(e.hides)) errors.push(`frames: "${e.id}" hides is not a list`);
+      else for (const word of e.hides) if (!HIDES.includes(word)) errors.push(`frames: "${e.id}" hides unknown layer "${word}"`);
+    }
     for (const e of t.helmets || []) {
       for (const [seat, on] of Object.entries(e.seats || {})) {
         if (!HELMET_SEATS.includes(seat)) errors.push(`helmets: "${e.id}" seats unknown seat "${seat}" (${HELMET_SEATS.join(", ")})`);
@@ -278,12 +259,7 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
       }
       const right = a.shape?.rightShoulder;
       if (right !== undefined && !shoulderIds.has(right)) errors.push(`frames: "${id}" shape.rightShoulder "${right}" is not a shoulder`);
-      const hides = a.shape?.hides;
-      if (!Array.isArray(hides)) {
-        errors.push(`frames: "${id}" has no shape.hides list`);
-        continue;
-      }
-      for (const word of hides) if (!HIDES.includes(word)) errors.push(`frames: "${id}" hides unknown layer "${word}"`);
+      if (a.shape && "hides" in a.shape) errors.push(`frames: art "${id}" declares shape.hides, which belongs on its data entry`);
     }
   }
   return errors;

@@ -25,6 +25,12 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
 - **Analytics.** Level events are sent only after consent, with a privacy note and a "Share Play Data" setting to withdraw (#19).
 - **Soft locks.** Fixed two: the Foundry's sentry staying silent after a retry (II-7), and a collapse walling you into a side room (IV-1) (#20).
 - **Hitches.** The station arrival and level starts no longer re-upload the wall art or build the lamp field mid-play (#20).
+- **Only gear you can see counts.** A piece your look keeps but does not draw gives no stats:
+  - shoulders on a frame that wears none (the Operator frame no longer counts shoulder stats);
+  - a visor on a helmet that has no visor (the Cockpit and the other visorless helmets ignore visor stats);
+  - helmet gear on a helmet with no place for it (nothing on the Bubble's glass);
+  - eyewear and face items under a closed helmet, or where an open helmet has no room for them (a bandana up over the face).
+  - A frame that covers the chest kit, the collar or the cape keeps every stat: it changes the look, not the gear.
 
 ### For developers
 - `?debug` and `?bench` no longer load the dev tools on the live site: they load only on the Vite dev server (#18).

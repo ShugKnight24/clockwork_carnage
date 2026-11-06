@@ -9,8 +9,12 @@
  *   { id, name, short, frames?: Entry[], helmets?: Entry[], shoulders?: Entry[] }
  * where `short` is the name for a tight caption (a one-tile group in the
  * creator's grids: "Marshal" for Frontier Marshal).
- * with each entry `{ id, name, desc, tier?, unlock?, bonuses?, perk?, visor?, face? }`,
- * and a helmet entry also `seats?` and `faceSlots?`:
+ * with each entry `{ id, name, desc, tier?, unlock?, bonuses?, visor?, face? }`,
+ * a frame entry also `hides?`, and a helmet entry also `seats?` and `faceSlots?`:
+ *   hides: the stock rig layers the frame replaces, words from HIDES (see
+ *     there for what each one removes); left out, it hides none. A frame
+ *     that hides the shoulders wears no shoulder piece, so the pick is
+ *     neither drawn nor counted (gearBonuses in src/data/cosmetics.js).
  *   seats: which accessory seats the helmet takes, words from HELMET_SEATS
  *     mapped to booleans; a seat left out is taken. A helmet that already
  *     wears what a seat holds (the Centurion's crest) turns it off, and the
@@ -76,6 +80,39 @@ export function themeTable(table) {
  * @type {ReadonlySet<string>}
  */
 export const FACE_HELMETS = readonlySet(WARDROBE_THEMES.flatMap((t) => t.helmets.filter((e) => e.face === true).map((e) => e.id)));
+
+/**
+ * The stock rig layers a frame may hide (its entry's `hides`), and what each
+ * removes:
+ *   kit       — the armour's chest kit and its light (gear front and glow),
+ *               the plate and variant trims, the chest seams, the origin
+ *               insignia and the chest core light (the belt light stays).
+ *               Gear on the back and the player's badge still draw: the
+ *               badge is placed on whatever the frame wears.
+ *   collar    — the gorget plate; the bare neck under an open helmet stays
+ *   hips      — the belt's hip plates (centre plate and both tassets)
+ *   shoulders — both shoulder pieces
+ *   cape      — the cape
+ *   limbGlow  — the energy channels along the arms and legs
+ * Only `shoulders` takes a pick off the figure; the rest hide stock art, so
+ * they never take a stat away.
+ */
+export const HIDES = Object.freeze(["kit", "collar", "hips", "shoulders", "cape", "limbGlow"]);
+
+const FRAME_ENTRY = new Map(WARDROBE_THEMES.flatMap((t) => t.frames.map((e) => [e.id, e])));
+
+/**
+ * Whether a frame replaces one of the rig's stock layers (its entry's
+ * `hides`). An unknown frame or word is a bug and throws.
+ * @param {string} id frame id
+ * @param {string} what a word from HIDES
+ */
+export function frameHides(id, what) {
+  if (!HIDES.includes(what)) throw new Error(`frameHides: "${what}" is not a hides word (${HIDES.join(", ")})`);
+  const e = FRAME_ENTRY.get(id);
+  if (!e) throw new Error(`frameHides: no frame "${id}"`);
+  return (e.hides || []).includes(what);
+}
 
 const HELMET_ENTRY = new Map(WARDROBE_THEMES.flatMap((t) => t.helmets.map((e) => [e.id, e])));
 

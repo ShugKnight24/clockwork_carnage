@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   gearBonuses,
   GEAR_SLOTS,
@@ -8,7 +8,9 @@ import {
   SHOULDER_STYLES,
   DEFAULT_CHARACTER,
   takesVisor,
+  BODY_FRAMES,
 } from "../../src/data/cosmetics.js";
+import { HIDES, frameHides, helmetSeats, helmetFaceSlots } from "../../src/data/wardrobe-themes/index.js";
 import {
   grantOwned,
   lockedItems,
@@ -18,7 +20,7 @@ import {
   LOCKABLE,
   ownedKey,
 } from "../../src/systems/unlocks.js";
-import { ACCESSORY_SLOTS } from "../../src/data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS } from "../../src/data/accessories.js";
 import { DEFAULT_BADGE } from "../../src/data/badges.js";
 
 const store = {};
@@ -88,6 +90,75 @@ describe("gearBonuses", () => {
         if (item.bonuses) expect(item.tier).toBeGreaterThan(1);
       }
     }
+  });
+});
+
+describe("gearBonuses counts only what is drawn", () => {
+  const BULWARK = "armored"; // +8 armour shoulders
+
+  it("counts the frame slot", () => {
+    expect(GEAR_SLOTS.map(([k]) => k)).toContain("frame");
+  });
+
+  it("gives no shoulder stats on a frame that hides the shoulders", () => {
+    expect(frameHides("operator", "shoulders")).toBe(true);
+    expect(gearBonuses({ frame: "operator", shoulder: BULWARK }).armorAdd ?? 0).toBe(0);
+    expect(gearBonuses({ frame: "standard", shoulder: BULWARK }).armorAdd).toBe(8);
+    // The Strider wears its own bare cap on the right; the pick is still worn on the left.
+    expect(gearBonuses({ frame: "strider", shoulder: BULWARK }).armorAdd).toBe(8);
+  });
+
+  it("never takes stats away for stock art a frame hides (kit, collar, hips, cape, limb light)", () => {
+    const look = { armor: "heavy", helmet: "mohawk", visor: "fullface", shoulder: BULWARK, accessories: { back: "cloak", waist: "belt", legs: "shins" } };
+    const bare = gearBonuses({ ...look, frame: "standard" });
+    for (const { id } of BODY_FRAMES) {
+      if (frameHides(id, "shoulders")) continue;
+      expect(gearBonuses({ ...look, frame: id }), id).toEqual(bare);
+    }
+    // The loop above takes in frames hiding each of these (no frame hides the hips yet).
+    for (const word of ["kit", "collar", "cape", "limbGlow"]) expect(BODY_FRAMES.some((f) => frameHides(f.id, word)), word).toBe(true);
+    expect(HIDES).toContain("hips");
+  });
+
+  it("gives no stats for helmet gear on a seat the helmet refuses", () => {
+    const whip = ACCESSORIES.helmet.find((i) => i.id === "whip");
+    expect(whip.seat).toBe("side");
+    expect(whip.bonuses).toBeTruthy();
+    expect(helmetSeats("bubble").side).toBe(false);
+    expect(gearBonuses({ helmet: "bubble", accessories: { helmet: "whip" } })).toEqual(gearBonuses({ helmet: "bubble" }));
+    expect(gearBonuses({ helmet: "standard", accessories: { helmet: "whip" } })).toEqual(whip.bonuses);
+  });
+
+  describe("eyes and face items", () => {
+    // A fixture item with a stat in every face slot, taken out after each test.
+    const FIXTURE = { id: "stat-fixture", name: "Fixture", desc: "Fixture", tier: 2, bonuses: { maxHealthAdd: 7 } };
+    beforeEach(() => {
+      for (const slot of FACE_SLOTS) ACCESSORIES[slot].push(FIXTURE);
+    });
+    afterEach(() => {
+      for (const slot of FACE_SLOTS) ACCESSORIES[slot].splice(ACCESSORIES[slot].indexOf(FIXTURE), 1);
+    });
+    const wearing = (helmet, slot) => gearBonuses({ helmet, accessories: { [slot]: FIXTURE.id } }).maxHealthAdd ?? 0;
+    const base = (helmet) => gearBonuses({ helmet }).maxHealthAdd ?? 0;
+
+    it("count under an open helmet with room for them", () => {
+      // Bastion: an open helmet with room for both.
+      for (const slot of FACE_SLOTS) expect(wearing("wide", slot) - base("wide"), slot).toBe(7);
+    });
+
+    it("give nothing under a closed helmet", () => {
+      expect(helmetFaceSlots("standard")).toEqual({ eyes: false, face: false });
+      for (const slot of FACE_SLOTS) expect(wearing("standard", slot), slot).toBe(0);
+    });
+
+    it("give nothing where an open helmet has no room for the slot", () => {
+      // The Marshal's bandana is up over the face, but eyewear fits.
+      expect(helmetFaceSlots("brim")).toEqual({ eyes: true, face: false });
+      expect(wearing("brim", "face")).toBe(base("brim"));
+      expect(wearing("brim", "eyes") - base("brim")).toBe(7);
+      // The LED mask leaves room for neither.
+      for (const slot of FACE_SLOTS) expect(wearing("ledmask", slot), slot).toBe(base("ledmask"));
+    });
   });
 });
 

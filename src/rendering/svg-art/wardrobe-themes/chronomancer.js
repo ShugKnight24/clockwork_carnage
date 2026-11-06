@@ -285,7 +285,7 @@ export default {
       // A robe over the chest and limbs: no chest kit, trim or limb
       // channels, and it falls where a cape would hang. The cowl lies over
       // the collar plate, which stays.
-      shape: { width: 1.02, shoulder: 1, softTorso: true, hides: ["kit", "cape", "limbGlow"] },
+      shape: { width: 1.02, shoulder: 1, softTorso: true },
       layers: vestment,
     },
   },

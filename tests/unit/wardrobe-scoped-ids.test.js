@@ -40,7 +40,7 @@ vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOri
       ...issue,
       frames: {
         ...issue.frames,
-        "ids-fixture": { shape: { width: 1, shoulder: 1, hides: [] }, layers: (P, c, K) => ({ ...none, torso: gradient(K, c.pal.primary, "frame") }) },
+        "ids-fixture": { shape: { width: 1, shoulder: 1 }, layers: (P, c, K) => ({ ...none, torso: gradient(K, c.pal.primary, "frame") }) },
       },
       helmets: {
         ...issue.helmets,

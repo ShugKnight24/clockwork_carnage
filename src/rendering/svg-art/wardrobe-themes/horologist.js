@@ -248,7 +248,7 @@ export default {
   frames: {
     // Brass plate over the chest: no chest trim; the escapement carries the
     // core light.
-    clockwork: { shape: { width: 1.02, shoulder: 1.02, softTorso: true, hides: [] }, layers: clockwork },
+    clockwork: { shape: { width: 1.02, shoulder: 1.02, softTorso: true }, layers: clockwork },
   },
   helmets: {
     // The winding crown stands on the top of the case and the dial fills

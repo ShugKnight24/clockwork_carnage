@@ -325,7 +325,7 @@ export default {
   frames: {
     // The coat covers the chest kit, hangs where a cape would, and its
     // sleeves cover the limbs' light.
-    duster: { shape: { width: 1, shoulder: 1, hides: ["kit", "cape", "limbGlow"] }, layers: duster },
+    duster: { shape: { width: 1, shoulder: 1 }, layers: duster },
   },
   helmets: {
     // An open head under a hat: the rig draws no helmet badge on a face that

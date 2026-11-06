@@ -1745,7 +1745,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   }
 
   // The frame's own layers, and the stock layers it hides (see HIDES in
-  // wardrobe-themes/index.js, which says what each word removes): a coat
+  // src/data/wardrobe-themes/index.js, which says what each word removes): a coat
   // over the chest kit, a hood over the collar, a skirt over the hip plates,
   // sleeves over the limbs' light.
   const fr = frameLayers(c.frame, P, c, { mix, ...scope.kit(`frame-${c.frame}`) });

@@ -198,7 +198,7 @@ export default {
   id: "exo",
   frames: {
     // A machine worn over the suit: the silhouette grows with it.
-    exo: { shape: { width: 1.14, shoulder: 1.2, hides: [] }, layers: exo },
+    exo: { shape: { width: 1.14, shoulder: 1.2 }, layers: exo },
   },
   helmets: {
     // Gear seats on the cage (crown), the shell above the canopy (brow) and

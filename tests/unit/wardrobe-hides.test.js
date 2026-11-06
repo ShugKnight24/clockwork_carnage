@@ -1,6 +1,6 @@
-// The rig skips each stock layer a frame lists in `hides`. Fixture frames
-// ("hides-<word>", the standard frame hiding one word) are added to the
-// Field Issue theme's data and art modules for this file only.
+// The rig skips each stock layer a frame lists in `hides` (on its data
+// entry). Fixture frames ("hides-<word>", the standard frame hiding one word)
+// are added to the Field Issue theme's data and art modules for this file only.
 import { describe, it, expect, vi } from "vitest";
 import { buildAgentParts, buildCastModel } from "../../src/rendering/svg-art/agent-rig.js";
 import { torso } from "../../src/rendering/svg-art/models/hero.js";
@@ -11,13 +11,13 @@ const { WORDS } = vi.hoisted(() => ({ WORDS: ["kit", "collar", "hips", "shoulder
 
 vi.mock("../../src/data/wardrobe-themes/issue.js", async (importOriginal) => {
   const { default: issue } = await importOriginal();
-  return { default: { ...issue, frames: [...issue.frames, ...WORDS.map((w) => ({ id: `hides-${w}`, name: w, desc: w }))] } };
+  return { default: { ...issue, frames: [...issue.frames, ...WORDS.map((w) => ({ id: `hides-${w}`, name: w, desc: w, hides: [w] }))] } };
 });
 
 vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOriginal) => {
   const { default: issue } = await importOriginal();
   const { standard } = issue.frames;
-  const fixtures = WORDS.map((w) => [`hides-${w}`, { shape: { ...standard.shape, hides: [w] }, layers: standard.layers }]);
+  const fixtures = WORDS.map((w) => [`hides-${w}`, { shape: standard.shape, layers: standard.layers }]);
   return { default: { ...issue, frames: { ...issue.frames, ...Object.fromEntries(fixtures) } } };
 });
 

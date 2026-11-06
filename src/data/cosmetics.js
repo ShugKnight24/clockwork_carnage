@@ -1,9 +1,9 @@
 // ── Character Creator ────────────────────────────────────
 
 import { DEFAULT_BADGE } from "./badges.js";
-import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, accessoryItem } from "./accessories.js";
+import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, FACE_SLOTS, accessoryItem } from "./accessories.js";
 import { RETIRED_PIECES } from "./retired-pieces.js";
-import { themeTable } from "./wardrobe-themes/index.js";
+import { themeTable, frameHides, helmetSeats, helmetFaceSlots } from "./wardrobe-themes/index.js";
 
 export const CHARACTER_COLORS = [
   {
@@ -603,6 +603,7 @@ export const DEFAULT_CHARACTER = {
  */
 export const GEAR_SLOTS = [
   ["armor", () => ARMOR_STYLES],
+  ["frame", () => BODY_FRAMES],
   ["helmet", () => HELMET_STYLES],
   ["visor", () => VISOR_STYLES],
   ["shoulder", () => SHOULDER_STYLES],
@@ -612,6 +613,13 @@ export const GEAR_SLOTS = [
  * Total stat bonuses from everything a character is wearing. Additive, and
  * recomputed from the character each run — nothing about gear is persisted on
  * the player.
+ *
+ * Only what the figure draws counts: a pick kept but not worn gives nothing.
+ * That is shoulders on a frame that hides them (its `hides`), a visor under
+ * a helmet that has none (takesVisor), helmet gear on a seat the helmet
+ * refuses (helmetSeats), and an eyes or face item the helmet has no room for
+ * or covers (helmetFaceSlots). A frame hiding stock art (the kit, collar,
+ * hips, cape or limb light) takes no pick off, so it takes no stat away.
  * @param {object} character
  * @returns {Record<string, number>}
  */
@@ -622,11 +630,21 @@ export function gearBonuses(character) {
     if (!bonuses) return;
     for (const [stat, value] of Object.entries(bonuses)) out[stat] = (out[stat] || 0) + value;
   };
+  const frame = pieceIn(BODY_FRAMES, "frame", character.frame).id;
+  const helmet = pieceIn(HELMET_STYLES, "helmet", character.helmet).id;
   for (const [field, table] of GEAR_SLOTS) {
-    if (field === "visor" && !takesVisor(character.helmet)) continue;
+    if (field === "visor" && !takesVisor(helmet)) continue;
+    if (field === "shoulder" && frameHides(frame, "shoulders")) continue;
     add(pieceIn(table(), field, character[field]).bonuses);
   }
   const acc = character.accessories || {};
-  for (const { id } of ACCESSORY_SLOTS) add(accessoryItem(id, acc[id])?.bonuses);
+  const seats = helmetSeats(helmet);
+  const faceRoom = helmetFaceSlots(helmet);
+  for (const { id: slot } of ACCESSORY_SLOTS) {
+    const item = accessoryItem(slot, acc[slot]);
+    if (slot === "helmet" && item?.seat && !seats[item.seat]) continue;
+    if (FACE_SLOTS.includes(slot) && !faceRoom[slot]) continue;
+    add(item?.bonuses);
+  }
   return out;
 }

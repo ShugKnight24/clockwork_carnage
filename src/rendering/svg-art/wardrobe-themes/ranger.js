@@ -313,7 +313,7 @@ export default {
     spacesuit: {
       // Cloth over the chest and limbs and a soft collar ring at the neck:
       // no chest kit, collar plate, trim or limb channels.
-      shape: { width: 1.05, shoulder: 1.02, softTorso: true, hides: ["kit", "collar", "limbGlow"] },
+      shape: { width: 1.05, shoulder: 1.02, softTorso: true },
       layers: spacesuit,
     },
   },

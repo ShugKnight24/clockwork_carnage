@@ -304,7 +304,7 @@ export default {
       // A jacket over the chest and arms: no chest kit, collar plate or
       // chest trim, and the frame draws its own limb lights (forearm ink,
       // lit welts).
-      shape: { width: 1.04, shoulder: 1, softTorso: true, hides: ["kit", "collar", "limbGlow"] },
+      shape: { width: 1.04, shoulder: 1, softTorso: true },
       layers: streetwear,
     },
   },

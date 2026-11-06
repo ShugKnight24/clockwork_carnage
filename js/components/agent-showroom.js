@@ -297,7 +297,7 @@ const previewedValue = (ch, key) => (key === "armorVariant" ? ch.armorVariant | 
 /** Why the frame overrides the shoulder pick (it hides shoulders, or wears its own right one), or "". */
 function shoulderNote(ch) {
   const frame = pieceOf(ch, "frame");
-  if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
+  if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick and its perk apply on another frame.`;
   const right = frameShape(frame.id).rightShoulder;
   if (right === "none") return `${frame.name} leaves the right shoulder bare: this pick fits the left.`;
   if (right) return `${frame.name} wears its own ${pieceOf({ shoulder: right }, "shoulder").name} on the right shoulder: this pick fits the left.`;
@@ -308,8 +308,8 @@ function shoulderNote(ch) {
 function faceSlotNote(ch, slot) {
   const helmet = pieceOf(ch, "helmet");
   const block = faceSlotBlock(helmet.id, slot);
-  if (block === "hidden") return `Hidden under the ${helmet.name}: this pick shows with an open helmet.`;
-  if (block === "room") return `No room under the ${helmet.name}: this pick shows with another helmet.`;
+  if (block === "hidden") return `Hidden under the ${helmet.name}: this pick and its perk apply with an open helmet.`;
+  if (block === "room") return `No room under the ${helmet.name}: this pick and its perk apply with another helmet.`;
   return "";
 }
 

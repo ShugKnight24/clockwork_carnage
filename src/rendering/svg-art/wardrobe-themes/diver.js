@@ -277,7 +277,7 @@ export default {
       // Canvas covers the chest and limbs and the corselet the neck, so no
       // chest kit, collar plate, trim or limb channels; the tanks stand
       // where a cape would hang.
-      shape: { width: 1.06, shoulder: 1.02, softTorso: true, hides: ["kit", "collar", "cape", "limbGlow"] },
+      shape: { width: 1.06, shoulder: 1.02, softTorso: true },
       layers: diving,
     },
   },
