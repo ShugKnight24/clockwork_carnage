@@ -22,6 +22,7 @@ import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
 import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
 import { FACE_HELMETS } from "../data/wardrobe-themes/index.js";
+import { drawPrompt } from "./input-glyphs.js";
 
 // ── Shared category definitions (used by render + click handler) ──
 
@@ -191,6 +192,18 @@ export function hairColorSwatches(L) {
     h: size,
   }));
   return { top, h, labelY: top + labelH - 6, rects };
+}
+
+/** The keys that step through the hair colours: Q / E on a keyboard, LB / RB on a pad, none on touch. */
+export const HAIR_COLOR_PROMPT = [["prevTab"], ["nextTab"]];
+
+/**
+ * The hair colour row's key hint, right-aligned at x, centred on y, in the
+ * glyphs of the device in use. `input` is the game (device, pad family,
+ * keybinds). Returns the width drawn (0 on touch: the swatches are tapped).
+ */
+export function drawHairColorHint(ctx, x, y, input) {
+  return drawPrompt(ctx, x, y, HAIR_COLOR_PROMPT, { input, look: "legacy", align: "right", size: 10, color: "rgba(255,255,255,0.45)" });
 }
 
 /** How many option rows a tab's list shows: the HAIR tab gives the foot of the panel to its colours. */
@@ -838,6 +851,7 @@ export function renderCharacterCreator(
   isTouchDevice,
   unlockCtx = null,
   placementSel = 0,
+  input = null,
 ) {
   const now = performance.now();
   const cat = creatorCategory;
@@ -1169,12 +1183,7 @@ export function renderCharacterCreator(
     ctx.font = "bold 11px monospace";
     ctx.textAlign = "left";
     ctx.fillText(`COLOR \u00B7 ${picked.name.toUpperCase()}`, listX + 10, row.labelY);
-    if (!isTouchDevice) {
-      ctx.textAlign = "right";
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      ctx.fillText("Q / E", listX + L.listW - 10, row.labelY);
-      ctx.textAlign = "left";
-    }
+    drawHairColorHint(ctx, listX + L.listW - 10, row.labelY - 4, input);
     HAIR_COLORS.forEach((hc, i) => {
       const r = row.rects[i];
       ctx.fillStyle = hairOf({ ...char, hairColor: hc.id }).color;

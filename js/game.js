@@ -1879,6 +1879,7 @@ export class Game {
       this.isTouchDevice,
       gameUnlockContext(this),
       this.creatorPlacementSel,
+      this,
     );
   }
 
