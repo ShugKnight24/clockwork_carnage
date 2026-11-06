@@ -5,9 +5,9 @@ import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-gly
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
 import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withId, withIndex, withTint } from "../../src/core/character-fields.js";
 import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
-import { normalizeAccessories, normalizeAccessoryTints } from "../../src/core/character-normalize.js";
+import { normalizeAccessories } from "../../src/core/character-normalize.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor } from "../../src/data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor, wornTints } from "../../src/data/accessories.js";
 import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
@@ -1732,6 +1732,11 @@ class AgentShowroom extends HTMLElement {
     this.el.save.classList.remove("ready");
     const ch = this.character;
     const prev = this.pick(ch);
+    // One rule for paint colours: the colours kept are the colours drawn
+    // (wornTints), whatever the change (a pick, a look, a preset, a roll).
+    if ("accessories" in changes || "accessoryTints" in changes) {
+      changes = { ...changes, accessoryTints: wornTints(changes.accessoryTints ?? ch.accessoryTints, changes.accessories ?? ch.accessories) };
+    }
     if (!Object.keys(changes).some((k) => !sameValue(ch[k], changes[k]))) return false;
     this.undoStack.push(prev);
     if (this.undoStack.length > 60) this.undoStack.shift();
@@ -2357,9 +2362,9 @@ class AgentShowroom extends HTMLElement {
     if (!l) return;
     const next = cloneLook(l.look);
     // Slots the look was not saved with keep what is worn (readLook); its
-    // paint colours count only for the items it puts on.
+    // paint colours, or the ones worn now, count only for the items drawn
+    // (commit keeps the colours by wornTints).
     if (next.accessories) next.accessories = { ...this.character.accessories, ...next.accessories };
-    if (next.accessoryTints) next.accessoryTints = normalizeAccessoryTints(next.accessoryTints, next.accessories || this.character.accessories);
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
     this.sfx("menuConfirm");
@@ -2483,8 +2488,10 @@ class AgentShowroom extends HTMLElement {
       this.renderAll(false);
       return;
     }
-    this._tintLive = live ? slot : null;
-    if (!this.commit(changes)) return;
+    // A drag is one edit from its first step that changes something.
+    const changed = this.commit(changes);
+    this._tintLive = live && changed ? slot : null;
+    if (!changed) return;
     this.sfx("menuSelect");
     const item = accessoryItem(slot, this.character.accessories[slot]);
     const named = PAINT_SWATCHES.find((p) => p.hex === tintFor(this.character, slot));

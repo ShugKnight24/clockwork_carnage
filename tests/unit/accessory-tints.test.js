@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ACCESSORIES, PAINT_SWATCHES, TINT_HEX, accessoryItem, tintFor } from "../../src/data/accessories.js";
 import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
 import { normalizeAccessoryTints } from "../../src/core/character-normalize.js";
-import { cloneLook, lookKey, withTint } from "../../src/core/character-fields.js";
+import { cloneLook, lookKey, withId, withIndex, withTint } from "../../src/core/character-fields.js";
 import { saveCharacter, loadCharacter } from "../../src/core/save-system.js";
 import { buildAgentParts } from "../../src/rendering/svg-art/agent-rig.js";
 import { validateWardrobe } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
@@ -91,6 +91,19 @@ describe("war paint colour", () => {
     expect(withTint(ch, "face", "#3F7A3A")).toEqual({ accessoryTints: { face: "#3f7a3a" } });
     expect(() => withTint(ch, "face", "green")).toThrow(RangeError);
     expect(() => withTint(lookFromIds({}), "face", "#3f7a3a")).toThrow(RangeError);
+  });
+
+  it("a colour goes when its item comes off, so the item comes back in its default", () => {
+    const blue = painted({}, "#2f4f8f");
+    const off = { ...blue, ...withId(blue, "acc.face", "beard") };
+    expect(off.accessoryTints).toEqual({});
+    const on = { ...off, ...withId(off, "acc.face", "warpaint") };
+    expect(tintFor(on, "face")).toBe("#b0302a");
+    // The canvas creator picks by position through the same path.
+    const none = { ...blue, ...withIndex(blue, "acc.face", 0) };
+    expect(none.accessoryTints).toEqual({});
+    // Another slot's pick keeps the colour of the item still worn.
+    expect(withId(blue, "acc.eyes", "monocle").accessoryTints).toEqual({ face: "#2f4f8f" });
   });
 
   it("a tint without a default (or label) fails validateWardrobe()", () => {

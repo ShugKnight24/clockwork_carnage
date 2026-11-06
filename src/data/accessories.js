@@ -126,6 +126,25 @@ export const PAINT_SWATCHES = Object.freeze([
 ].map(Object.freeze));
 
 /**
+ * The colours kept for `accessories`: one rule, the colours stored are the
+ * colours drawn. A valid `#rrggbb` (lower-cased), only for a slot whose worn
+ * item declares a `tint`; anything else is dropped, so a colour goes the
+ * moment its item comes off and the item comes back in its default.
+ * @param {unknown} raw stored colours by slot
+ * @param {object} accessories the slots worn
+ * @returns {Record<string, string>}
+ */
+export function wornTints(raw, accessories) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const { id } of ACCESSORY_SLOTS) {
+    const v = src[id];
+    if (typeof v === "string" && TINT_HEX.test(v) && accessoryItem(id, accessories?.[id])?.tint) out[id] = v.toLowerCase();
+  }
+  return out;
+}
+
+/**
  * The colour a slot's worn item is painted in: the character's pick for
  * that slot when it is a valid colour, else the item's default; null when
  * the item worn there takes no tint.

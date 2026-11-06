@@ -9,7 +9,7 @@
  * badge.enamel, badge.metal, badge.finish, acc.<slot>.
  */
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, BADGE_PRESETS, indexOfId } from "../data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES, TINT_HEX, accessoryItem, tintFor } from "../data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, TINT_HEX, accessoryItem, tintFor, wornTints } from "../data/accessories.js";
 import {
   CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, HAIR_COLORS, EYE_COLORS, ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
   WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
@@ -123,7 +123,11 @@ export function withId(ch, key, id) {
   if (key === "badge.finish") {
     return { badge: { ...badge, layers: badge.layers.map((l) => ({ ...l })), placements: shown(badge.placements), finish: id } };
   }
-  if (key.startsWith("acc.")) return { accessories: { ...ch.accessories, [key.slice(4)]: id } };
+  if (key.startsWith("acc.")) {
+    // A paint colour goes with its item (wornTints): taken off, the item comes back in its default.
+    const accessories = { ...ch.accessories, [key.slice(4)]: id };
+    return { accessories, accessoryTints: wornTints(ch.accessoryTints, accessories) };
+  }
   if (key === "armor" && ch.armorVariant) return { armor: id, armorVariant: 0 };
   return { [key]: id };
 }

@@ -151,6 +151,66 @@ test("war paint takes a colour of its own, a swatch or a custom one, and keeps i
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).accessoryTints)).toEqual({ face: "#8a2be2" });
 });
 
+test("a paint colour goes with its item: off and on again is the default, in the session and after a reload; undo brings it back", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  const tints = () => page.evaluate(() => window.ccDebug.game.character.accessoryTints);
+  const face = () => page.evaluate(() => window.ccDebug.game.character.accessories.face);
+  const row = room(page).locator('.tintrow[data-tint-slot="face"]');
+  const undo = room(page).getByRole("button", { name: "Undo last change" });
+  await tab(page, "gear").click();
+  const warpaint = await posOf(page, "acc.face", "warpaint");
+  await opt(page, "acc.face", warpaint).click();
+  await row.locator('.tsw[data-hex="#2f4f8f"]').click();
+  expect(await tints()).toEqual({ face: "#2f4f8f" });
+  // Off: the colour goes with it. Undo puts both back.
+  await opt(page, "acc.face", 0).click();
+  expect(await tints()).toEqual({});
+  await undo.click();
+  expect(await face()).toBe("warpaint");
+  expect(await tints()).toEqual({ face: "#2f4f8f" });
+  // Off and on again in the session: the default.
+  await opt(page, "acc.face", 0).click();
+  await opt(page, "acc.face", warpaint).click();
+  expect(await tints()).toEqual({});
+  await expect(row.locator('.tsw[data-hex="#b0302a"]')).toHaveAttribute("aria-checked", "true");
+  // Painted, taken off and saved: after a reload it comes back in its default.
+  await row.locator('.tsw[data-hex="#3f7a3a"]').click();
+  await opt(page, "acc.face", 0).click();
+  await room(page).locator(".save").click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).accessoryTints)).toEqual({});
+  await page.reload();
+  await page.waitForFunction(() => window.ccDebug?.game);
+  await debug(page, "showCharacterCreate");
+  await page.waitForTimeout(700);
+  await grantAll(page);
+  await tab(page, "gear").click();
+  await opt(page, "acc.face", warpaint).click();
+  expect(await tints()).toEqual({});
+  await expect(row.locator('.tsw[data-hex="#b0302a"]')).toHaveAttribute("aria-checked", "true");
+});
+
+test("a colour drag whose first step changes nothing is still one undo step", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  await tab(page, "gear").click();
+  await opt(page, "acc.face", await posOf(page, "acc.face", "warpaint")).click();
+  const steps = () => page.evaluate(() => document.querySelector("agent-showroom").undoStack.length);
+  const before = await steps();
+  // The drag starts on the colour already worn, then moves twice.
+  await room(page).locator('.tintrow input[type="color"]').evaluate((input) => {
+    for (const v of ["#b0302a", "#123456", "#654321"]) {
+      input.value = v;
+      input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    }
+    input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+  });
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessoryTints)).toEqual({ face: "#654321" });
+  expect(await steps()).toBe(before + 1);
+  await room(page).getByRole("button", { name: "Undo last change" }).click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessoryTints)).toEqual({});
+});
+
 test("presets and looks saved before the eyes and face slots keep the eyewear and face item worn", async ({ page }) => {
   await openCreator(page);
   await page.evaluate(() => {
