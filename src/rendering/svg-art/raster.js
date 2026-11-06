@@ -307,6 +307,11 @@ export function layerBaked(id, scale) {
   return !!(e && (e.baked || e.failed));
 }
 
+/** True when this size of a layer was decoded and the browser could not draw it (a broken SVG). */
+export function layerFailed(id, scale) {
+  return !!layers.get(id)?.get(scaleBucket(scale))?.failed;
+}
+
 const releaseListeners = new Set();
 
 /**

@@ -22,7 +22,7 @@ import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/
 import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor } from "../data/accessories.js";
 import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.js";
 import { unlockState } from "../systems/unlocks.js";
-import { getLayerImage } from "../rendering/svg-art/raster.js";
+import { getLayerImage, layerFailed } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
 import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
 import { FACE_HELMETS, WARDROBE_THEMES } from "../data/wardrobe-themes/index.js";
@@ -551,6 +551,7 @@ function pixelRatio(ctx) {
 // figure of a session has nothing before it.
 let _figure = null; // the look asked for: { key, defs, markup, asked, decodeMs }
 let _shown = null; // the last look that decoded, and the scale it decoded at
+const _failed = new Set(); // looks whose figure would not decode, each logged once
 
 /**
  * The preview's figure: the look asked for, the one on screen (keys start
@@ -574,6 +575,15 @@ function drawAgentFigure(ctx, ch, cx, cy, heightFor, stage = IDLE_STAGE) {
   const scale = (heightFor(_figure.box) / _figure.box[3]) * pixelRatio(ctx);
   let img = getLayerImage(`legacy-agent:${key}`, _figure.box, _figure.defs, _figure.markup, scale);
   let shown = _figure;
+  if (!img && layerFailed(`legacy-agent:${key}`, scale)) {
+    // A figure that will never decode: say so once, stop waiting on it and
+    // keep the last good one up.
+    if (!_failed.has(key)) {
+      _failed.add(key);
+      console.warn(`character creator: the preview figure failed to decode (${key})`);
+    }
+    _figure = null;
+  }
   if (img) {
     if (_shown?.key !== key) _shown = { ..._figure, scale, decodeMs: performance.now() - _figure.asked };
   } else if (_shown) {

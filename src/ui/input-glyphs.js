@@ -94,6 +94,8 @@ const KEYBOARD_FIXED = {
   deploy: "⇧ ENTER",
   pick: "1/2/3",
   toggle: "SPACE",
+  // Touch only (the Legacy creator's hints): a keyboard steps tabs with A/D
+  // and picks with W/S, so these have no key and drawPrompt leaves them out.
   edgeTabs: "",
   tap: "",
 };

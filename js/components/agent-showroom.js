@@ -1988,6 +1988,7 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
+    this.frameSection(null);
     const next = this.presetChanges(i);
     // Belt and braces: anything the agent has not earned falls back instead of equipping.
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
@@ -2488,6 +2489,7 @@ class AgentShowroom extends HTMLElement {
   wearLook(i) {
     const l = this.looks[i];
     if (!l) return;
+    this.frameSection(null);
     const next = this.lookChanges(l);
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
@@ -2640,6 +2642,8 @@ class AgentShowroom extends HTMLElement {
   chooseSet(themeId, el) {
     const theme = SET_THEMES.find((t) => t.id === themeId);
     if (!theme) return;
+    // A tap may not move focus (Safari): leave a close-up for the whole figure here.
+    this.frameSection(null);
     const { changes, skipped } = equipSet(this.character, themeId, this.unlockCtx());
     const names = skipped.map((p) => pieceOf({ [p.field]: p.id }, p.field).name);
     if (!Object.keys(changes).length) {
