@@ -610,16 +610,32 @@ export const GEAR_SLOTS = [
 ];
 
 /**
- * Total stat bonuses from everything a character is wearing. Additive, and
- * recomputed from the character each run — nothing about gear is persisted on
- * the player.
- *
- * Only what the figure draws counts: a pick kept but not worn gives nothing.
- * That is shoulders on a frame that hides them (its `hides`), a visor under
- * a helmet that has none (takesVisor), helmet gear on a seat the helmet
+ * Whether the pick in a gear slot counts toward the character's stats: only
+ * what the figure draws does, so a pick kept but not worn gives nothing.
+ * That rules out shoulders on a frame that hides them (its `hides`), a visor
+ * under a helmet that has none (takesVisor), helmet gear on a seat the helmet
  * refuses (helmetSeats), and an eyes or face item the helmet has no room for
  * or covers (helmetFaceSlots). A frame hiding stock art (the kit, collar,
  * hips, cape or limb light) takes no pick off, so it takes no stat away.
+ * @param {object} character
+ * @param {string} key a GEAR_SLOTS field, or `acc.<slot>`
+ * @returns {boolean}
+ */
+export function gearPickCounts(character, key) {
+  const helmet = pieceIn(HELMET_STYLES, "helmet", character?.helmet).id;
+  if (key === "visor") return takesVisor(helmet);
+  if (key === "shoulder") return !frameHides(pieceIn(BODY_FRAMES, "frame", character?.frame).id, "shoulders");
+  if (!key.startsWith("acc.")) return true;
+  const slot = key.slice(4);
+  if (FACE_SLOTS.includes(slot)) return helmetFaceSlots(helmet)[slot];
+  const seat = slot === "helmet" ? accessoryItem(slot, character?.accessories?.[slot])?.seat : null;
+  return !seat || helmetSeats(helmet)[seat];
+}
+
+/**
+ * Total stat bonuses from everything a character is wearing and the figure
+ * draws (gearPickCounts). Additive, and recomputed from the character each
+ * run — the player records only what it last applied (gear-sync.js).
  * @param {object} character
  * @returns {Record<string, number>}
  */
@@ -630,21 +646,12 @@ export function gearBonuses(character) {
     if (!bonuses) return;
     for (const [stat, value] of Object.entries(bonuses)) out[stat] = (out[stat] || 0) + value;
   };
-  const frame = pieceIn(BODY_FRAMES, "frame", character.frame).id;
-  const helmet = pieceIn(HELMET_STYLES, "helmet", character.helmet).id;
   for (const [field, table] of GEAR_SLOTS) {
-    if (field === "visor" && !takesVisor(helmet)) continue;
-    if (field === "shoulder" && frameHides(frame, "shoulders")) continue;
-    add(pieceIn(table(), field, character[field]).bonuses);
+    if (gearPickCounts(character, field)) add(pieceIn(table(), field, character[field]).bonuses);
   }
   const acc = character.accessories || {};
-  const seats = helmetSeats(helmet);
-  const faceRoom = helmetFaceSlots(helmet);
   for (const { id: slot } of ACCESSORY_SLOTS) {
-    const item = accessoryItem(slot, acc[slot]);
-    if (slot === "helmet" && item?.seat && !seats[item.seat]) continue;
-    if (FACE_SLOTS.includes(slot) && !faceRoom[slot]) continue;
-    add(item?.bonuses);
+    if (gearPickCounts(character, `acc.${slot}`)) add(accessoryItem(slot, acc[slot])?.bonuses);
   }
   return out;
 }

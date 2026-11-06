@@ -17,7 +17,7 @@ import {
   CAPE_STYLES,
   CAMO_STYLES,
 } from "../data/index.js";
-import { GEAR_SLOTS, takesVisor } from "../data/cosmetics.js";
+import { GEAR_SLOTS, gearPickCounts, takesVisor } from "../data/cosmetics.js";
 import { bonusText } from "../data/gear-stats.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor } from "../data/accessories.js";
@@ -357,6 +357,60 @@ const STAT_SLOTS = new Set(GEAR_SLOTS.map(([key]) => key));
 export function gearPerkLines(cat, item) {
   if (cat.slot ? item.id === "none" : !STAT_SLOTS.has(cat.key)) return [];
   return bonusText(item.bonuses).split(" · ");
+}
+
+/** The info panel's text styles: font, size (px) and line step. */
+export const INFO_TEXT = Object.freeze({
+  desc: Object.freeze({ font: "11px monospace", size: 11, line: 16 }),
+  perk: Object.freeze({ font: "bold 10px monospace", size: 10, line: 13 }),
+  note: Object.freeze({ font: "9px monospace", size: 9, line: 12 }),
+});
+
+/**
+ * Where the info panel's description, perk lines and note go: the
+ * description wrapped to the panel from under the title, the perk lines
+ * (each wrapped too) from where the description ends, the note under them.
+ * Each line is `{ text, x, y, rect }`, y the baseline and rect its box. On a
+ * panel too short for that (a phone on its side, a long description), the
+ * lines close up to fit.
+ * @param {object} L getCreatorLayout's layout
+ * @param {number} infoX the panel's left edge
+ * @param {{ desc?: string, perk?: string[], note?: string[] }} text
+ * @param {(text: string, font: string) => number} measure width of `text` in `font`
+ * @returns {{ desc: object[], perk: object[], note: object[], bottom: number }}
+ */
+export function infoTextLayout(L, infoX, text, measure) {
+  const roomy = layInfoText(L, infoX, text, measure, false);
+  return roomy.bottom <= L.contentY + L.panelH ? roomy : layInfoText(L, infoX, text, measure, true);
+}
+
+function layInfoText(L, infoX, { desc = "", perk = [], note = [] }, measure, tight) {
+  const x = infoX + 12;
+  const maxW = L.infoW - 24;
+  let y = L.contentY + 50;
+  let started = false;
+  const out = { desc: [], perk: [], note: [], bottom: y };
+  const put = (list, text, style) => {
+    if (started) y += tight ? style.size + 2 : style.line;
+    started = true;
+    list.push({ text, x, y, rect: { x, y: y - style.size * 0.8, w: measure(text, style.font), h: style.size } });
+  };
+  const wrap = (text, style) => {
+    const lines = [];
+    for (const word of text.split(" ")) {
+      const last = lines.length - 1;
+      if (last >= 0 && measure(`${lines[last]} ${word}`, style.font) <= maxW) lines[last] += ` ${word}`;
+      else lines.push(word);
+    }
+    return lines;
+  };
+  for (const line of desc ? wrap(desc, INFO_TEXT.desc) : []) put(out.desc, line, INFO_TEXT.desc);
+  // A gap under the description before the perk.
+  if (out.desc.length) y += tight ? 3 : 6;
+  for (const stat of perk) for (const line of wrap(stat, INFO_TEXT.perk)) put(out.perk, line, INFO_TEXT.perk);
+  for (const n of note) for (const line of wrap(n, INFO_TEXT.note)) put(out.note, line, INFO_TEXT.note);
+  out.bottom = y + 3;
+  return out;
 }
 
 /** Line height and character width of the foot's note, bold 10px monospace. */
@@ -1065,6 +1119,8 @@ export function renderCharacterCreator(
   // ─── Info panel (right) — hidden on mobile ───
   const infoX = prevX + L.previewW + L.contentGap;
   const selectedItem = items[selIdx];
+  // How far down the info panel's text runs, so the locked list below stays clear of it.
+  let infoBottom = L.contentY;
 
   if (!isMobile) {
     ctx.fillStyle = "rgba(0, 5, 15, 0.6)";
@@ -1104,43 +1160,37 @@ export function renderCharacterCreator(
       ctx.font = "bold 13px monospace";
     }
 
-    // Description
-    if (selectedItem.desc) {
-      ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
-      ctx.font = "11px monospace";
-      const words = selectedItem.desc.split(" ");
-      let line = "";
-      let lineY = L.contentY + 50;
-      for (const word of words) {
-        const test = line + (line ? " " : "") + word;
-        if (ctx.measureText(test).width > L.infoW - 24) {
-          ctx.fillText(line, infoX + 12, lineY);
-          line = word;
-          lineY += 16;
-        } else {
-          line = test;
-        }
-      }
-      if (line) ctx.fillText(line, infoX + 12, lineY);
-    }
-
-    // Gear perk, one stat a line, and how to work the placement toggles. A
-    // helmet with no visor (takesVisor) does not draw the pick or count its
-    // perk, and says so in its place.
+    // Description, then the gear perk one stat a line under it. A pick the
+    // figure does not draw (gearPickCounts: a visor on a helmet with none,
+    // shoulders the frame hides, gear the helmet has no place or room for)
+    // counts for nothing, so its perk is dimmed and says so; a helmet with no
+    // visor names itself in the perk's place.
     const noVisor = curCat.key === "visor" && !takesVisor(char.helmet);
-    if (!noVisor) {
-      ctx.fillStyle = selectedItem.bonuses ? palette.accent : "rgba(180,200,220,0.45)";
-      ctx.font = "bold 10px monospace";
-      gearPerkLines(curCat, selectedItem).forEach((line, i) => ctx.fillText(line.toUpperCase(), infoX + 12, L.contentY + 96 + i * NOTE_LINE));
-    }
-    if (noVisor) {
-      ctx.fillStyle = "rgba(255, 200, 90, 0.8)";
-      ctx.font = "bold 10px monospace";
-      ctx.fillText(`${helmet.name.toUpperCase()}: NO VISOR`, infoX + 12, L.contentY + 96);
-      ctx.fillStyle = "rgba(180,200,220,0.55)";
-      ctx.font = "9px monospace";
-      ctx.fillText("Pick and perk don't apply", infoX + 12, L.contentY + 110);
-    }
+    const perkLines = gearPerkLines(curCat, selectedItem);
+    const counts = !perkLines.length || !selectedItem.bonuses || gearPickCounts(char, curCat.key);
+    const info = infoTextLayout(
+      L,
+      infoX,
+      {
+        desc: selectedItem.desc || "",
+        perk: noVisor ? [`${helmet.name.toUpperCase()}: NO VISOR`] : perkLines.map((l) => l.toUpperCase()),
+        note: noVisor ? ["Pick and perk don't apply"] : counts ? [] : ["Not drawn here: perk doesn't apply"],
+      },
+      (text, font) => {
+        ctx.font = font;
+        return ctx.measureText(text).width;
+      },
+    );
+    ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
+    ctx.font = INFO_TEXT.desc.font;
+    for (const l of info.desc) ctx.fillText(l.text, l.x, l.y);
+    ctx.fillStyle = noVisor ? "rgba(255, 200, 90, 0.8)" : selectedItem.bonuses && counts ? palette.accent : "rgba(180,200,220,0.45)";
+    ctx.font = INFO_TEXT.perk.font;
+    for (const l of info.perk) ctx.fillText(l.text, l.x, l.y);
+    ctx.fillStyle = "rgba(180,200,220,0.55)";
+    ctx.font = INFO_TEXT.note.font;
+    for (const l of info.note) ctx.fillText(l.text, l.x, l.y);
+    infoBottom = info.bottom;
     if (multi) {
       ctx.fillStyle = "rgba(200, 220, 240, 0.6)";
       ctx.font = "11px monospace";
@@ -1268,8 +1318,10 @@ export function renderCharacterCreator(
       .filter((e) => !e.st.unlocked);
     // A category can have dozens of locked options (badge symbols); list only
     // as many as the panel holds and count the rest, or the block runs off the
-    // top of the screen and over the tabs.
-    const room = Math.max(1, Math.floor((listH - 170) / 30));
+    // top of the screen and over the tabs. It stands on the panel's foot and
+    // stops short of the info text above (a long description and its perk).
+    const top = Math.max(L.contentY + 156, infoBottom + 8);
+    const room = Math.max(0, Math.floor((L.contentY + listH - 14 - top) / 30));
     const shownLocks = locked.slice(0, room);
     const moreLocks = locked.length - shownLocks.length;
     let ly = L.contentY + listH - 14 - (shownLocks.length + (moreLocks ? 1 : 0) - 1) * 30;
