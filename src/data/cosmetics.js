@@ -288,7 +288,7 @@ export const ARMOR_STYLES = [
     name: "Engineer",
     desc: "Utility-integrated hardsuit",
     tier: 3,
-    bonuses: { maxChronoEnergyAdd: 25, maxHealthAdd: 10 },
+    bonuses: { maxChronoEnergyAdd: 25, regenAdd: 0.2 },
     badgeTreatment: { finish: "stencil", metal: "steel" },
     variant: { id: "engineer_foreman", name: "Foreman", desc: "Hazard stripes and tool scars", trim: "#e0a030", wear: 0.6, badgeTreatment: { finish: "stencil", metal: "brass" }, unlock: { type: "achievement", id: "droneHunter", label: "Earn Drone Hunter" } },
   },
@@ -344,9 +344,9 @@ export function takesVisor(helmetId) {
 
 export const VISOR_STYLES = [
   { id: "standard", name: "Wide Visor", desc: "Full lower-arc optics", tier: 1 },
-  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2, bonuses: { maxChronoEnergyAdd: 10 } },
+  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2, bonuses: { armorAdd: 2 } },
   { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3, bonuses: { armorAdd: 4, maxChronoEnergyAdd: 10 } },
-  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { maxStaminaAdd: 10 } },
+  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { fireRateAdd: 0.03 } },
   { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3, bonuses: { maxChronoEnergyAdd: 25 } },
   { id: "goldwrap", name: "Gold Wrap", desc: "Wraparound tinted dome visor", tier: 2, bonuses: { maxChronoEnergyAdd: 6 } },
 ];

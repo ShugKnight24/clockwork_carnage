@@ -6,7 +6,12 @@ export default {
   id: "exo",
   name: "Exo-Frame",
   short: "Exo",
-  frames: [{ id: "exo", name: "Exo-Frame", desc: "Hydraulic exoskeleton over the suit: piston limbs, reactor core, mech boots", tier: 3 }],
-  helmets: [{ id: "cockpit", name: "Cockpit", desc: "Roll-cage pilot helmet with a HUD canopy", tier: 3, visor: false }],
-  shoulders: [{ id: "pods", name: "Missile Pods", desc: "Six-tube launcher pods on hinge arms", tier: 3 }],
+  frames: [{ id: "exo", name: "Exo-Frame", desc: "Hydraulic exoskeleton over the suit: piston limbs, reactor core, mech boots", tier: 3,
+      // Plate and a reactor-fed frame: tougher, and heavier on its feet.
+      bonuses: { armorAdd: 3, maxHealthAdd: 10, moveSpeedAdd: -0.1 } }],
+  helmets: [{ id: "cockpit", name: "Cockpit", desc: "Roll-cage pilot helmet with a HUD canopy", tier: 3, visor: false,
+      // A cage to take hits and a targeting canopy.
+      bonuses: { armorAdd: 2, fireRateAdd: 0.06 } }],
+  shoulders: [{ id: "pods", name: "Missile Pods", desc: "Six-tube launcher pods on hinge arms", tier: 3,
+      bonuses: { armorAdd: 5, moveSpeedAdd: -0.08 } }],
 };

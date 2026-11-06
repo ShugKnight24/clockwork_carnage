@@ -85,7 +85,7 @@ describe("gearBonuses", () => {
   it("only puts bonuses on gear that has to be earned", () => {
     // A tier-1 starting piece giving stats would make the default kit strictly
     // worse for no reason the player can see.
-    for (const table of [ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES]) {
+    for (const table of [ARMOR_STYLES, BODY_FRAMES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES]) {
       for (const item of table) {
         if (item.bonuses) expect(item.tier).toBeGreaterThan(1);
       }
@@ -111,9 +111,14 @@ describe("gearBonuses counts only what is drawn", () => {
   it("never takes stats away for stock art a frame hides (kit, collar, hips, cape, limb light)", () => {
     const look = { armor: "heavy", helmet: "mohawk", visor: "fullface", shoulder: BULWARK, accessories: { back: "cloak", waist: "belt", legs: "shins" } };
     const bare = gearBonuses({ ...look, frame: "standard" });
-    for (const { id } of BODY_FRAMES) {
+    for (const { id, bonuses } of BODY_FRAMES) {
       if (frameHides(id, "shoulders")) continue;
-      expect(gearBonuses({ ...look, frame: id }), id).toEqual(bare);
+      // Everything else worn still counts, alongside the frame's own stats.
+      const want = { ...bare };
+      for (const [k, v] of Object.entries(bonuses || {})) want[k] = (want[k] || 0) + v;
+      const got = gearBonuses({ ...look, frame: id });
+      expect(Object.keys(got).sort(), id).toEqual(Object.keys(want).sort());
+      for (const k of Object.keys(want)) expect(got[k], `${id} ${k}`).toBeCloseTo(want[k], 10);
     }
     // The loop above takes in frames hiding each of these (no frame hides the hips yet).
     for (const word of ["kit", "collar", "cape", "limbGlow"]) expect(BODY_FRAMES.some((f) => frameHides(f.id, word)), word).toBe(true);
@@ -246,8 +251,9 @@ describe("gearBonuses with accessories", () => {
     const ch = { ...DEFAULT_CHARACTER, accessories: { ...DEFAULT_CHARACTER.accessories, back: "backpack", waist: "belt" } };
     const base = gearBonuses(DEFAULT_CHARACTER);
     const g = gearBonuses(ch);
-    expect(g.maxStaminaAdd || 0).toBe((base.maxStaminaAdd || 0) + 8);
-    expect(g.maxHealthAdd || 0).toBe((base.maxHealthAdd || 0) + 5);
+    // The backpack carries rounds; the belt's med pouches patch you up.
+    expect(g.ammoCapAdd || 0).toBeCloseTo((base.ammoCapAdd || 0) + 0.1, 10);
+    expect(g.regenAdd || 0).toBeCloseTo((base.regenAdd || 0) + 0.1, 10);
   });
 
   it("ignores unknown accessory ids and a missing accessories object", () => {

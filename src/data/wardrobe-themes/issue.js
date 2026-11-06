@@ -29,16 +29,16 @@ export default {
     { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 }, face: true,
       // The crest takes the crown, so a plume does not seat there.
       seats: { crown: false } },
-    { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { maxStaminaAdd: 20, moveSpeedAdd: 0.1 } },
+    { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { armorAdd: 3 } },
     { id: "ordnance", name: "Ordnance", desc: "Faceted gunner's helm with targeting spine", tier: 3, bonuses: { armorAdd: 4, maxHealthAdd: 8 } },
-    { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },
+    { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { armorAdd: 6 } },
     { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
-    { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
+    { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { staminaRegenAdd: 0.2 } },
     {
       id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3, visor: false,
       unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
     },
-    { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { maxStaminaAdd: 10 } },
+    { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { fireRateAdd: 0.03 } },
     { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false },
   ],
   /** Shoulder pieces, drawn on both shoulders. */
@@ -50,7 +50,7 @@ export default {
     { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3, bonuses: { armorAdd: 8, moveSpeedAdd: -0.1 } },
     { id: "slab", name: "Slab", desc: "Oversized rounded shoulder slabs", tier: 3, bonuses: { maxHealthAdd: 18, armorAdd: 4, moveSpeedAdd: -0.12 } },
     { id: "dome", name: "Domed", desc: "Deep crusader half-shells with a raised rim", tier: 3, bonuses: { armorAdd: 9, moveSpeedAdd: -0.08 } },
-    { id: "ordnance", name: "Launcher", desc: "Vented ordnance housing on a rail", tier: 3, bonuses: { armorAdd: 6, maxHealthAdd: 10, moveSpeedAdd: -0.1 } },
+    { id: "ordnance", name: "Launcher", desc: "Vented ordnance housing on a rail", tier: 3, bonuses: { armorAdd: 6, ammoCapAdd: 0.1, moveSpeedAdd: -0.1 } },
     { id: "layered", name: "Layered", desc: "Stepped overlapping plates", tier: 2, bonuses: { maxStaminaAdd: 14, moveSpeedAdd: 0.1 } },
   ],
 };

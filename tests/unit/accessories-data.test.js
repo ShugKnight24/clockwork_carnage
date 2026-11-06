@@ -1,8 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS, accessoryItem } from "../../src/data/accessories.js";
+import { GEAR_STATS, bonusText } from "../../src/data/gear-stats.js";
 
-const APPLIED = new Set(["maxHealthAdd", "maxChronoEnergyAdd", "maxStaminaAdd", "dashCostAdd", "armorAdd", "moveSpeedAdd"]);
-const CAP = { maxHealthAdd: 10, maxStaminaAdd: 10, maxChronoEnergyAdd: 10, armorAdd: 5, moveSpeedAdd: 0.05 };
+const APPLIED = new Set(Object.keys(GEAR_STATS));
+// The newer stats stay under one arena upgrade level (ammo +0.15, fire rate
+// +0.12, regen +0.5 per level; stamina regen +0.3).
+const CAP = {
+  maxHealthAdd: 10,
+  maxStaminaAdd: 10,
+  maxChronoEnergyAdd: 10,
+  armorAdd: 5,
+  moveSpeedAdd: 0.05,
+  ammoCapAdd: 0.1,
+  fireRateAdd: 0.05,
+  staminaRegenAdd: 0.15,
+  regenAdd: 0.1,
+};
 
 describe("accessory tables", () => {
   it("has the eight slots in order, the last two worn on the face", () => {
@@ -24,11 +37,11 @@ describe("accessory tables", () => {
     }
   });
 
-  it("perks use only applied stats, within the caps, and carry a perk line", () => {
+  it("perks use only applied stats, within the caps, and say them from the stats", () => {
     for (const { id } of ACCESSORY_SLOTS) {
       for (const item of ACCESSORIES[id]) {
         if (!item.bonuses) continue;
-        expect(item.perk).toBeTruthy();
+        expect(bonusText(item.bonuses)).not.toBe("Looks only");
         for (const [stat, v] of Object.entries(item.bonuses)) {
           expect(APPLIED.has(stat)).toBe(true);
           if (stat === "dashCostAdd") expect(v).toBeGreaterThanOrEqual(-3);

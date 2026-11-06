@@ -31,6 +31,23 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
   - helmet gear on a helmet with no place for it (nothing on the Bubble's glass);
   - eyewear and face items under a closed helmet, or where an open helmet has no room for them (a bandana up over the face).
   - A frame that covers the chest kit, the collar or the cape keeps every stat: it changes the look, not the gear.
+- **Gear stats that fit the piece.** Plate gives armour, a gun belt carries rounds, a heavy suit slows you down, chrono hardware feeds chrono energy. A piece nothing fits is cosmetic, and its tile says "Looks only". Gear can now also raise ammo capacity, fire rate, stamina regen and health regen; dropping ammo capacity mid-run trims your rounds to the new cap, and putting the gear back on adds room, not rounds. Every tile states the real effect (move speed as a percent of your base speed). Old gear that changed:
+  - Engineer armour: +25 chrono energy, +10 max health → +25 chrono energy, +0.2 health per second.
+  - Bucket helmet: +18 max health → +6 armour.
+  - Vanguard helmet: +20 stamina, +3% move speed → +3 armour.
+  - Sealed helmet: +12 stamina, +2% move speed → +20% stamina regen.
+  - Pilot helmet: +10 stamina → +3% fire rate.
+  - Slit visor: +10 chrono energy → +2 armour.
+  - Dual Lens visor: +10 stamina → +3% fire rate.
+  - Launcher shoulders: +6 armour, +10 max health, -3% move speed → +6 armour, +10% ammo capacity, -3% move speed.
+  - Tactical Backpack: +8 stamina → +10% ammo capacity.
+  - Utility Belt: +5 max health → +0.1 health per second.
+  - Drop Holster: +1% move speed (shown as +3%) → +5% ammo capacity.
+  - Thigh Holster: +1% move speed (shown as +2%) → +5% ammo capacity.
+  - Bandolier: +5 stamina → +10% ammo capacity.
+  - Forearm Screen: -2 stamina per dash → +2% fire rate.
+  - Grenade Rig: +3 armour → looks only.
+  - Dog Tags: +3 max health → looks only.
 
 ### For developers
 - `?debug` and `?bench` no longer load the dev tools on the live site: they load only on the Vite dev server (#18).

@@ -7,9 +7,11 @@ export default {
   id: "diver",
   name: "Abyssal Diver",
   short: "Diver",
-  frames: [{ id: "diving", name: "Abyssal Diver", desc: "Canvas pressure suit, brass corselet, back tank and lead boots", tier: 2, hides: ["kit", "collar", "cape", "limbGlow"] }],
+  frames: [{ id: "diving", name: "Abyssal Diver", desc: "Canvas pressure suit, brass corselet, back tank and lead boots", tier: 2, hides: ["kit", "collar", "cape", "limbGlow"],
+      // A pressure suit takes punishment; the lead boots slow you.
+      bonuses: { maxHealthAdd: 12, moveSpeedAdd: -0.08 } }],
   // A sealed helmet whose port glass is its own: no visor to fit.
-  helmets: [{ id: "porthole", name: "Porthole", desc: "Round brass diving helmet, grilled front port, bolted collar", tier: 3, visor: false,
+  helmets: [{ id: "porthole", name: "Porthole", desc: "Round brass diving helmet, grilled front port, bolted collar", tier: 3, visor: false, bonuses: { armorAdd: 5 },
       // The air fitting holds the crown and the front port fills the brow.
       seats: { crown: false, brow: false } }],
   shoulders: [{ id: "lantern", name: "Deep Lantern", desc: "Brass lantern on a shoulder bracket, for the dark floors", tier: 2 }],

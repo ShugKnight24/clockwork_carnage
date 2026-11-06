@@ -6,10 +6,12 @@ export default {
   id: "ronin",
   name: "Ronin",
   short: "Ronin",
-  frames: [{ id: "lamellar", name: "Ronin", desc: "Laced chrono-steel lamellar, hanging tassets, an obi with a short blade and a back banner", tier: 2 }],
+  frames: [{ id: "lamellar", name: "Ronin", desc: "Laced chrono-steel lamellar, hanging tassets, an obi with a short blade and a back banner", tier: 2,
+      // Plate that moves with you: laced scales flex and breathe.
+      bonuses: { armorAdd: 2, staminaRegenAdd: 0.1 } }],
   // The war mask covers the face; there is no visor to fit.
-  helmets: [{ id: "kabuto", name: "Kabuto", desc: "Crescent-crested helm, flared neck guard and a snarling war mask", tier: 3, visor: false,
+  helmets: [{ id: "kabuto", name: "Kabuto", desc: "Crescent-crested helm, flared neck guard and a snarling war mask", tier: 3, visor: false, bonuses: { maxHealthAdd: 8, armorAdd: 3 },
       // The crest holds the crown and its clock fitting the brow.
       seats: { crown: false, brow: false } }],
-  shoulders: [{ id: "sode", name: "Sode", desc: "Broad laced shoulder plates hung in rows", tier: 2 }],
+  shoulders: [{ id: "sode", name: "Sode", desc: "Broad laced shoulder plates hung in rows", tier: 2, bonuses: { armorAdd: 3 } }],
 };

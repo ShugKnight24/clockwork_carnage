@@ -17,7 +17,8 @@ import {
   CAPE_STYLES,
   CAMO_STYLES,
 } from "../data/index.js";
-import { takesVisor } from "../data/cosmetics.js";
+import { GEAR_SLOTS, takesVisor } from "../data/cosmetics.js";
+import { bonusText } from "../data/gear-stats.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor } from "../data/accessories.js";
 import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.js";
@@ -341,6 +342,21 @@ function wrapChars(text, max) {
     else lines.push(word);
   }
   return lines;
+}
+
+const STAT_SLOTS = new Set(GEAR_SLOTS.map(([key]) => key));
+
+/**
+ * The info panel's perk lines for a gear pick, one stat a line (bonusText:
+ * "Looks only" for a piece with none); [] for a tab that is not gear or an
+ * accessory slot's "None".
+ * @param {{ key: string, slot?: string }} cat the creator tab
+ * @param {{ id: string, bonuses?: object }} item the pick
+ * @returns {string[]}
+ */
+export function gearPerkLines(cat, item) {
+  if (cat.slot ? item.id === "none" : !STAT_SLOTS.has(cat.key)) return [];
+  return bonusText(item.bonuses).split(" · ");
 }
 
 /** Line height and character width of the foot's note, bold 10px monospace. */
@@ -1108,14 +1124,16 @@ export function renderCharacterCreator(
       if (line) ctx.fillText(line, infoX + 12, lineY);
     }
 
-    // Gear perk, and how to work the placement toggles.
-    if (curCat.slot && selectedItem.perk) {
-      ctx.fillStyle = palette.accent;
+    // Gear perk, one stat a line, and how to work the placement toggles. A
+    // helmet with no visor (takesVisor) does not draw the pick or count its
+    // perk, and says so in its place.
+    const noVisor = curCat.key === "visor" && !takesVisor(char.helmet);
+    if (!noVisor) {
+      ctx.fillStyle = selectedItem.bonuses ? palette.accent : "rgba(180,200,220,0.45)";
       ctx.font = "bold 10px monospace";
-      ctx.fillText(selectedItem.perk.toUpperCase(), infoX + 12, L.contentY + 96);
+      gearPerkLines(curCat, selectedItem).forEach((line, i) => ctx.fillText(line.toUpperCase(), infoX + 12, L.contentY + 96 + i * NOTE_LINE));
     }
-    // A helmet with no visor (takesVisor): the pick is not drawn and its perk not counted.
-    if (curCat.key === "visor" && !takesVisor(char.helmet)) {
+    if (noVisor) {
       ctx.fillStyle = "rgba(255, 200, 90, 0.8)";
       ctx.font = "bold 10px monospace";
       ctx.fillText(`${helmet.name.toUpperCase()}: NO VISOR`, infoX + 12, L.contentY + 96);

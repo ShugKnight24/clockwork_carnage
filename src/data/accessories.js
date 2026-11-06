@@ -1,7 +1,9 @@
 /**
  * Accessory slots worn over the armour. Items are referenced by id; entry 0 of
- * every slot is "none". Perks use the same bonus vocabulary as armour and are
- * summed by gearBonuses() (src/data/cosmetics.js). Painted by
+ * every slot is "none". An item's `bonuses` use the gear stats of
+ * src/data/gear-stats.js (its tile's text comes from them, bonusText) and are
+ * summed by gearBonuses() (src/data/cosmetics.js); an item no stat fits has
+ * none and is looks only. Painted by
  * src/rendering/svg-art/accessories/. Tier 2 and 3 items unlock by the
  * armour's TIER_UNLOCKS (src/data/cosmetics.js), looked up from `tier`.
  *
@@ -37,16 +39,16 @@ export const FACE_SLOTS = Object.freeze(["eyes", "face"]);
 export const ACCESSORIES = {
   back: [
     NONE,
-    { id: "backpack", name: "Tactical Backpack", desc: "Boxy pack with a bedroll", tier: 1, bonuses: { maxStaminaAdd: 8 }, perk: "+8 stamina" },
-    { id: "antenna", name: "Rift Antenna", desc: "Field radio mast", tier: 2, bonuses: { maxChronoEnergyAdd: 8 }, perk: "+8 chrono energy" },
+    { id: "backpack", name: "Tactical Backpack", desc: "Boxy pack with a bedroll", tier: 1, bonuses: { ammoCapAdd: 0.1 } },
+    { id: "antenna", name: "Rift Antenna", desc: "Field radio mast", tier: 2, bonuses: { maxChronoEnergyAdd: 8 } },
     { id: "blade", name: "Sheathed Blade", desc: "Chrono-steel sword across the back", tier: 3 },
     { id: "cloak", name: "Long Cloak", desc: "Replaces the armour's cape", tier: 1 },
   ],
   waist: [
     NONE,
-    { id: "belt", name: "Utility Belt", desc: "Pouches all round", tier: 1, bonuses: { maxHealthAdd: 5 }, perk: "+5 max health" },
-    { id: "holster", name: "Drop Holster", desc: "Sidearm on the thigh strap", tier: 2, bonuses: { moveSpeedAdd: 0.03 }, perk: "+3% move speed" },
-    { id: "grenades", name: "Grenade Rig", desc: "Canisters on a webbing belt", tier: 3, bonuses: { armorAdd: 3 }, perk: "+3 armour" },
+    { id: "belt", name: "Utility Belt", desc: "Pouches all round", tier: 1, bonuses: { regenAdd: 0.1 } },
+    { id: "holster", name: "Drop Holster", desc: "Sidearm on the thigh strap", tier: 2, bonuses: { ammoCapAdd: 0.05 } },
+    { id: "grenades", name: "Grenade Rig", desc: "Canisters on a webbing belt", tier: 3 },
     { id: "canister", name: "Chrono Canister", desc: "Glowing energy cell at the hip", tier: 2 },
   ],
   // Helmet gear sits on one of the helmet's seats (`seat`: crown, brow or
@@ -55,35 +57,35 @@ export const ACCESSORIES = {
   helmet: [
     NONE,
     { id: "nvg", name: "Night-Vision Mount", desc: "Flip-up quad tubes", tier: 2, seat: "brow" },
-    { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, perk: "+5 chrono energy", seat: "side" },
+    { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, seat: "side" },
     { id: "lamp", name: "Head Lamp", desc: "Side-mounted torch", tier: 1, seat: "side" },
     { id: "plume", name: "Plume", desc: "Parade crest", tier: 3, seat: "crown" },
     { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1, seat: "side" },
   ],
   arms: [
     NONE,
-    { id: "gauntlets", name: "Gauntlets", desc: "Heavy forearm guards", tier: 2, bonuses: { armorAdd: 2 }, perk: "+2 armour" },
-    { id: "screen", name: "Forearm Screen", desc: "Tactical wrist display", tier: 1, bonuses: { dashCostAdd: -2 }, perk: "-2 dash cost" },
+    { id: "gauntlets", name: "Gauntlets", desc: "Heavy forearm guards", tier: 2, bonuses: { armorAdd: 2 } },
+    { id: "screen", name: "Forearm Screen", desc: "Tactical wrist display", tier: 1, bonuses: { fireRateAdd: 0.02 } },
     { id: "launcher", name: "Wrist Launcher", desc: "Compact dart launcher", tier: 3 },
   ],
   neck: [
     NONE,
     { id: "scarf", name: "Scarf", desc: "Wrapped field scarf", tier: 1 },
-    { id: "tags", name: "Dog Tags", desc: "Chain and two tags", tier: 1, bonuses: { maxHealthAdd: 3 }, perk: "+3 max health" },
-    { id: "bandolier", name: "Bandolier", desc: "Ammo belt across the chest", tier: 2, bonuses: { maxStaminaAdd: 5 }, perk: "+5 stamina" },
+    { id: "tags", name: "Dog Tags", desc: "Chain and two tags", tier: 1 },
+    { id: "bandolier", name: "Bandolier", desc: "Ammo belt across the chest", tier: 2, bonuses: { ammoCapAdd: 0.1 } },
   ],
   legs: [
     NONE,
-    { id: "kneepads", name: "Knee Pads", desc: "Hard-shell pads", tier: 1, bonuses: { dashCostAdd: -1 }, perk: "-1 dash cost" },
-    { id: "thigh", name: "Thigh Holster", desc: "Magazine pouch on the thigh", tier: 2, bonuses: { moveSpeedAdd: 0.02 }, perk: "+2% move speed" },
-    { id: "shins", name: "Shin Guards", desc: "Plated greaves", tier: 3, bonuses: { armorAdd: 2 }, perk: "+2 armour" },
+    { id: "kneepads", name: "Knee Pads", desc: "Hard-shell pads", tier: 1, bonuses: { dashCostAdd: -1 } },
+    { id: "thigh", name: "Thigh Holster", desc: "Magazine pouch on the thigh", tier: 2, bonuses: { ammoCapAdd: 0.05 } },
+    { id: "shins", name: "Shin Guards", desc: "Plated greaves", tier: 3, bonuses: { armorAdd: 2 } },
   ],
   eyes: [
     NONE,
     { id: "aviators", name: "Aviators", desc: "Teardrop shades on a gold wire frame", tier: 1 },
     { id: "shades", name: "Wraparound Shades", desc: "One lens, tinted the suit's energy", tier: 2 },
     { id: "eyepatch", name: "Eyepatch", desc: "Strapped over the left eye", tier: 1 },
-    { id: "cybereye", name: "Optic Implant", desc: "A glowing lens set into the right eye", tier: 3 },
+    { id: "cybereye", name: "Optic Implant", desc: "A glowing lens set into the right eye", tier: 3, bonuses: { fireRateAdd: 0.03 } },
     { id: "monocle", name: "Brass Monocle", desc: "A lens and its chain", tier: 2 },
   ],
   face: [

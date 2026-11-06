@@ -30,8 +30,10 @@ import {
   VISOR_STYLES,
   VOICE_PROFILES,
   WEAPON_SKINS,
+  GEAR_SLOTS,
   takesVisor,
 } from "../../src/data/cosmetics.js";
+import { bonusText } from "../../src/data/gear-stats.js";
 import { frameShape } from "../../src/rendering/svg-art/frames.js";
 import { faceSlotBlock, frameHides } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import * as Skins from "../../src/data/weapon-skins.js";
@@ -293,6 +295,20 @@ function readLook(raw) {
 // armour variant chip (0 standard, 1 variant), which is a plain number.
 const previewChanges = (ch, p) => (p.key === "armorVariant" ? { armorVariant: p.value } : withIndex(ch, p.key, p.value));
 const previewedValue = (ch, key) => (key === "armorVariant" ? ch.armorVariant | 0 : getIndex(ch, key));
+
+const STAT_SLOTS = new Set(GEAR_SLOTS.map(([key]) => key));
+
+/**
+ * A gear tile's perk line (bonusText: "Looks only" for a piece with no
+ * stats), or null for a tile that is not gear: a body type, a hair cut, an
+ * origin (which says its own perk), or an accessory slot's "None".
+ */
+function gearPerk(key, item) {
+  const acc = key.startsWith("acc.");
+  if (!STAT_SLOTS.has(key) && !acc) return null;
+  if (acc && item.id === "none") return null;
+  return bonusText(item.bonuses);
+}
 
 /** Why the frame overrides the shoulder pick (it hides shoulders, or wears its own right one), or "". */
 function shoulderNote(ch) {
@@ -708,6 +724,7 @@ svg { display: block; }
 .thumb.empty { display: grid; place-items: center; }
 .thumb.empty svg { width: 34%; height: 34%; fill: none; stroke: var(--cc-text-faint); stroke-width: 1.6; stroke-linecap: round; }
 .gperk { padding: 0 2px 2px; font: 700 var(--cc-type-micro)/1.15 var(--cc-font); letter-spacing: 0.4px; color: var(--cc-cyan); text-transform: uppercase; }
+.gperk.looks { font-weight: 600; color: var(--cc-text-faint); }
 .section h3 .cur.locked { color: var(--cc-amber); }
 .snote { margin: 8px 0 0; font: 500 var(--cc-type-label)/1.35 var(--cc-font); color: var(--cc-text-dim); }
 .snote[hidden] { display: none; }
@@ -1096,6 +1113,7 @@ const REALISTIC_STYLE = `
 :host([realistic]) .hero-name { font-weight: 600; letter-spacing: 0.08em; color: var(--r-text); text-shadow: none; }
 :host([realistic]) .hero-kicker, :host([realistic]) .vlabel { font-weight: 600; letter-spacing: 0.24em; }
 :host([realistic]) .hero-finish, :host([realistic]) .gperk { color: var(--r-accent); font-weight: 600; }
+:host([realistic]) .gperk.looks { color: var(--cc-text-faint); }
 :host([realistic]) .modes { background: rgba(14, 16, 18, 0.6); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
 :host([realistic]) .chip { font-weight: 600; letter-spacing: 0.14em; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
 :host([realistic]) .chip:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--r-line-hi); }
@@ -2995,7 +3013,10 @@ class AgentShowroom extends HTMLElement {
     const st = LOCKABLE[s.key] ? unlockState(s.key, item.id, this.unlockCtx()) : null;
     const locked = !!st && !st.unlocked;
     const attrs = `class="opt plate${s.kind === "origin" || s.kind === "voice" || s.kind === "class" ? " card" : ""}${locked ? " locked" : ""}" role="radio" aria-checked="false" data-key="${s.key}" data-idx="${i}" tabindex="-1"`;
-    const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${item.perk ? `. Perk: ${item.perk}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
+    const gperk = gearPerk(s.key, item);
+    const perkText = gperk ?? item.perk;
+    const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${perkText ? `. Perk: ${perkText}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
+    const perk = gperk ? `<span class="gperk${item.bonuses ? "" : " looks"}">${esc(gperk)}</span>` : "";
     const tick = `<span class="tick" aria-hidden="true">${I.check}</span>`;
     const tier = item.tier ? `<span class="tier" aria-hidden="true">${[1, 2, 3].map((t) => `<i class="${t <= item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
     // Locked badge and gear tiles: amber lock corner, rule in the tooltip, progress along the foot.
@@ -3020,7 +3041,6 @@ class AgentShowroom extends HTMLElement {
           item.id === "none"
             ? `<span class="thumb empty" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="m7 17 10-10"/></svg></span>`
             : `<span class="thumb" data-thumb="gear" data-slot="${s.key.slice(4)}"></span>`;
-        const perk = item.perk ? `<span class="gperk">${esc(item.perk)}</span>` : "";
         return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}${thumb}<span class="oname">${esc(item.name)}</span>${tier}${perk}${prog}</button>`;
       }
       case "eye":
@@ -3063,7 +3083,7 @@ class AgentShowroom extends HTMLElement {
       case "rifle":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="thumb" data-thumb="rifle"></span><span class="oname">${esc(item.name)}</span></button>`;
       default:
-        return `<button ${attrs} aria-label="${esc(label)}"${locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : ""}>${tick}${locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : ""}<span class="thumb" data-thumb="${s.kind}"></span><span class="oname">${esc(item.name)}</span>${tier}</button>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : ""}>${tick}${locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : ""}<span class="thumb" data-thumb="${s.kind}"></span><span class="oname">${esc(item.name)}</span>${tier}${perk}</button>`;
     }
   }
 

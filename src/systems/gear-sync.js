@@ -8,7 +8,12 @@
  * Bring `player` from the bonuses recorded in `player._gearApplied` to `next`
  * (gearBonuses(character)). Only the difference goes on, so a second call
  * with the same gear changes nothing. Armour is a floor rather than a sum: it
- * rises with better gear and never drops.
+ * rises with better gear and never drops. The stats are those of GEAR_STATS
+ * (src/data/gear-stats.js).
+ *
+ * Less ammo capacity clamps every gun's rounds to its new cap
+ * (player.ammoCapOf), and the loaded rounds to what is carried; more
+ * capacity adds room, never rounds.
  * @param {object} player
  * @param {Record<string, number>} next
  */
@@ -36,5 +41,32 @@ export function syncGearStats(player, next) {
   if (next.armorAdd) p.armor = Math.max(p.armor, next.armorAdd);
   const speed = d("moveSpeedAdd");
   if (speed) p.moveSpeed += speed;
+  const ammo = d("ammoCapAdd");
+  if (ammo) {
+    p.ammoCap = (p.ammoCap || 1) + ammo;
+    if (ammo < 0) clampRounds(p);
+  }
+  const fire = d("fireRateAdd");
+  if (fire) p.fireRateMultiplier = (p.fireRateMultiplier || 1) + fire;
+  const staminaRegen = d("staminaRegenAdd");
+  if (staminaRegen) p.staminaRegenRate = (p.staminaRegenRate || 1) + staminaRegen;
+  const regen = d("regenAdd");
+  if (regen) p.regenRate = (p.regenRate || 0) + regen;
   p._gearApplied = { ...next };
+}
+
+/**
+ * Hold every gun's rounds to its cap: the guns held and any other the player
+ * has rounds for. A gun not yet stocked is left alone (it is stocked with its
+ * startAmmo, under any cap, when first held).
+ * @param {object} p player
+ */
+function clampRounds(p) {
+  const reserves = p.reserves || {};
+  const ids = new Set([...(p.weapons || []), ...Object.keys(reserves).map(Number)]);
+  for (const id of ids) {
+    if (reserves[id] === undefined) continue;
+    reserves[id] = Math.min(reserves[id], p.ammoCapOf(id));
+    if (p.mags?.[id] > reserves[id]) p.mags[id] = reserves[id];
+  }
 }
