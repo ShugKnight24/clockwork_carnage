@@ -293,6 +293,58 @@ test("the shoulder note reads the frame's own right shoulder", async ({ page }) 
   await expect(room(page).locator('[data-note="frame-shoulders"]')).toHaveText("Strider leaves the right shoulder bare: this pick fits the left.");
 });
 
+test("theme captions appear in helmet grid in theme order", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "helmet").click();
+  const themes = await page.evaluate(async () => (await import("/src/data/wardrobe-themes/index.js")).WARDROBE_THEMES.map((t) => t.name));
+  const caps = room(page).locator('.section[data-key="helmet"] .gcap');
+  await expect(caps).toHaveText(themes.map((t) => new RegExp(`^${t}$`, "i")));
+  // Each helmet sits under its own theme's caption.
+  const misplaced = await room(page).evaluate(async (el) => {
+    const { HELMET_STYLES } = await import("/src/data/cosmetics.js");
+    return [...el.shadowRoot.querySelectorAll('.section[data-key="helmet"] .group')].flatMap((g) =>
+      [...g.querySelectorAll(".opt")].map((o) => HELMET_STYLES[Number(o.dataset.idx)]).filter((h) => h.theme !== g.dataset.group).map((h) => h.id),
+    );
+  });
+  expect(misplaced).toEqual([]);
+  // The frame and shoulder grids are captioned the same way.
+  await tab(page, "suit").click();
+  await expect(room(page).locator('.section[data-key="frame"] .gcap')).toHaveText(themes.map((t) => new RegExp(`^${t}$`, "i")));
+  await expect(room(page).locator('.section[data-key="shoulder"] .gcap').first()).toHaveText(/field issue/i);
+});
+
+test("Sets row equips Ronin", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  await tab(page, "suit").click();
+  const tiles = room(page).locator(".section[data-section=sets] .settile");
+  // One tile per designed theme: never Field Issue.
+  await expect(tiles).toHaveCount(8);
+  await expect(room(page).locator('.settile[data-set="issue"]')).toHaveCount(0);
+  const ronin = room(page).locator('.settile[data-set="ronin"]');
+  await expect(ronin.locator(".sskip")).toBeHidden();
+  await ronin.click();
+  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "lamellar", helmet: "kabuto", shoulder: "sode" });
+  await expect(ronin).toHaveAttribute("aria-pressed", "true");
+  await expect(room(page).locator(".toast")).toHaveText("Ronin set on");
+  // One undo step takes the whole set off.
+  await room(page).getByRole("button", { name: "Undo last change" }).click();
+  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "standard", helmet: "standard", shoulder: "none" });
+});
+
+test("a set with locked pieces equips what is owned and says what it skipped", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "suit").click();
+  // A fresh save owns no tiered helmet or shoulder: the Ronin tile says so up front.
+  const ronin = room(page).locator('.settile[data-set="ronin"]');
+  await expect(ronin.locator(".sskip")).toBeVisible();
+  await expect(ronin.locator(".sskip .sline")).toHaveText([/^Kabuto: Clear Act/, /^Sode: Clear Act/]);
+  await ronin.click();
+  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "lamellar", helmet: "standard", shoulder: "none" });
+  await expect(room(page).locator(".toast")).toHaveText("Ronin set on · Kabuto, Sode locked, skipped");
+  await expect(ronin).toHaveAttribute("aria-pressed", "false");
+});
+
 test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));

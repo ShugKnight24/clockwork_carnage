@@ -21,7 +21,7 @@ import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
 import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
-import { FACE_HELMETS } from "../data/wardrobe-themes/index.js";
+import { FACE_HELMETS, WARDROBE_THEMES } from "../data/wardrobe-themes/index.js";
 import { faceSlotBlock } from "../rendering/svg-art/wardrobe-themes/index.js";
 import { drawPrompt } from "./input-glyphs.js";
 
@@ -399,6 +399,53 @@ export function listRows(L, curCat, ch) {
   if (!foot) return Math.min(curCat.data.length, L.maxBySpace);
   const free = Math.floor((L.panelH - 16 - foot) / L.itemH);
   return Math.min(curCat.data.length, Math.max(2, free));
+}
+
+/** Height of a theme caption row in the list, canvas px. */
+export const LIST_CAPTION_H = 18;
+
+const THEME_NAMES = Object.fromEntries(WARDROBE_THEMES.map((t) => [t.id, t.name]));
+
+/**
+ * The rows the list panel shows: option rows, and on the helmet and
+ * shoulder tabs a caption row ahead of each theme's run (the showroom's
+ * groupBy captions), scrolled so the selected option is in view. A run
+ * scrolled into from above keeps its caption at the top. Shared by the
+ * renderer and the click handler (src/systems/input-click-dispatch.js).
+ * @returns {{ type: "caption"|"item", y: number, h: number, i?: number, text?: string }[]}
+ */
+export function listWindow(L, curCat, ch, selIdx) {
+  const items = curCat.data;
+  const height = listRows(L, curCat, ch) * L.itemH;
+  const themed = items.some((e) => e.theme) && new Set(items.map((e) => e.theme)).size > 1;
+  // Every row in table order, captions included.
+  const all = [];
+  items.forEach((item, i) => {
+    if (themed && (i === 0 || items[i - 1].theme !== item.theme)) all.push({ type: "caption", h: LIST_CAPTION_H, text: THEME_NAMES[item.theme].toUpperCase(), theme: item.theme });
+    all.push({ type: "item", h: L.itemH, i });
+  });
+  // The run's caption, when the window starts inside it.
+  const stickyFor = (k) => (themed && all[k].type === "item" ? all.findLast((r, j) => j < k && r.type === "caption") : null);
+  const span = (from, to) => all.slice(from, to + 1).reduce((t, r) => t + r.h, 0) + (stickyFor(from)?.h || 0);
+  const sel = Math.max(0, all.findIndex((r) => r.type === "item" && r.i === selIdx));
+  // The first row: from the top, or as far down as keeps the pick on the bottom row.
+  let start = 0;
+  while (start < sel && span(start, sel) > height) start++;
+  const rows = [];
+  let y = L.contentY + 8;
+  const sticky = stickyFor(start);
+  if (sticky) {
+    rows.push({ ...sticky, y });
+    y += sticky.h;
+  }
+  for (let k = start; k < all.length; k++) {
+    if (y + all[k].h > L.contentY + 8 + height) break;
+    rows.push({ ...all[k], y });
+    y += all[k].h;
+  }
+  // A caption with none of its run under it says nothing.
+  if (rows.at(-1)?.type === "caption") rows.pop();
+  return rows;
 }
 
 // ── Shared SVG art, rasterised onto the canvas ──
@@ -1268,7 +1315,6 @@ export function renderCharacterCreator(
   const lookSig = lookKey(char);
   const hasTile = BADGE_TILE_KEYS.has(curCat.key) || !!curCat.slot;
   const listX = L.contentX;
-  const maxVisible = listRows(L, curCat, char);
   const listH = L.panelH;
 
   ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
@@ -1281,14 +1327,20 @@ export function renderCharacterCreator(
   ctx.roundRect(listX, L.contentY, L.listW, listH, 8);
   ctx.stroke();
 
-  let scrollOff = 0;
-  if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
-
-  for (let vi = 0; vi < maxVisible; vi++) {
-    const i = vi + scrollOff;
-    if (i >= items.length) break;
+  for (const row of listWindow(L, curCat, char, selIdx)) {
+    if (row.type === "caption") {
+      // A theme's run starts: its name, as the showroom captions its groups.
+      ctx.fillStyle = "rgba(170, 200, 220, 0.55)";
+      ctx.font = "bold 9px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(row.text, listX + 12, row.y + 12);
+      ctx.fillStyle = "rgba(170, 200, 220, 0.12)";
+      ctx.fillRect(listX + 16 + ctx.measureText(row.text).width, row.y + 8, Math.max(0, L.listW - 32 - ctx.measureText(row.text).width), 1);
+      continue;
+    }
+    const i = row.i;
     const item = items[i];
-    const iy = L.contentY + 8 + vi * L.itemH;
+    const iy = row.y;
     const isSelected = i === selIdx;
 
     if (isSelected) {

@@ -14,7 +14,7 @@ import {
   faceSlotFoot,
   getCreatorLayout,
   hairColorSwatches,
-  listRows,
+  listWindow,
   setCreatorCategory,
   tabRect,
 } from "../ui/character-creator.js";
@@ -78,20 +78,16 @@ export function handleCreatorClick(game, e) {
     }
   }
 
-  // Same window the renderer uses (listRows), derived from panel height.
-  const maxVisible = listRows(L, curCat, game.character);
+  // The rows the renderer drew (listWindow): theme captions take no tap.
   const selIdx = curCat.multi
     ? Math.min(Math.max(game.creatorPlacementSel | 0, 0), items.length - 1)
     : getIndex(game.character, curCat.key);
-  let scrollOff = 0;
-  if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
 
   if (mx >= L.contentX && mx <= L.contentX + L.listW) {
-    for (let vi = 0; vi < maxVisible; vi++) {
-      const idx = vi + scrollOff;
-      if (idx >= items.length) break;
-      const iy = L.contentY + 8 + vi * L.itemH;
-      if (my >= iy && my <= iy + L.itemH) {
+    for (const row of listWindow(L, curCat, game.character, selIdx)) {
+      if (row.type !== "item") continue;
+      const idx = row.i;
+      if (my >= row.y && my <= row.y + row.h) {
         // PLACE toggles where the badge is worn; every other tab picks one
         // option, writing through character-fields so nested badge and gear
         // keys land in the right place.

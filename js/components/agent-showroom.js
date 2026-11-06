@@ -8,7 +8,8 @@ import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/sav
 import { normalizeAccessories } from "../../src/core/character-normalize.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor, wornTints } from "../../src/data/accessories.js";
-import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
+import { FACE_HELMETS, WARDROBE_THEMES } from "../../src/data/wardrobe-themes/index.js";
+import { SET_THEMES, equipSet, setPieces, wearsSet } from "../../src/systems/wardrobe-sets.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
   ARMOR_STYLES,
@@ -142,10 +143,13 @@ const CATEGORIES = [
     id: "suit",
     label: "Suit",
     sections: [
-      { key: "frame", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
+      // A designed theme's frame, helmet and shoulders in one pick (src/systems/wardrobe-sets.js).
+      { type: "sets", title: "Sets" },
+      // Frame, helmet and shoulder grids run theme by theme under captions, in theme order.
+      { key: "frame", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame", groupBy: "theme" },
       { key: "armor", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
       { key: "camo", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
-      { key: "shoulder", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
+      { key: "shoulder", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso", groupBy: "theme" },
     ],
   },
   {
@@ -153,7 +157,7 @@ const CATEGORIES = [
     label: "Helmet",
     camera: "bust",
     sections: [
-      { key: "helmet", title: "Helmet", data: HELMET_STYLES, kind: "head" },
+      { key: "helmet", title: "Helmet", data: HELMET_STYLES, kind: "head", groupBy: "theme" },
       { key: "visor", title: "Visor", data: VISOR_STYLES, kind: "head" },
     ],
   },
@@ -223,6 +227,9 @@ const allSections = (c) => (c.modes ? Object.values(c.modes).flat() : c.sections
 // Badge and gear sections (virtual keys) can omit `data`: their table comes from character-fields.
 for (const c of CATEGORIES) for (const s of allSections(c)) if (s.key && !s.data) s.data = tableFor(s.key);
 const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", act: "Act emblems", earned: "Earned" };
+const THEME_NAMES = Object.fromEntries(WARDROBE_THEMES.map((t) => [t.id, t.name]));
+/** A group's caption: a badge set's name, or a wardrobe theme's. */
+const groupName = (by, g) => (by === "theme" ? THEME_NAMES[g] : GROUP_NAMES[g]) || g;
 
 /** Field equality for flat indices and the nested badge / accessory records. */
 const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
@@ -596,7 +603,23 @@ svg { display: block; }
 .grid.camo .thumb svg { width: 100%; height: 100%; display: block; }
 /* Camo is the reward: locked swatches keep their colour. */
 .grid.camo .locked .thumb svg { filter: none; opacity: 0.85; }
-.grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
+.grid.bodyFrame .thumb, .grid.sets .thumb { aspect-ratio: 92 / 162; }
+/* Sets: the whole figure per theme; a pick that would skip locked pieces says which, in amber. */
+.grid.sets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.settile .sskip { display: flex; flex-direction: column; gap: 3px; padding: 0 2px 2px; font: 600 9px/1.25 var(--cc-font); letter-spacing: 0.3px; color: var(--cc-amber); }
+.settile .sskip[hidden] { display: none; }
+.settile .sline { display: flex; gap: 3px; align-items: flex-start; }
+.settile .sline .lk { flex: none; display: flex; padding-top: 1px; }
+.settile .sline .lk svg { width: 9px; height: 9px; fill: none; stroke: currentColor; stroke-width: 2.4; }
+/* Theme groups: one set of columns; Field Issue's run spans it, each designed theme's piece takes a cell under its caption.
+   Each group is a caption row over a tile row (subgrid), so captions and tiles line up across a row whatever wraps. */
+.groups.theme { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.groups.theme.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.groups.theme .group { display: grid; grid-template-rows: subgrid; grid-row: span 2; min-width: 0; }
+.groups.theme .group + .group { margin-top: 0; }
+.groups.theme .group.wide { grid-column: 1 / -1; }
+.groups.theme .gcap { justify-self: start; align-self: end; max-width: 100%; margin: 6px 0 0; }
+.groups.theme .group:not(.wide) .grid { grid-template-columns: minmax(0, 1fr); align-self: start; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
 .grid.finish, .grid.gear { grid-template-columns: repeat(5, 1fr); }
@@ -616,7 +639,7 @@ svg { display: block; }
 .opt:hover, .opt:focus-visible, :host(.kbd) .opt:focus { box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.42), inset 0 0 0 2px rgba(34, 230, 255, 0.6), inset 0 0 22px rgba(34, 230, 255, 0.14); }
 .opt.card:hover, .opt.card:focus-visible, :host(.kbd) .opt.card:focus { box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.42), inset 5px 0 0 var(--cc-cyan), inset 0 0 0 2px rgba(34, 230, 255, 0.6), inset 0 0 26px rgba(34, 230, 255, 0.14); }
 .opt:focus-visible, :host(.kbd) .opt:focus { box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px var(--cc-cyan), inset 0 0 22px rgba(34, 230, 255, 0.25) !important; }
-.opt[aria-checked="true"] { background: linear-gradient(180deg, rgba(34, 230, 255, 0.16), rgba(34, 230, 255, 0) 70%), var(--cc-steel-hi); color: #fff;
+.opt[aria-checked="true"], .opt[aria-pressed="true"] { background: linear-gradient(180deg, rgba(34, 230, 255, 0.16), rgba(34, 230, 255, 0) 70%), var(--cc-steel-hi); color: #fff;
   box-shadow: inset 0 1px 0 rgba(185, 240, 255, 0.45), inset 0 0 0 2px var(--cc-cyan), inset 0 0 20px rgba(34, 230, 255, 0.16); }
 .opt.card[aria-checked="true"] { box-shadow: inset 0 1px 0 rgba(185, 240, 255, 0.45), inset 5px 0 0 var(--cc-cyan), inset 0 0 0 2px var(--cc-cyan), inset 0 0 26px rgba(34, 230, 255, 0.16); }
 /* Brackets on the square corners of the chosen plate (mode-btn::before). */
@@ -626,11 +649,11 @@ svg { display: block; }
     linear-gradient(var(--cc-cyan), var(--cc-cyan)) right top / 2px 10px no-repeat,
     linear-gradient(var(--cc-cyan), var(--cc-cyan)) left bottom / 10px 2px no-repeat,
     linear-gradient(var(--cc-cyan), var(--cc-cyan)) left bottom / 2px 10px no-repeat; }
-.opt[aria-checked="true"]::before, .opt:hover::before { opacity: 1; }
+.opt[aria-checked="true"]::before, .opt[aria-pressed="true"]::before, .opt:hover::before { opacity: 1; }
 .opt .tick { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; padding: 2px; color: var(--cc-caption-cyan-text); background: var(--cc-caption-cyan);
   clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%); opacity: 0; transform: scale(0.6); transition: opacity var(--cc-dur-fast), transform var(--cc-dur-fast) var(--cc-ease); z-index: 3; }
 .opt .tick svg { stroke-width: 3.2; }
-.opt[aria-checked="true"] .tick { opacity: 1; transform: none; }
+.opt[aria-checked="true"] .tick, .opt[aria-pressed="true"] .tick { opacity: 1; transform: none; }
 .thumb { position: relative; aspect-ratio: 1; background: radial-gradient(circle at 45% 38%, #1a2a3e, #050910 78%); box-shadow: inset 0 0 0 1px var(--cc-ink), inset 0 2px 0 rgba(0, 0, 0, 0.55); overflow: hidden; }
 .thumb svg { width: 100%; height: 100%; }
 .oname { font: 700 var(--cc-type-label)/1.1 var(--cc-font); letter-spacing: 0.6px; text-transform: uppercase; color: inherit; padding: 0 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -889,7 +912,7 @@ button:focus-visible { outline: none; }
   .figure-wrap { bottom: 16%; height: 66%; }
   .pedestal { bottom: 12%; width: 70%; }
   .toast { bottom: 58px; }
-  .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .grid.torso, .grid.head, .grid.hair, .groups.theme.torso, .groups.theme.head { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   .opt { min-height: 44px; }
   .hero-well { grid-template-columns: 96px 1fr; gap: 12px; padding: 6px 12px 6px 6px; }
   .hero-art { width: 96px; height: 96px; }
@@ -1456,6 +1479,7 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.tint) return this.chooseTint(t.dataset.tint, t.dataset.hex);
     if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
+    if (t.dataset.set) return this.chooseSet(t.dataset.set, t);
     if (t.dataset.look != null) return this.wearLook(Number(t.dataset.look));
     if (t.dataset.act === "look-save") return this.saveLook();
     if (t.dataset.act === "more-presets") {
@@ -2463,6 +2487,7 @@ class AgentShowroom extends HTMLElement {
         <p class="err ${msg ? "" : "ok"}" id="callsign-err">${esc(msg || "Letters, numbers, space . _ ' -")}</p></div>`;
     }
     if (s.type === "badgeHero") return this.badgeHeroHtml();
+    if (s.type === "sets") return this.setsHtml(s);
     if (s.type === "armory") return this.armoryHtml(s);
     if (s.type === "placement") {
       const on = this.character.badge.placements;
@@ -2482,17 +2507,102 @@ class AgentShowroom extends HTMLElement {
         if (!groups.has(g)) groups.set(g, []);
         groups.get(g).push([item, i]);
       });
-      body = `<div class="groups" role="radiogroup" aria-label="${s.title}">${[...groups]
-        .map(([g, entries]) => `<div class="group"><span class="gcap caption steel">${esc(GROUP_NAMES[g] || g)}</span>${grid(entries)}</div>`)
+      // Theme groups share one set of columns: Field Issue's run spans the
+      // panel, each designed theme's piece takes a cell under its caption.
+      const theme = s.groupBy === "theme";
+      body = `<div class="groups${theme ? ` theme ${s.kind}` : ""}" role="radiogroup" aria-label="${s.title}">${[...groups]
+        .map(([g, entries]) => `<div class="group${theme && entries.length > 1 ? " wide" : ""}" data-group="${esc(g)}"><span class="gcap caption steel">${esc(groupName(s.groupBy, g))}</span>${grid(entries)}</div>`)
         .join("")}</div>`;
     } else {
       body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);
     }
     const variant = s.key === "armor" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
     const note = (SECTION_NOTES[s.key] || "") + (s.kind === "gear" ? this.tintRowHtml(s.key.slice(4)) : "");
-    // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
-    const locks = s.groupBy ? "" : this.lockInfoHtml(s);
+    // Badge sets carry their unlock rule on each tile instead of a long list of rows.
+    const locks = s.groupBy && s.groupBy !== "theme" ? "" : this.lockInfoHtml(s);
     return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
+  }
+
+  /**
+   * The Sets row: one tile per designed theme (SET_THEMES), the agent in its
+   * full set. refreshContent draws the figure, marks the set worn and says
+   * which pieces a pick would skip, and why.
+   */
+  setsHtml(s) {
+    const tiles = SET_THEMES.map(
+      (t) =>
+        `<button class="opt plate settile" data-set="${t.id}" aria-pressed="false" tabindex="-1"><span class="tick" aria-hidden="true">${I.check}</span><span class="thumb" data-set-thumb></span><span class="oname">${esc(t.name)}</span><span class="sskip" hidden></span></button>`,
+    ).join("");
+    return `<div class="section" data-section="sets"><h3><span>${s.title}</span><span class="cur set-cur"></span></h3><div class="grid sets" role="group" aria-label="${s.title}">${tiles}</div></div>`;
+  }
+
+  /** The pieces of a set the player has not unlocked, grouped by the rule that earns them. */
+  setLocks(themeId) {
+    const rows = new Map();
+    for (const s of equipSet(this.character, themeId, this.unlockCtx()).skipped) {
+      const name = pieceOf({ [s.field]: s.id }, s.field).name;
+      rows.set(s.hint, [...(rows.get(s.hint) || []), name]);
+    }
+    return [...rows].map(([hint, names]) => ({ hint, names }));
+  }
+
+  /**
+   * Wear a theme's set: the pieces owned go on in one undo step; locked ones
+   * are skipped (equipSet never equips them) and the toast names them.
+   */
+  chooseSet(themeId, el) {
+    const theme = SET_THEMES.find((t) => t.id === themeId);
+    if (!theme) return;
+    const { changes, skipped } = equipSet(this.character, themeId, this.unlockCtx());
+    const names = skipped.map((p) => pieceOf({ [p.field]: p.id }, p.field).name);
+    if (!Object.keys(changes).length) {
+      el?.classList.remove("shake");
+      void el?.offsetWidth;
+      el?.classList.add("shake");
+      this.toast(`${theme.name} set locked · ${skipped[0].hint}`);
+      this.sfx("menuNav");
+      return;
+    }
+    this.commit(changes);
+    this.sfx("menuSelect");
+    this.flashStage();
+    const msg = skipped.length ? `${theme.name} set on · ${names.join(", ")} locked, skipped` : `${theme.name} set on`;
+    this.toast(msg);
+    this.announce(msg);
+  }
+
+  /** Sets row: figures, the worn mark, and what a pick would skip. */
+  refreshSets(sig) {
+    const ch = this.character;
+    let worn = "";
+    this.shadowRoot.querySelectorAll(".content .settile").forEach((tile) => {
+      const id = tile.dataset.set;
+      const theme = SET_THEMES.find((t) => t.id === id);
+      const on = wearsSet(ch, id);
+      if (on) worn = theme.name;
+      tile.setAttribute("aria-pressed", String(on));
+      const thumb = tile.querySelector("[data-set-thumb]");
+      if (thumb.dataset.sig !== sig) {
+        thumb.dataset.sig = sig;
+        const look = { ...ch, ...Object.fromEntries(setPieces(id).map((p) => [p.field, p.id])) };
+        thumb.innerHTML = buildAgentSvg(look, { view: FRAME_VIEW, idPrefix: `st${this._thumbSeq++}-`, lighting: "flat", realistic: this._real });
+      }
+      const locks = this.setLocks(id);
+      const all = locks.reduce((n, l) => n + l.names.length, 0) === setPieces(id).length;
+      tile.classList.toggle("locked", all);
+      tile.classList.toggle("partial", !!locks.length && !all);
+      const skip = tile.querySelector(".sskip");
+      skip.hidden = !locks.length;
+      const html = locks.map((l) => `<span class="sline"><span class="lk" aria-hidden="true">${I.lock}</span>${esc(l.names.join(", "))}: ${esc(l.hint)}</span>`).join("");
+      if (skip.dataset.html !== html) {
+        skip.dataset.html = html;
+        skip.innerHTML = html;
+      }
+      const why = locks.map((l) => `${l.names.join(", ")} locked: ${l.hint}`).join(". ");
+      tile.setAttribute("aria-label", `Wear the ${theme.name} set${on ? ", worn" : ""}${why ? `. ${all ? "Every piece is locked" : "Skips"}: ${why}` : ""}`);
+    });
+    const cur = this.shadowRoot.querySelector(".content .set-cur");
+    if (cur) cur.textContent = worn;
   }
 
   /**
@@ -2903,6 +3013,7 @@ class AgentShowroom extends HTMLElement {
         default:
       }
     });
+    this.refreshSets(sig);
     const autoMetal = this.shadowRoot.querySelector('.content [data-note="auto-metal"]');
     if (autoMetal) {
       autoMetal.hidden = ch.badge.finish !== "auto";
