@@ -75,25 +75,29 @@ function lamellar(P, c, K) {
   const lacquer = K.mix(c.pal.dark, "#07080b", 0.45);
   let glow = "";
 
-  // Behind the body: a back banner on a pole rising over the right shoulder,
-  // a chrono crest on the cloth.
-  const flag = "M16.8,-110.4 L30,-110.8 C29.6,-102 30.4,-94 29.8,-83.6 L26.6,-86.6 L23.4,-82.8 L20.2,-86.4 L17.2,-83.2 C17.6,-92 17,-101 16.8,-110.4 Z";
-  const mon = [23.4, -99];
+  // Behind the body: a back banner (sashimono) on a pole rising over the
+  // right shoulder, a chrono crest on the cloth. It stands no higher than
+  // the kabuto's crest, so the bust camera holds it: drawn at full size in
+  // its own coordinates (the table below) and fitted by B, ~60% as tall.
+  const B = (d) => d.replace(/(-?[\d.]+),(-?[\d.]+)/g, (_, x, y) => pt(14.8 + (x - 15.4) * 0.68, -103 + (+y + 111.4) * 0.6));
+  const flag = B("M16.8,-110.4 L30,-110.8 C29.6,-102 30.4,-94 29.8,-83.6 L26.6,-86.6 L23.4,-82.8 L20.2,-86.4 L17.2,-83.2 C17.6,-92 17,-101 16.8,-110.4 Z");
+  const mon = B("23.4,-99").split(",").map(Number);
+  const pole = "M12.4,-58 L15.1,-103.8";
   const under =
-    line("M12.4,-58 L15.6,-113", INK, 2.6, 1) +
-    line("M12.4,-58 L15.6,-113", "#2a2016", 1.6, 1) +
-    line("M12.7,-62 L15.7,-111", "#6a5640", 0.4, 0.8) +
-    shape(flag, "url(#paint)", 1) +
-    line("M18,-108.6 C18.4,-100 18.2,-92 18.4,-86", "#ffffff", 0.6, 0.35) +
-    line("M29,-108 C28.6,-100 29.2,-92 28.8,-86", "#000000", 0.8, 0.3) +
-    line("M15.4,-111.2 L31,-111.6", INK, 2.2, 1) +
-    line("M15.4,-111.2 L31,-111.6", "#2a2016", 1.2, 1) +
-    `<circle cx="${mon[0]}" cy="${mon[1]}" r="5" fill="${lacquer}" stroke="${INK}" stroke-width=".7"/>` +
-    `<circle cx="${mon[0]}" cy="${mon[1]}" r="3.6" fill="none" stroke="${KNOT}" stroke-width=".6"/>` +
-    line(`M${mon[0]},${mon[1] - 3.4} L${mon[0]},${mon[1]} L${mon[0] + 2.2},${mon[1] + 1.2}`, KNOT, 0.6, 1) +
-    `<path d="M${pt(mon[0] - 4.2, -91)} L${pt(mon[0] + 4.2, -91)}" stroke="${lacquer}" stroke-width="1.4"/>` +
-    `<path d="M${pt(mon[0] - 3.2, -88.8)} L${pt(mon[0] + 3.2, -88.8)}" stroke="${lacquer}" stroke-width=".8"/>`;
-  glow += energy(`<circle cx="${mon[0]}" cy="${mon[1]}" r="3.6" fill="none" stroke-width=".5"/><circle cx="${mon[0]}" cy="${mon[1]}" r=".8"/>`, c.energy);
+    line(pole, INK, 2.4, 1) +
+    line(pole, "#2a2016", 1.4, 1) +
+    line("M12.7,-62 L15,-102", "#6a5640", 0.4, 0.8) +
+    shape(flag, "url(#paint)", 0.9) +
+    line(B("M18,-108.6 C18.4,-100 18.2,-92 18.4,-86"), "#ffffff", 0.5, 0.35) +
+    line(B("M29,-108 C28.6,-100 29.2,-92 28.8,-86"), "#000000", 0.7, 0.3) +
+    line(B("M15.4,-111.2 L31,-111.6"), INK, 2, 1) +
+    line(B("M15.4,-111.2 L31,-111.6"), "#2a2016", 1.1, 1) +
+    `<circle cx="${f(mon[0])}" cy="${f(mon[1])}" r="3.3" fill="${lacquer}" stroke="${INK}" stroke-width=".6"/>` +
+    `<circle cx="${f(mon[0])}" cy="${f(mon[1])}" r="2.4" fill="none" stroke="${KNOT}" stroke-width=".5"/>` +
+    line(`M${pt(mon[0], mon[1] - 2.2)} L${pt(...mon)} L${pt(mon[0] + 1.5, mon[1] + 0.8)}`, KNOT, 0.5, 1) +
+    `<path d="M${pt(mon[0] - 2.8, mon[1] + 4.8)} L${pt(mon[0] + 2.8, mon[1] + 4.8)}" stroke="${lacquer}" stroke-width="1"/>` +
+    `<path d="M${pt(mon[0] - 2.1, mon[1] + 6.1)} L${pt(mon[0] + 2.1, mon[1] + 6.1)}" stroke="${lacquer}" stroke-width=".6"/>`;
+  glow += energy(`<circle cx="${f(mon[0])}" cy="${f(mon[1])}" r="2.4" fill="none" stroke-width=".4"/><circle cx="${f(mon[0])}" cy="${f(mon[1])}" r=".55"/>`, c.energy);
 
   // Shin guards: splinted plates down the front of the shin, laced at the top.
   const legs = P.legs

@@ -210,19 +210,19 @@
 <g class="ag-body">
 <g transform="scale(1.2 1)">
 <g transform="translate(0,58) scale(1.05) translate(0,-58)">
-<path d="M12.4,-58 L15.6,-113" fill="none" stroke="#04060b" stroke-width="2.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M12.4,-58 L15.6,-113" fill="none" stroke="#2a2016" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M12.7,-62 L15.7,-111" fill="none" stroke="#6a5640" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.8,-110.4 L30,-110.8 C29.6,-102 30.4,-94 29.8,-83.6 L26.6,-86.6 L23.4,-82.8 L20.2,-86.4 L17.2,-83.2 C17.6,-92 17,-101 16.8,-110.4 Z" fill="url(#ronin-0-kabuto-lamellar-sode-masc-idle-paint)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
-<path d="M18,-108.6 C18.4,-100 18.2,-92 18.4,-86" fill="none" stroke="#ffffff" stroke-width="0.6" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M29,-108 C28.6,-100 29.2,-92 28.8,-86" fill="none" stroke="#000000" stroke-width="0.8" stroke-opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M15.4,-111.2 L31,-111.6" fill="none" stroke="#04060b" stroke-width="2.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M15.4,-111.2 L31,-111.6" fill="none" stroke="#2a2016" stroke-width="1.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="23.4" cy="-99" r="5" fill="#060f1c" stroke="#04060b" stroke-width="0.7"/>
-<circle cx="23.4" cy="-99" r="3.6" fill="none" stroke="#e6dcc2" stroke-width="0.6"/>
-<path d="M23.4,-102.4 L23.4,-99 L25.6,-97.8" fill="none" stroke="#e6dcc2" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M19.2,-91 L27.6,-91" stroke="#060f1c" stroke-width="1.4"/>
-<path d="M20.2,-88.8 L26.6,-88.8" stroke="#060f1c" stroke-width="0.8"/>
+<path d="M12.4,-58 L15.1,-103.8" fill="none" stroke="#04060b" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.4,-58 L15.1,-103.8" fill="none" stroke="#2a2016" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.7,-62 L15,-102" fill="none" stroke="#6a5640" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M15.8,-102.4 L24.7,-102.6 C24.5,-97.4 25,-92.6 24.6,-86.3 L22.4,-88.1 L20.2,-85.8 L18.1,-88 L16,-86.1 C16.3,-91.4 15.9,-96.8 15.8,-102.4 Z" fill="url(#ronin-0-kabuto-lamellar-sode-masc-idle-paint)" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M16.6,-101.3 C16.8,-96.2 16.7,-91.4 16.8,-87.8" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M24,-101 C23.8,-96.2 24.2,-91.4 23.9,-87.8" fill="none" stroke="#000000" stroke-width="0.7" stroke-opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.8,-102.9 L25.4,-103.1" fill="none" stroke="#04060b" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.8,-102.9 L25.4,-103.1" fill="none" stroke="#2a2016" stroke-width="1.1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="20.2" cy="-95.6" r="3.3" fill="#060f1c" stroke="#04060b" stroke-width="0.6"/>
+<circle cx="20.2" cy="-95.6" r="2.4" fill="none" stroke="#e6dcc2" stroke-width="0.5"/>
+<path d="M20.2,-97.8 L20.2,-95.6 L21.7,-94.8" fill="none" stroke="#e6dcc2" stroke-width="0.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.4,-90.8 L23,-90.8" stroke="#060f1c" stroke-width="1"/>
+<path d="M18.1,-89.5 L22.3,-89.5" stroke="#060f1c" stroke-width="0.6"/>
 <path d="M-17.5,-19.6C-17.8,-18.2 -18.8,-14.2 -19.1,-11.3C-19.4,-8.5 -19.5,-5.9 -19.2,-2.5C-19,0.8 -18.1,5.5 -17.6,9C-17.1,12.5 -16.5,17 -16.3,18.6C-16.7,24.2 -5.5,24.9 -5.1,19.3C-4.9,18.8 -4.5,17.7 -4.1,16.3C-3.6,15 -2.9,13.8 -2.5,11.1C-2.1,8.5 -2,4.1 -1.6,0.5C-1.2,-3.2 -0.3,-7.7 0,-10.9C0.3,-14 0,-17.2 0,-18.5C0.6,-27.3 -17,-28.4 -17.5,-19.6Z" fill="url(#ronin-0-kabuto-lamellar-sode-masc-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-17.5,-19.6C-17.8,-18.2 -18.8,-14.2 -19.1,-11.3C-19.4,-8.5 -19.5,-5.9 -19.2,-2.5C-19,0.8 -18.1,5.5 -17.6,9C-17.1,12.5 -16.5,17 -16.3,18.6C-16.7,24.2 -5.5,24.9 -5.1,19.3C-4.9,18.8 -4.5,17.7 -4.1,16.3C-3.6,15 -2.9,13.8 -2.5,11.1C-2.1,8.5 -2,4.1 -1.6,0.5C-1.2,-3.2 -0.3,-7.7 0,-10.9C0.3,-14 0,-17.2 0,-18.5C0.6,-27.3 -17,-28.4 -17.5,-19.6Z" fill="url(#ronin-0-kabuto-lamellar-sode-masc-idle-weave)"/>
 <path d="M-17.5,-19.6C-17.8,-18.2 -18.8,-14.2 -19.1,-11.3C-19.4,-8.5 -19.5,-5.9 -19.2,-2.5C-19,0.8 -18.1,5.5 -17.6,9C-17.1,12.5 -16.5,17 -16.3,18.6C-16.7,24.2 -5.5,24.9 -5.1,19.3C-4.9,18.8 -4.5,17.7 -4.1,16.3C-3.6,15 -2.9,13.8 -2.5,11.1C-2.1,8.5 -2,4.1 -1.6,0.5C-1.2,-3.2 -0.3,-7.7 0,-10.9C0.3,-14 0,-17.2 0,-18.5C0.6,-27.3 -17,-28.4 -17.5,-19.6Z" fill="url(#ronin-0-kabuto-lamellar-sode-masc-idle-cyl)"/>
@@ -1167,12 +1167,12 @@
 <circle cx="16.8" cy="-47.4" r="0.9"/>
 </g>
 <g filter="url(#ronin-0-kabuto-lamellar-sode-masc-idle-glow)" fill="#3dffb0" stroke="#3dffb0">
-<circle cx="23.4" cy="-99" r="3.6" fill="none" stroke-width="0.5"/>
-<circle cx="23.4" cy="-99" r="0.8"/>
+<circle cx="20.2" cy="-95.6" r="2.4" fill="none" stroke-width="0.4"/>
+<circle cx="20.2" cy="-95.6" r="0.55"/>
 </g>
 <g fill="#bffcff" stroke="#bffcff" opacity="0.9">
-<circle cx="23.4" cy="-99" r="3.6" fill="none" stroke-width="0.5"/>
-<circle cx="23.4" cy="-99" r="0.8"/>
+<circle cx="20.2" cy="-95.6" r="2.4" fill="none" stroke-width="0.4"/>
+<circle cx="20.2" cy="-95.6" r="0.55"/>
 </g>
 <g filter="url(#ronin-0-kabuto-lamellar-sode-masc-idle-glow)" fill="#3dffb0" stroke="#3dffb0">
 <circle cx="0" cy="-54" r="1.7"/>
