@@ -291,6 +291,16 @@ describe("the Void Ranger theme", () => {
   });
 });
 
+describe("the Chronomancer theme", () => {
+  it("the robe covers the kit, cape and limb light; the hood's halo and hollow take the crown and brow, the badge rides the clasp", () => {
+    expect([...FRAME_ART.vestment.shape.hides]).toEqual(["kit", "cape", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "hood").visor).toBe(false);
+    expect(FACE_HELMETS.has("hood")).toBe(false);
+    expect(helmetSeats("hood")).toEqual({ crown: false, brow: false, side: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "hood").helmet).toEqual({ x: 0, y: -64.6, rot: 0, size: 3.6 });
+  });
+});
+
 describe("every theme piece draws cleanly", () => {
   // Each theme's own set: both builds and poses, realistic, the head tile,
   // a face peek and both builds fallen. No NaN or undefined in the markup,
