@@ -322,11 +322,15 @@ test("Sets row equips Ronin", async ({ page }) => {
   await expect(tiles).toHaveCount(8);
   await expect(room(page).locator('.settile[data-set="issue"]')).toHaveCount(0);
   const ronin = room(page).locator('.settile[data-set="ronin"]');
-  await expect(ronin.locator(".sskip")).toBeHidden();
+  await expect(ronin.locator(".setlock")).toBeHidden();
+  await expect(ronin.locator(".sown")).toHaveText("3/3 owned");
+  await expect(room(page).locator(".setlocks .lockfold")).toHaveCount(0);
   await ronin.click();
   expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "lamellar", helmet: "kabuto", shoulder: "sode" });
   await expect(ronin).toHaveAttribute("aria-pressed", "true");
   await expect(room(page).locator(".toast")).toHaveText("Ronin set on");
+  await ronin.click();
+  await expect(room(page).locator(".toast")).toHaveText("Ronin set already worn");
   // One undo step takes the whole set off.
   await room(page).getByRole("button", { name: "Undo last change" }).click();
   expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "standard", helmet: "standard", shoulder: "none" });
@@ -337,8 +341,16 @@ test("a set with locked pieces equips what is owned and says what it skipped", a
   await tab(page, "suit").click();
   // A fresh save owns no tiered helmet or shoulder: the Ronin tile says so up front.
   const ronin = room(page).locator('.settile[data-set="ronin"]');
-  await expect(ronin.locator(".sskip")).toBeVisible();
-  await expect(ronin.locator(".sskip .sline")).toHaveText([/^Kabuto: Clear Act/, /^Sode: Clear Act/]);
+  await expect(ronin.locator(".setlock")).toBeVisible();
+  await expect(ronin.locator(".setlock b")).toHaveText("2");
+  await expect(ronin.locator(".sown")).toHaveText("1/3 owned");
+  await expect(ronin).toHaveAttribute("title", /^Ronin: Kabuto \(Clear Act .+\), Sode \(Clear Act .+\)$/);
+  await expect(ronin).toHaveAttribute("aria-label", /Skips: Kabuto locked: Clear Act/);
+  // The rules that earn them sit in the section's unlock fold, grouped by rule.
+  const fold = room(page).locator(".setlocks .lockfold");
+  await expect(fold.locator("summary")).toHaveText(/How to unlock · 16/);
+  await fold.locator("summary").click();
+  await expect(fold.locator(".lockrow").filter({ hasText: "Kabuto" })).toContainText(/Clear Act 2/);
   await ronin.click();
   expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "lamellar", helmet: "standard", shoulder: "none" });
   await expect(room(page).locator(".toast")).toHaveText("Ronin set on · Kabuto, Sode locked, skipped");

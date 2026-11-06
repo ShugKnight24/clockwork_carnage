@@ -132,6 +132,8 @@ const TURN_DEPTH = { back: -9, cape: -6, head: 1 };
 
 /** Whole-figure crop for frame tiles (the cape and boots inside the frame). */
 const FRAME_VIEW = [-46, -100, 92, 162];
+/** Set tiles: the same figure from the helmet to the shins, so two rows of sets leave the Frame grid in view. */
+const SET_VIEW = [-46, -100, 92, 116];
 
 const CATEGORIES = [
   {
@@ -609,14 +611,16 @@ svg { display: block; }
 .grid.camo .thumb svg { width: 100%; height: 100%; display: block; }
 /* Camo is the reward: locked swatches keep their colour. */
 .grid.camo .locked .thumb svg { filter: none; opacity: 0.85; }
-.grid.bodyFrame .thumb, .grid.sets .thumb { aspect-ratio: 92 / 162; }
-/* Sets: the whole figure per theme; a pick that would skip locked pieces says which, in amber. */
+.grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
+/* Sets: the set on the player, shins up; a corner lock (with a count past one) and an owned line when pieces are locked. */
 .grid.sets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.settile .sskip { display: flex; flex-direction: column; gap: 3px; padding: 0 2px 2px; font: 600 9px/1.25 var(--cc-font); letter-spacing: 0.3px; color: var(--cc-amber); }
-.settile .sskip[hidden] { display: none; }
-.settile .sline { display: flex; gap: 3px; align-items: flex-start; }
-.settile .sline .lk { flex: none; display: flex; padding-top: 1px; }
-.settile .sline .lk svg { width: 9px; height: 9px; fill: none; stroke: currentColor; stroke-width: 2.4; }
+.grid.sets .thumb { aspect-ratio: 92 / 116; }
+.settile .sown { padding: 0 2px 2px; font: 600 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 0.5px; color: var(--cc-text-dim); text-transform: uppercase; }
+.settile .setlock { width: auto; min-width: 17px; padding: 0 3px; gap: 2px; grid-auto-flow: column; }
+.settile .setlock b { font: 800 9px/1 var(--cc-font); }
+.settile .setlock[hidden] { display: none; }
+/* A rule can earn a piece of every set: its names share the row with the rule instead of squeezing it. */
+.setlocks .lockrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 /* Theme groups: one set of columns; Field Issue's run spans it, each designed theme's piece takes a cell under its caption.
    Each group is a caption row over a tile row (subgrid), so captions and tiles line up across a row whatever wraps. */
 .groups.theme { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
@@ -2561,25 +2565,43 @@ class AgentShowroom extends HTMLElement {
 
   /**
    * The Sets row: one tile per designed theme (SET_THEMES), the agent in its
-   * full set. refreshContent draws the figure, marks the set worn and says
-   * which pieces a pick would skip, and why.
+   * full set. refreshSets draws the figures, marks the set worn, badges a
+   * tile with how many of its pieces are locked, and keeps the section's
+   * "How to unlock" fold (the lockInfoHtml pattern) listing what earns them.
    */
   setsHtml(s) {
     const tiles = SET_THEMES.map(
       (t) =>
-        `<button class="opt plate settile" data-set="${t.id}" aria-pressed="false" tabindex="-1"><span class="tick" aria-hidden="true">${I.check}</span><span class="thumb" data-set-thumb></span><span class="oname">${esc(t.name)}</span><span class="sskip" hidden></span></button>`,
+        `<button class="opt plate settile" data-set="${t.id}" aria-pressed="false" tabindex="-1"><span class="tick" aria-hidden="true">${I.check}</span>` +
+        `<span class="lockbadge setlock" aria-hidden="true" hidden>${I.lock}<b></b></span><span class="thumb" data-set-thumb></span>` +
+        `<span class="oname">${esc(t.name)}</span><span class="sown"></span></button>`,
     ).join("");
-    return `<div class="section" data-section="sets"><h3><span>${s.title}</span><span class="cur set-cur"></span></h3><div class="grid sets" role="group" aria-label="${s.title}">${tiles}</div></div>`;
+    return `<div class="section" data-section="sets"><h3><span>${s.title}</span><span class="cur set-cur"></span></h3><div class="grid sets" role="group" aria-label="${s.title}">${tiles}</div><div class="setlocks"></div></div>`;
   }
 
-  /** The pieces of a set the player has not unlocked, grouped by the rule that earns them. */
-  setLocks(themeId) {
+  /** Each piece of a set with its unlock state. */
+  setState(themeId) {
+    const ctx = this.unlockCtx();
+    return setPieces(themeId).map((p) => ({ ...p, st: unlockState(p.field, p.id, ctx) }));
+  }
+
+  /** The Sets section's fold: every locked set piece, one row per rule that earns them, with progress. */
+  setLockInfoHtml() {
     const rows = new Map();
-    for (const s of equipSet(this.character, themeId, this.unlockCtx()).skipped) {
-      const name = pieceOf({ [s.field]: s.id }, s.field).name;
-      rows.set(s.hint, [...(rows.get(s.hint) || []), name]);
+    for (const t of SET_THEMES) {
+      for (const p of this.setState(t.id)) {
+        if (p.st.unlocked) continue;
+        const row = rows.get(p.st.hint) || { st: p.st, names: [] };
+        row.names.push(p.name);
+        rows.set(p.st.hint, row);
+      }
     }
-    return [...rows].map(([hint, names]) => ({ hint, names }));
+    if (!rows.size) return "";
+    const html = [...rows.values()]
+      .map(({ st, names }) => `<div class="lockrow"><span class="lock caption amber">${I.lock}${esc(names.join(", "))}</span><span>${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></div>`)
+      .join("");
+    const n = [...rows.values()].reduce((k, r) => k + r.names.length, 0);
+    return `<details class="lockfold"><summary><span class="lock caption amber">${I.lock}How to unlock · ${n}</span></summary><div class="lockinfo">${html}</div></details>`;
   }
 
   /**
@@ -2599,15 +2621,20 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
-    this.commit(changes);
+    const skip = skipped.length ? ` · ${names.join(", ")} locked, skipped` : "";
+    if (!this.commit(changes)) {
+      this.toast(`${theme.name} set already worn${skip}`);
+      this.sfx("menuNav");
+      return;
+    }
     this.sfx("menuSelect");
     this.flashStage();
-    const msg = skipped.length ? `${theme.name} set on · ${names.join(", ")} locked, skipped` : `${theme.name} set on`;
+    const msg = `${theme.name} set on${skip}`;
     this.toast(msg);
     this.announce(msg);
   }
 
-  /** Sets row: figures, the worn mark, and what a pick would skip. */
+  /** Sets row: figures, the worn mark, the lock badge and count, and the unlock fold. */
   refreshSets(sig) {
     const ch = this.character;
     let worn = "";
@@ -2621,24 +2648,30 @@ class AgentShowroom extends HTMLElement {
       if (thumb.dataset.sig !== sig) {
         thumb.dataset.sig = sig;
         const look = { ...ch, ...Object.fromEntries(setPieces(id).map((p) => [p.field, p.id])) };
-        thumb.innerHTML = buildAgentSvg(look, { view: FRAME_VIEW, idPrefix: `st${this._thumbSeq++}-`, lighting: "flat", realistic: this._real });
+        thumb.innerHTML = buildAgentSvg(look, { view: SET_VIEW, idPrefix: `st${this._thumbSeq++}-`, lighting: "flat", realistic: this._real });
       }
-      const locks = this.setLocks(id);
-      const all = locks.reduce((n, l) => n + l.names.length, 0) === setPieces(id).length;
-      tile.classList.toggle("locked", all);
-      tile.classList.toggle("partial", !!locks.length && !all);
-      const skip = tile.querySelector(".sskip");
-      skip.hidden = !locks.length;
-      const html = locks.map((l) => `<span class="sline"><span class="lk" aria-hidden="true">${I.lock}</span>${esc(l.names.join(", "))}: ${esc(l.hint)}</span>`).join("");
-      if (skip.dataset.html !== html) {
-        skip.dataset.html = html;
-        skip.innerHTML = html;
-      }
-      const why = locks.map((l) => `${l.names.join(", ")} locked: ${l.hint}`).join(". ");
-      tile.setAttribute("aria-label", `Wear the ${theme.name} set${on ? ", worn" : ""}${why ? `. ${all ? "Every piece is locked" : "Skips"}: ${why}` : ""}`);
+      const pieces = this.setState(id);
+      const locked = pieces.filter((p) => !p.st.unlocked);
+      const owned = pieces.length - locked.length;
+      tile.classList.toggle("locked", owned === 0);
+      const badge = tile.querySelector(".setlock");
+      badge.hidden = !locked.length;
+      badge.querySelector("b").textContent = locked.length > 1 ? String(locked.length) : "";
+      tile.querySelector(".sown").textContent = `${owned}/${pieces.length} owned`;
+      const why = locked.map((p) => `${p.name} locked: ${p.st.hint}`).join(". ");
+      tile.setAttribute("aria-label", `Wear the ${theme.name} set${on ? ", worn" : ""}. ${owned} of ${pieces.length} pieces owned${why ? `. ${owned ? "Skips" : "Every piece is locked"}: ${why}` : ""}`);
+      tile.title = locked.length ? `${theme.name}: ${locked.map((p) => `${p.name} (${p.st.hint})`).join(", ")}` : theme.name;
     });
     const cur = this.shadowRoot.querySelector(".content .set-cur");
     if (cur) cur.textContent = worn;
+    const fold = this.shadowRoot.querySelector(".content .setlocks");
+    if (fold) {
+      const html = this.setLockInfoHtml();
+      if (fold.dataset.html !== html) {
+        fold.dataset.html = html;
+        fold.innerHTML = html;
+      }
+    }
   }
 
   /**
