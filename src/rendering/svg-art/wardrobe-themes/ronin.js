@@ -16,7 +16,7 @@ const KNOT = "#e6dcc2";
  * the plate's top lip showing steel with rivets and the lower part covered
  * in vertical lacing.
  */
-function row(tl, tr, br, bl, lace, { fill = STEEL, cords = 3, knots = false, lit = 0.5 } = {}) {
+function row(tl, tr, br, bl, lace, { fill = STEEL, cords = 4.2, knots = false, lit = 0.5 } = {}) {
   const d = `M${pt(...tl)} L${pt(...tr)} L${pt(...br)} L${pt(...bl)} Z`;
   const n = Math.max(2, Math.round(Math.hypot(tr[0] - tl[0], tr[1] - tl[1]) / cords));
   let cord = "";
@@ -136,19 +136,24 @@ function lamellar(P, c, K) {
   let rows = "";
   for (let i = 5; i >= 0; i--) {
     const sag = 0.7;
-    rows += row([-W[i], Y[i]], [W[i], Y[i]], [W[i + 1], Y[i + 1] + 0.6], [-W[i + 1], Y[i + 1] + 0.6], lace, { cords: 2.3, lit: 0.55 });
+    rows += row([-W[i], Y[i]], [W[i], Y[i]], [W[i + 1], Y[i + 1] + 0.6], [-W[i + 1], Y[i + 1] + 0.6], lace, { cords: 3.6, lit: 0.55 });
     rows += line(`M${pt(-W[i] + 1, Y[i] + 0.2)} C${pt(-4, Y[i] + sag)} ${pt(4, Y[i] + sag)} ${pt(W[i] - 1, Y[i] + 0.2)}`, INK, 0.4, 0.4);
   }
-  const side = (sx) =>
-    panel(sx * 9.4, sx * 16.4, -24, sx * 10.4, sx * 19.2, -4.2, 4, lace, { tilt: 0.8 }) ;
-  const front = (sx) => panel(sx * 0.6, sx * 10.6, -23.4, sx * 0.6, sx * 11.8, -1.6, 4, lace);
+  // The tassets hang in a front and a side panel each side, parted over
+  // the stock hip plate so the origin insignia engraved there shows.
+  const side = (sx) => panel(sx * 12.8, sx * 17.4, -24, sx * 13.6, sx * 20, -4.2, 4, lace, { tilt: 0.8 });
+  const front = (sx) => panel(sx * 0.6, sx * 7.2, -23.4, sx * 0.6, sx * 8.6, -1.6, 4, lace);
   const obi = "M-15,-32 C-6,-30.8 6,-30.8 15,-32 L15.2,-22.4 C6,-21.4 -6,-21.4 -15.2,-22.4 Z";
   const sash = K.mix(c.pal.primary, "#15181d", 0.62);
-  // The blade: scabbard out past the left hip, the wrapped hilt angled up
+  // The blade: a short sword thrust through the sash, its scabbard ending
+  // at the left hip inside the arm's swing, the wrapped hilt angled up
   // across the belly, a round guard where it enters the sash.
-  const guard = [-6, -30.6];
-  const hiltEnd = [5, -37.6];
-  const sayaEnd = [-22.4, -19.4];
+  const guard = [-4.2, -29.6];
+  const hiltEnd = [4.6, -36.4];
+  // The feminine arm hangs closer in, so her scabbard is shorter.
+  const sayaEnd = c.fem ? [-12, -21] : [-13.8, -21.8];
+  // Where the scabbard goes under a fold of the sash.
+  const tuck = lerp(guard, sayaEnd, 0.5);
   const hiltWrap = [0.2, 0.4, 0.6, 0.8]
     .map((t) => {
       const p = lerp(guard, hiltEnd, t);
@@ -179,10 +184,6 @@ function lamellar(P, c, K) {
     side(1) +
     front(-1) +
     front(1) +
-    // Scabbard behind the sash.
-    line(`M${pt(...guard)} L${pt(...sayaEnd)}`, INK, 3.4, 1) +
-    line(`M${pt(...guard)} L${pt(...sayaEnd)}`, lacquer, 2.4, 1) +
-    line(`M${pt(guard[0] - 3, guard[1] + 1.6)} L${pt(sayaEnd[0] + 0.6, sayaEnd[1] - 0.8)}`, "#ffffff", 0.4, 0.35) +
     shape(obi, sash, 1) +
     `<path d="${obi}" fill="url(#weave)" opacity=".8"/>` +
     line("M-14.6,-29.6 C-6,-28.6 6,-28.6 14.6,-29.6", "#000000", 0.6, 0.4) +
@@ -193,10 +194,13 @@ function lamellar(P, c, K) {
     // Chrono clasp: the belt light shows through it.
     `<rect x="-3.2" y="-27.6" width="6.4" height="5" rx="1.2" fill="url(#steel)" stroke="${INK}" stroke-width=".6"/>` +
     `<rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx=".4" fill="#0b6f80"/>` +
-    // Scabbard mouth and hilt over the sash.
-    line(`M${pt(-14.2, -25.6)} L${pt(...sayaEnd)}`, INK, 3.4, 1) +
-    line(`M${pt(-14.2, -25.6)} L${pt(...sayaEnd)}`, lacquer, 2.4, 1) +
-    line(`M${pt(-14.6, -24.4)} L${pt(sayaEnd[0] + 0.6, sayaEnd[1] - 0.2)}`, "#ffffff", 0.4, 0.35) +
+    // Scabbard along the sash, a fold of the sash wrapped over it, the
+    // steel chape at its end.
+    line(`M${pt(...guard)} L${pt(...sayaEnd)}`, INK, 3.4, 1) +
+    line(`M${pt(...guard)} L${pt(...sayaEnd)}`, lacquer, 2.4, 1) +
+    line(`M${pt(guard[0] - 1.2, guard[1] - 0.3)} L${pt(sayaEnd[0] + 0.8, sayaEnd[1] - 0.9)}`, "#ffffff", 0.4, 0.35) +
+    shape(`M${pt(tuck[0] - 1.1, tuck[1] - 3)} L${pt(tuck[0] + 1.3, tuck[1] - 3.4)} L${pt(tuck[0] + 1.9, tuck[1] + 2.4)} L${pt(tuck[0] - 0.5, tuck[1] + 2.8)} Z`, sash, 0.6) +
+    line(`M${pt(tuck[0] - 0.6, tuck[1] - 2.4)} L${pt(tuck[0], tuck[1] + 2)}`, "#000000", 0.5, 0.35) +
     `<circle cx="${f(sayaEnd[0])}" cy="${f(sayaEnd[1])}" r="1.3" fill="url(#steel)" stroke="${INK}" stroke-width=".5"/>` +
     line(`M${pt(...guard)} L${pt(...hiltEnd)}`, INK, 3, 1) +
     line(`M${pt(...guard)} L${pt(...hiltEnd)}`, "#191b20", 2.1, 1) +
@@ -226,7 +230,7 @@ function kabuto(c, K) {
     for (const s of [-1, 1]) {
       const X = (x) => -s * x; // the table is drawn for the left; s = 1 mirrors it
       const pts = [[X(xi), yt], [X(xo), yt + 1.6], [X(xo - 0.6), yb + 1.8], [X(xi), yb]];
-      guard += s < 0 ? row(pts[0], pts[1], pts[2], pts[3], lace, { cords: 2.8, knots: i === 3, lit: 0.6 }) : row(pts[1], pts[0], pts[3], pts[2], lace, { cords: 2.8, knots: i === 3, lit: 0.3 });
+      guard += s < 0 ? row(pts[0], pts[1], pts[2], pts[3], lace, { cords: 3.6, knots: i === 3, lit: 0.6 }) : row(pts[1], pts[0], pts[3], pts[2], lace, { cords: 3.6, knots: i === 3, lit: 0.3 });
     }
   }
   const bowl = "M-12.6,-85.8 C-13.2,-93 -7.6,-98.4 0,-98.4 C7.6,-98.4 13.2,-93 12.6,-85.8 Z";
