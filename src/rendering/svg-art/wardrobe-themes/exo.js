@@ -18,18 +18,20 @@ import { STEEL, STEEL_DK, HAZARD, plateAt, lineAt, mirrorIf, T, S, strut, drum }
 function exo(P, c) {
   let glow = "";
   // Behind the body: the spine frame, a power pack, and the roll hoops that
-  // stand over the shoulders.
+  // stand over the shoulders, tall and close to the helmet so the missile
+  // pods (which stand outboard of them) leave them in view.
+  const HOOP = "M6,-62 L7.4,-84 C8,-89.4 11.6,-91.6 15.4,-90.4 L19.6,-88.4 L20.4,-66";
   const hoop = (s) =>
-    line(mirrorIf(s, "M6,-62 L8,-80 C8.6,-84.6 12.6,-86.6 17,-85.4 L24.6,-82.6 L26,-66"), INK, 3.4, 1) +
-    line(mirrorIf(s, "M6,-62 L8,-80 C8.6,-84.6 12.6,-86.6 17,-85.4 L24.6,-82.6 L26,-66"), "#3a4450", 2.2, 1) +
-    line(mirrorIf(s, "M8.4,-79 C9.2,-83 12.4,-84.6 16.6,-83.6"), "#8d9cab", 0.5, 0.8);
+    line(mirrorIf(s, HOOP), INK, 3.4, 1) +
+    line(mirrorIf(s, HOOP), "#3a4450", 2.2, 1) +
+    line(mirrorIf(s, "M7.8,-83.4 C8.6,-88 11.6,-89.8 15,-89"), "#8d9cab", 0.5, 0.8);
   const under =
     hoop(-1) +
     hoop(1) +
     shape("M-11,-70 L11,-70 L12.4,-36 L-12.4,-36 Z", STEEL_DK, 1) +
     [-58, -50, -42].map((y) => line(`M-10.6,${y} L10.6,${y}`, INK, 0.6, 0.6)).join("") +
     shape("M-14.6,-30 L14.6,-30 L15.6,-20 L-15.6,-20 Z", STEEL_DK, 1);
-  glow += energy(`<path d="M-15.6,-82.8 L-14.2,-79.4 M15.6,-82.8 L14.2,-79.4" fill="none" stroke-width="1.2" stroke-linecap="round"/>`, c.energy);
+  glow += energy(`<path d="M-19.8,-84.4 L-19.9,-80.4 M19.8,-84.4 L19.9,-80.4" fill="none" stroke-width="1.2" stroke-linecap="round"/>`, c.energy);
 
   const legs = P.legs
     .map((leg, i) => {
@@ -82,10 +84,11 @@ function exo(P, c) {
     .map((arm, i) => {
       const s = i === 0 ? -1 : 1;
       const { sh, el, wr } = armJoints(arm, s);
-      // Struts down the outside of the arm, a drum at the elbow, and a servo
-      // gauntlet: an oversized cuff over the forearm and knuckle plates.
+      // A strut down the outside of the arm from under the shoulder piece
+      // into the elbow drum (the shoulder covers the arm above it), and a
+      // servo gauntlet: an oversized cuff over the forearm and knuckle plates.
       return (
-        strut(lerp(sh, el, 0.18), lerp(sh, el, 0.96), s, 6.4, 3, 1.4) +
+        strut(lerp(sh, el, 0.4), lerp(sh, el, 1), s, 6.6, 3.4, 1.5) +
         drum([el[0] + s * 5.8, el[1]], 3.6) +
         plateAt(lerp(el, wr, 0.56), el, wr, "M-7.2,-8.6 L7.2,-8.6 L8,7.4 L-8,7.4 Z", STEEL, 1.1) +
         plateAt(lerp(el, wr, 0.56), el, wr, "M-6.2,-5.4 L6.2,-5.4 L6.4,-2.8 L-6.4,-2.8 Z", HAZARD, 0.5) +
@@ -164,32 +167,40 @@ function cockpit(c, K) {
 // ── Missile Pods ───────────────────────────────────────────────────────────
 
 /**
- * Missile Pods: a launcher box on a hinge arm over the shoulder, six tubes
- * facing out, a hazard band on its side. The stock pad sits between the arm
- * and the box; all three turn with the arm.
+ * Missile Pods: an upright launcher rack on a hinge arm over the shoulder,
+ * outboard of the Exo-Frame's roll hoops, six tubes facing out in two
+ * columns, a hazard band at its foot. The hinge seats on a domed mount over
+ * the joint, short of the stock pad's lames, so the arm and its gear show
+ * below it; all three turn with the arm.
  */
 function pods(c, s, K) {
   const { M, rot, lit } = K;
-  const arm = "M11,-66 L18,-74 L22,-71 L16,-62 Z";
-  const box = "M13.4,-84.6 L33.4,-86.6 L35.8,-82.4 L35.6,-64.4 L32.6,-61.2 L14.4,-62.4 L12.4,-66.6 Z";
+  const arm = "M11,-66 L19,-75 L23,-72 L16,-62 Z";
+  const mount = "M11,-66.8 C17,-70.4 26.2,-68.8 29.2,-61.6 C31,-57 30.6,-52.4 28.8,-49.4 C25,-51 20.4,-51.6 16.4,-50.6 C16.8,-56 14.8,-61.6 11,-63.8 Z";
+  const box = "M18.4,-91.6 L30.4,-93 L32.6,-89 L32.4,-64.4 L29.8,-61.4 L19.4,-62.2 L17.6,-66.4 Z";
   const tubes = [];
-  for (let r = 0; r < 2; r++)
-    for (let k = 0; k < 3; k++) {
-      const x = 18.6 + k * 5.6;
-      const y = -80.2 + r * 6.8;
+  for (let r = 0; r < 3; r++)
+    for (let k = 0; k < 2; k++) {
+      const x = 22.4 + k * 5.4;
+      const y = -86 + r * 6.6;
       tubes.push(`<circle cx="${f(s < 0 ? -x : x)}" cy="${f(y)}" r="2.1" fill="#05070a" stroke="${INK}" stroke-width=".6"/><circle cx="${f(s < 0 ? -x : x)}" cy="${f(y + 0.3)}" r="1.1" fill="#c8402e"/>`);
     }
   return (
-    rot(shape(M(arm), "url(#steelDk)", 0.8)) +
-    K.pauldron(s) +
+    rot(
+      shape(M(arm), "url(#steelDk)", 0.8) +
+        shape(M(mount), "url(#steel)") +
+        line(M("M13.6,-65.4 C18.4,-67.6 24.2,-66.8 27.3,-62"), "#f4faff", lit ? 0.9 : 0.6, lit ? 0.85 : 0.45) +
+        line(M("M16.8,-53.2 C21,-54.2 25.4,-53.6 28.6,-51.6"), INK, 0.5, 0.6) +
+        (lit ? `<ellipse cx="-20.5" cy="-63" rx="5" ry="3" fill="url(#sheen)"/>` : line("M29.6,-60.4 C30.8,-56.4 30.4,-52.8 28.9,-50", c.rim, 0.8, 0.9)),
+    ) +
     rot(
       shape(M(box), "url(#steelDk)", 1.1) +
-        shape(M("M15,-82.6 L32.6,-84.4 L33.6,-81.8 L33.4,-66.4 L31.4,-64.2 L16,-65 L14.6,-68 Z"), "url(#steel)", 0.8) +
+        shape(M("M19.8,-89.6 L29.8,-90.8 L30.8,-88.2 L30.6,-66.4 L28.6,-64.2 L20.6,-65 L19.2,-68 Z"), "url(#steel)", 0.8) +
         tubes.join("") +
-        shape(M("M14.2,-67.4 L35.6,-68 L35.6,-64.6 L15,-64 Z"), HAZARD, 0.5) +
-        line(M("M18,-67.5 L16.6,-64.1 M22,-67.6 L20.6,-64.2 M26,-67.7 L24.6,-64.3 M30,-67.8 L28.6,-64.4 M34,-67.9 L32.6,-64.5"), INK, 0.8, 0.9) +
-        line(M("M14.6,-84.2 L33,-86"), "#f4faff", 0.6, lit ? 0.8 : 0.4) +
-        (lit ? "" : line("M35.8,-82 L35.6,-64.8", c.rim, 0.9, 0.9)),
+        shape(M("M18.4,-67.6 L32.4,-68 L32.4,-64.6 L19.2,-64.2 Z"), HAZARD, 0.5) +
+        line(M("M21.8,-67.7 L20.4,-64.3 M25.4,-67.8 L24,-64.4 M29,-67.9 L27.6,-64.5 M32.4,-68 L31.2,-64.6"), INK, 0.8, 0.9) +
+        line(M("M19.4,-91.2 L30,-92.4"), "#f4faff", 0.6, lit ? 0.8 : 0.4) +
+        (lit ? "" : line("M32.6,-88.6 L32.4,-64.8", c.rim, 0.9, 0.9)),
     )
   );
 }
