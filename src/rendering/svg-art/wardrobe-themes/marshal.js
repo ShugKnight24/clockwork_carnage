@@ -232,6 +232,7 @@ function brim(c, K) {
   const crown =
     "M-8.8,-90.4 C-9.6,-95.4 -9,-100.4 -6.4,-102.8 C-3.6,-101.4 -1.6,-101 0,-101.8 C1.6,-101 3.6,-101.4 6.4,-102.8 C9,-100.4 9.6,-95.4 8.8,-90.4 Z";
   const brimTop = "M-21.6,-91.8 C-18,-95.2 -9,-96 0,-96 C9,-96 18,-95.2 21.6,-91.8 C16,-89.4 -16,-89.4 -21.6,-91.8 Z";
+  const acc = K.faceAccessories();
   const brimLip =
     "M-22,-93 C-19.4,-89.8 -14,-89.2 0,-89.4 C14,-89.2 19.4,-89.8 22,-93 C22.4,-90.2 19.4,-86.8 0,-86.4 C-19.4,-86.8 -22.4,-90.2 -22,-93 Z";
 
@@ -244,6 +245,8 @@ function brim(c, K) {
     // Shade cast by the brim across the brow.
     `<path d="M-9.4,-87.6 C-4,-86.6 4,-86.6 9.4,-87.6 L9.4,-83.8 C4,-82.6 -4,-82.6 -9.4,-83.8 Z" fill="#000" opacity=".28"/>` +
     bandana +
+    // Eyewear over the bandana's top edge, under the hat.
+    acc.front +
     shape(brimTop, feltLo, 1) +
     shape(crown, felt, 1.1) +
     `<path d="${crown}" fill="url(#weave)" opacity=".35"/>` +
@@ -262,7 +265,8 @@ function brim(c, K) {
     front,
     glow:
       K.eyeGlow(c, 0.55) +
-      energy(`<circle cx="-10.6" cy="-81.6" r=".55"/><circle cx="10.6" cy="-81.6" r=".55"/>`, c.energy),
+      energy(`<circle cx="-10.6" cy="-81.6" r=".55"/><circle cx="10.6" cy="-81.6" r=".55"/>`, c.energy) +
+      acc.glow,
   };
 }
 
@@ -326,7 +330,9 @@ export default {
     // shows. A plume rides in the crown's dent; the comm cups are the side
     // rail (lamps, whips, a headset over them). Night vision has no brow to
     // seat on under the brim.
-    brim: { anchors: { top: -101.8, half: 11.6, rail: -81.8, badge: false }, seats: { brow: false }, paint: brim },
+    // The bandana is up over the nose and jaw: eyewear fits over it, nothing
+    // else worn on the face shows.
+    brim: { anchors: { top: -101.8, half: 11.6, rail: -81.8, badge: false }, seats: { brow: false }, faceSlots: { face: false }, paint: brim },
   },
   shoulders: {
     poncho: { paint: poncho },

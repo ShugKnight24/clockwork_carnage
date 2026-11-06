@@ -7,7 +7,14 @@ import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
 import { cloneLook } from "../../src/core/character-fields.js";
 import { idScope } from "../../src/rendering/svg-art/id-scope.js";
 
-const LOOK = { pal: { primary: "#3a6ea5", accent: "#00e5ff", dark: "#0b1a2a" }, cape: ["#aa3333", "#882222", "#551111", "#220505"], energy: "#00e5ff", armor: "standard" };
+const LOOK = {
+  pal: { primary: "#3a6ea5", accent: "#00e5ff", dark: "#0b1a2a" },
+  cape: ["#aa3333", "#882222", "#551111", "#220505"],
+  energy: "#00e5ff",
+  armor: "standard",
+  skin: { color: "#c68a62", shadow: "#8a5a3c" },
+  hair: { color: "#2a1a12" },
+};
 const POSES = [[STAND, "standing"], [ARMED, "armed"], [FALLEN, "fallen"]];
 
 // Painters may define gradients through K.uid / K.defs; that two figures on

@@ -54,9 +54,10 @@ import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { frameShape, frameLayers } from "./frames.js";
 import { CANDY, CANDY_HI, AMBER } from "./frame-kit.js";
-import { frameHides, helmetArt, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
+import { frameHides, helmetArt, helmetFaceSlots, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
 import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
 import { idScope } from "./id-scope.js";
+import { FACE_SLOTS } from "../../data/accessories.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 import { clamp } from "../../utils/math.js";
 import { hexRgb, rgbHex, mixHexClamped } from "../../utils/color.js";
@@ -1070,18 +1071,36 @@ function helmetShell(c, { path, half: w, ears = true }) {
  * each). Generic: none of it knows a helmet id; a helmet's own shape comes
  * in as arguments.
  */
-export const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix });
+export const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix, faceAccessories: () => NO_FACE_ACC });
 /** Ids the helmet kit defines inline with what it draws (K.hair's clip); a painter never names them itself. */
 export const HELMET_KIT_IDS = Object.freeze(["hairClip"]);
+
+/** No eyes or face items: what K.faceAccessories gives a painter drawn outside a figure. */
+const NO_FACE_ACC = Object.freeze({ front: "", glow: "" });
+
+/**
+ * The eyes and face items a look wears (paintAccessories' face and
+ * faceGlow), fitted to the build: the feminine jaw narrows them with the face.
+ */
+const faceItems = (c, acc) => ({ front: c.fem ? warpX(acc.face, FEM_JAW) : acc.face, glow: c.fem ? warpX(acc.faceGlow, FEM_JAW) : acc.faceGlow });
 
 /**
  * Head assembly: the helmet's painter, or for a face peek the bare head.
  * `scope` is the figure's idScope (scoped ids and defs for the painter).
+ * `items` are the eyes and face items (faceItems): on the bare face under
+ * the hair, handed to a helmet painter as K.faceAccessories, or, for a
+ * painter that never asks, drawn over its head.
  * @returns {{ front: string, glow: string }}
  */
-function head(c, peek, scope) {
-  if (peek) return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
-  return helmetArt(c.helmet).paint(c, { ...HELMET_KIT, ...scope.kit(`helmet-${c.helmet}`) });
+function head(c, peek, scope, items = NO_FACE_ACC) {
+  if (peek) return { front: hairBack(c) + face(c) + items.front + hair(c, false), glow: eyeGlow(c, 0.45) + items.glow };
+  let placed = false;
+  const faceAccessories = () => {
+    placed = true;
+    return items;
+  };
+  const h = helmetArt(c.helmet).paint(c, { ...HELMET_KIT, ...scope.kit(`helmet-${c.helmet}`), faceAccessories });
+  return placed ? h : { front: h.front + items.front, glow: h.glow + items.glow };
 }
 
 /** Eye glow: chrono-augmented irises, visible faintly through a visor. */
@@ -1521,6 +1540,8 @@ export const GEAR_VIEW = {
   arms: [-38, -84, 76, 76],
   neck: [-30, -102, 60, 60],
   legs: [-32, -34, 64, 64],
+  eyes: [-13, -99, 26, 26],
+  face: [-16, -102, 32, 32],
 };
 
 /** Pectoral seam paths (left/right), shared by chestTrim and variantTrim so they never drift apart. */
@@ -1610,9 +1631,10 @@ function forearmAxis({ el, wr }) {
  * `size` is the badge diameter at that point. Helmet mounts (crown, browL,
  * sideL) and the helmet badge (`helmet`, null for a helmet with no place for
  * one) are seated on the given helmet's shell (its art's anchors); `seats`
- * says which accessory seats the helmet takes (helmetSeats).
+ * says which accessory seats the helmet takes (helmetSeats), `faceSlots`
+ * which face slots show (helmetFaceSlots; both on a bare-headed peek).
  */
-export function rigAnchors(P, tilt, pose, helmet = "standard") {
+export function rigAnchors(P, tilt, pose, helmet = "standard", peek = false) {
   const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
   const [hipL, hipR] = P.legs.map((l) => l.hip);
   const [kneeL, kneeR] = P.legs.map((l) => l.kn);
@@ -1639,6 +1661,7 @@ export function rigAnchors(P, tilt, pose, helmet = "standard") {
     browL: { x: 0, y: top + 7.6, rot: 0, size: 0 },
     sideL: { x: -half + 0.2, y: rail, rot: 0, size: 0 },
     seats: helmetSeats(helmet),
+    faceSlots: peek ? Object.fromEntries(FACE_SLOTS.map((slot) => [slot, true])) : helmetFaceSlots(helmet),
     pose,
   };
 }
@@ -1690,7 +1713,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     const s = i === 0 ? -1 : 1;
     return -s * clamp((armSwing(arm, s) - 8) * 0.35, -4, 12);
   });
-  const A = rigAnchors(P, tilt, armed ? "armed" : "standing", c.helmet);
+  const A = rigAnchors(P, tilt, armed ? "armed" : "standing", c.helmet, peek);
   const acc = paintAccessories(c.accessories, A, c);
   const shoulderAO = P.arms.map((arm) => `<ellipse cx="${f(arm.sh[0])}" cy="${f(arm.sh[1] + 9)}" rx="7" ry="3.4" fill="url(#shade)"/>`).join("");
   const kit = gear(c, P);
@@ -1750,7 +1773,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
   const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
-  const h = head(c, peek, scope);
+  const h = head(c, peek, scope, faceItems(c, acc));
   const helmBadge = wears(c, "helmet") && A.helmet && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
@@ -2004,10 +2027,10 @@ function fallenParts(c) {
   const kit = gear(c, P);
   const scope = idScope();
   const showFace = FACE_HELMETS.has(c.helmet);
-  const h = head(c, false, scope);
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
   const acc = paintAccessories(c.accessories, A, c);
+  const h = head(c, false, scope, faceItems(c, acc));
   const helmBadge = wears(c, "helmet") && A.helmet && !showFace ? badgeAt(c, A.helmet, "low") : "";
   const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
   // The free arm lies on top of the body, so its vambrace badge rides with it.

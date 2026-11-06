@@ -5,8 +5,9 @@ import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-gly
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
 import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withId, withIndex } from "../../src/core/character-fields.js";
 import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
+import { normalizeAccessories } from "../../src/core/character-normalize.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS } from "../../src/data/accessories.js";
 import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
@@ -31,7 +32,7 @@ import {
   takesVisor,
 } from "../../src/data/cosmetics.js";
 import { frameShape } from "../../src/rendering/svg-art/frames.js";
-import { frameHides } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
+import { faceSlotBlock, frameHides } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import * as Skins from "../../src/data/weapon-skins.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
@@ -62,10 +63,12 @@ const CAMERAS = ["full", "bust", "face"];
 
 /** A library badge worn at the given places. */
 const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
-const gear = (items) => ({ ...DEFAULT_ACCESSORIES, ...items });
+/** A preset's gear: every slot but the face ones, which a preset leaves as worn. */
+const gear = (items) => ({ ...Object.fromEntries(Object.entries(DEFAULT_ACCESSORIES).filter(([slot]) => !FACE_SLOTS.includes(slot))), ...items });
 
-// Presets set no body or hair colour: those are the player's own picks, and
-// wearing a preset keeps them (applyPreset spreads over the current look).
+// Presets set no body, hair colour, eyewear or face item: those are the
+// player's own picks, and wearing a preset keeps them (applyPreset spreads
+// over the current look).
 const PRESETS = [
   { name: "Regulation", ch: { color: "chrono_teal", skinTone: "warm_light", hair: "short", eye: "blue", armor: "standard", helmet: "standard", visor: "standard", shoulder: "pads", weaponSkin: "default",
     badge: presetBadge("p_clock", ["chest", "shoulder"]), accessories: gear({ waist: "belt", neck: "tags" }) } },
@@ -232,6 +235,8 @@ const SECTION_NOTES = {
   // Text filled in too: both depend on what else is worn.
   visor: `<p class="snote" data-note="no-visor" hidden></p>`,
   shoulder: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
+  // Eyes and face: the helmet worn may hide the face or leave the slot no room.
+  ...Object.fromEntries(FACE_SLOTS.map((slot) => [`acc.${slot}`, `<p class="snote" data-note="face-slot" data-slot="${slot}" hidden></p>`])),
 };
 
 /**
@@ -242,6 +247,8 @@ const SECTION_NOTES = {
  * A field the look does not hold is left out, so wearing it keeps the
  * current pick: a look saved before hair colour existed keeps the hair
  * colour the player has now, as one saved before body types keeps the body.
+ * Accessories go slot by slot the same way: a look saved before the eyes
+ * and face slots keeps the eyewear and face items worn now (wearLook).
  */
 function readLook(raw) {
   const m = migrateCharacterSave(raw);
@@ -249,6 +256,10 @@ function readLook(raw) {
   for (const k of LOOK_FIELDS) {
     if (!(k in m)) continue; // not saved with this look: the current pick stays
     look[k] = k in LOOK_TABLES ? pieceOf(m, k).id : m[k];
+  }
+  if (look.accessories) {
+    const held = normalizeAccessories(look.accessories);
+    look.accessories = Object.fromEntries(ACCESSORY_SLOTS.filter(({ id }) => id in look.accessories).map(({ id }) => [id, held[id]]));
   }
   return look;
 }
@@ -264,6 +275,15 @@ function shoulderNote(ch) {
   if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
   const right = frameShape(frame.id).rightShoulder;
   if (right) return `${frame.name} keeps its own right shoulder (${pieceOf({ shoulder: right }, "shoulder").name}): this pick fits the left.`;
+  return "";
+}
+
+/** Why an eyes or face pick does not show under the helmet worn, or "". */
+function faceSlotNote(ch, slot) {
+  const helmet = pieceOf(ch, "helmet");
+  const block = faceSlotBlock(helmet.id, slot);
+  if (block === "hidden") return `Hidden under the ${helmet.name}: this pick shows with an open helmet.`;
+  if (block === "room") return `No room under the ${helmet.name}: this pick shows with another helmet.`;
   return "";
 }
 
@@ -1856,6 +1876,7 @@ class AgentShowroom extends HTMLElement {
     // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
     const armorVariant = pieceOf(p.ch, "armor") === pieceOf(this.character, "armor") ? this.character.armorVariant : 0;
     const next = { ...cloneLook(p.ch), armorVariant };
+    next.accessories = { ...this.character.accessories, ...next.accessories };
     // Belt and braces: anything the agent has not earned falls back instead of equipping.
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
@@ -2319,6 +2340,8 @@ class AgentShowroom extends HTMLElement {
     const l = this.looks[i];
     if (!l) return;
     const next = cloneLook(l.look);
+    // Slots the look was not saved with keep what is worn (readLook).
+    if (next.accessories) next.accessories = { ...this.character.accessories, ...next.accessories };
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
     this.sfx("menuConfirm");
@@ -2766,9 +2789,12 @@ class AgentShowroom extends HTMLElement {
         case "rifle":
           thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id, realistic });
           break;
-        case "gear":
-          thumb.innerHTML = buildAgentSvg(variant, { view: GEAR_VIEW[thumb.dataset.slot], idPrefix: id, lighting: "flat", realistic });
+        case "gear": {
+          // Eyes and face tiles show the bare head, so the item reads whatever the helmet.
+          const peek = FACE_SLOTS.includes(thumb.dataset.slot);
+          thumb.innerHTML = buildAgentSvg(variant, { view: GEAR_VIEW[thumb.dataset.slot], idPrefix: id, lighting: "flat", realistic, peek });
           break;
+        }
         case "badge": {
           const t = resolveTreatment(ch);
           thumb.innerHTML = `<svg viewBox="-54 -54 108 108">${renderBadge(variant.badge, { treatment: t, detail: "low" })}</svg>`;
@@ -2793,6 +2819,12 @@ class AgentShowroom extends HTMLElement {
       noVisor.textContent = off ? `The ${pieceOf(ch, "helmet").name} has no visor, so this pick and its perk don't apply.` : "";
       noVisor.closest(".section").classList.toggle("off", off);
     }
+    // Eyes and face picks under a helmet that hides them: kept, not drawn.
+    this.shadowRoot.querySelectorAll('.content [data-note="face-slot"]').forEach((note) => {
+      note.textContent = faceSlotNote(ch, note.dataset.slot);
+      note.hidden = !note.textContent;
+      note.closest(".section").classList.toggle("muted", !note.hidden);
+    });
     const frameNote = this.shadowRoot.querySelector('.content [data-note="frame-shoulders"]');
     if (frameNote) {
       frameNote.textContent = shoulderNote(ch);

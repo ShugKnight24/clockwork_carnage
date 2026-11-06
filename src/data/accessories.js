@@ -14,7 +14,20 @@ export const ACCESSORY_SLOTS = [
   { id: "arms", name: "Arms" },
   { id: "neck", name: "Neck" },
   { id: "legs", name: "Legs" },
+  // Worn on the face (FACE_SLOTS): eyewear and the rest are separate picks,
+  // so an eyepatch and a beard can go together.
+  { id: "eyes", name: "Eyes" },
+  { id: "face", name: "Face" },
 ];
+
+/**
+ * The slots worn on the face itself. Drawn only where the face shows (a
+ * helmet whose entry says `face: true`, or a peek), and only where that
+ * helmet leaves room for the slot (its art's `faceSlots`, see
+ * src/rendering/svg-art/wardrobe-themes/index.js). Under a closed helmet the
+ * pick is kept but not drawn.
+ */
+export const FACE_SLOTS = Object.freeze(["eyes", "face"]);
 
 export const ACCESSORIES = {
   back: [
@@ -59,6 +72,24 @@ export const ACCESSORIES = {
     { id: "kneepads", name: "Knee Pads", desc: "Hard-shell pads", tier: 1, bonuses: { dashCostAdd: -1 }, perk: "-1 dash cost" },
     { id: "thigh", name: "Thigh Holster", desc: "Magazine pouch on the thigh", tier: 2, bonuses: { moveSpeedAdd: 0.02 }, perk: "+2% move speed" },
     { id: "shins", name: "Shin Guards", desc: "Plated greaves", tier: 3, bonuses: { armorAdd: 2 }, perk: "+2 armour" },
+  ],
+  eyes: [
+    NONE,
+    { id: "aviators", name: "Aviators", desc: "Teardrop shades on a gold wire frame", tier: 1 },
+    { id: "shades", name: "Wraparound Shades", desc: "One lens, tinted the suit's energy", tier: 2 },
+    { id: "eyepatch", name: "Eyepatch", desc: "Strapped over the left eye", tier: 1 },
+    { id: "cybereye", name: "Optic Implant", desc: "A glowing lens set into the right eye", tier: 3 },
+    { id: "monocle", name: "Brass Monocle", desc: "A lens and its chain", tier: 2 },
+  ],
+  face: [
+    NONE,
+    { id: "scar", name: "Brow Scar", desc: "An old cut across the right eye", tier: 1 },
+    { id: "warpaint", name: "War Paint", desc: "Two stripes under the eyes", tier: 1 },
+    { id: "cigar", name: "Cigar", desc: "Lit, in the corner of the mouth", tier: 2 },
+    { id: "nosestrip", name: "Field Dressing", desc: "A strip across the nose", tier: 1 },
+    { id: "piercings", name: "Piercings", desc: "Brow bar and a lip ring", tier: 1 },
+    { id: "freckles", name: "Freckles", desc: "A dusting across the nose", tier: 1 },
+    { id: "beard", name: "Stubble Beard", desc: "Short beard in the hair colour", tier: 1 },
   ],
 };
 

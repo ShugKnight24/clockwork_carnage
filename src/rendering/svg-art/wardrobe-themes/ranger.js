@@ -248,13 +248,15 @@ function bubble(c, K) {
       `<stop offset="1" stop-color="#ffffff" stop-opacity=".45"/></radialGradient>`,
   );
   const ring = "M-12,-71.6 C-6,-73.8 6,-73.8 12,-71.6 L12.8,-66.6 C6,-64.2 -6,-64.2 -12.8,-66.6 Z";
+  const acc = K.faceAccessories();
   const lamp = "M10.6,-76.6 L15.4,-78.6 L17.4,-74.2 L13.2,-71.8 Z";
   return {
     front:
       // The far side of the dome: a faint tinted back and the inside of the ring.
       `<circle cx="${BX}" cy="${BY}" r="${BR}" fill="${K.mix(c.energy, "#02060a", 0.8)}" opacity=".35"/>` +
       `<ellipse cx="0" cy="-71" rx="10.8" ry="1.9" fill="#0a0f16" opacity=".8"/>` +
-      `<g clip-path="url(#${clipId})">${K.hairBack(c)}${K.face(c)}${K.hair(c, false)}</g>` +
+      // The head inside the glass, the eyes and face items on it.
+      `<g clip-path="url(#${clipId})">${K.hairBack(c)}${K.face(c)}${acc.front}${K.hair(c, false)}</g>` +
       // The glass: tinted toward the edge, inked, a bright window reflection and a rim light.
       `<circle cx="${BX}" cy="${BY}" r="${BR}" fill="url(#${glassId})" stroke="${INK}" stroke-width="1.1"/>` +
       `<circle cx="${BX}" cy="${BY}" r="${BR - 0.9}" fill="none" stroke="#ffffff" stroke-width=".4" opacity=".35"/>` +
@@ -273,7 +275,9 @@ function bubble(c, K) {
     glow:
       energy(`<path d="M15.4,-77.6 L16.9,-74.6" fill="none" stroke-width="1.1" stroke-linecap="round"/>`, c.energy) +
       `<path d="M16.6,-76.4 L24,-79.4 L25.6,-72.6 Z" fill="${c.energy}" opacity=".12" filter="url(#glow)"/>` +
-      K.eyeGlow(c, 0.3),
+      K.eyeGlow(c, 0.3) +
+      // Their light shows through the glass.
+      acc.glow,
   };
 }
 
@@ -315,7 +319,8 @@ export default {
     // and a headset would close round the neck ring across the face (the
     // ring already carries the helmet's own lamp). The anchors measure the
     // dome (top, half) and the ring (rail); the rig draws no helmet badge
-    // on a face that shows.
+    // on a face that shows. Eyes and face items go on the face inside the
+    // glass (K.faceAccessories), so the glass and its glare lie over them.
     bubble: {
       anchors: { top: -99.6, half: 13, rail: -70, badge: false },
       seats: { crown: false, brow: false, side: false },

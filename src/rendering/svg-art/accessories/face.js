@@ -1,0 +1,132 @@
+/**
+ * Eyes and face slots (FACE_SLOTS in src/data/accessories.js). Drawn in head
+ * space on the face itself (agent-rig.js face(): eyes at y -81.6, x -3 and
+ * 3.2; brows near -84.4; nose -80..-76; mouth -74; cheeks out to x ±7.2),
+ * returned as `face`, with lights in `glow` (the rig blooms them). The rig
+ * draws them only where the face shows and the helmet leaves the slot room
+ * (its art's faceSlots), shaped to the feminine jaw like the face under them.
+ * Like every painter, an id comes from K.uid and its markup goes to K.defs.
+ */
+
+import { mixHex as mix } from "../../../utils/color.js";
+
+const f = (n) => Math.round(n * 100) / 100;
+const INK = "#0a0d12";
+const BRASS = "#c9a24a";
+const stroke = (d, color, w, op = 1) =>
+  `<path d="${d}" fill="none" stroke="${color}" stroke-width="${f(w)}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
+const fill = (d, color, sw = 0.5, extra = "") => `<path d="${d}" fill="${color}" stroke="${INK}" stroke-width="${f(sw)}" stroke-linejoin="round"${extra}/>`;
+const dot = (x, y, r, color, sw = 0) => `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${color}"${sw ? ` stroke="${INK}" stroke-width="${f(sw)}"` : ""}/>`;
+
+/** A teardrop lens round an eye, on side s (-1 left, 1 right). */
+const tear = (s) =>
+  `M${f(s * 0.9)},-83.2 C${f(s * 3)},-83.8 ${f(s * 5.8)},-83.8 ${f(s * 6.6)},-82.8 C${f(s * 7)},-80.6 ${f(s * 6)},-78.4 ${f(s * 4)},-78.2 C${f(s * 2)},-78.2 ${f(s * 0.9)},-79.6 ${f(s * 0.8)},-81.4 Z`;
+
+/** Eyewear. */
+export const EYES = {
+  aviators: () => {
+    const lens = (s) => fill(tear(s), "#2a2218", 0.55, ' fill-opacity=".92"') + stroke(`M${f(s * 1.6)},-82.6 C${f(s * 3)},-83 ${f(s * 4.4)},-83 ${f(s * 5.6)},-82.4`, "#fff3d0", 0.45, 0.6);
+    return {
+      face:
+        lens(-1) +
+        lens(1) +
+        stroke("M-0.9,-82.4 C-0.4,-83 0.4,-83 0.9,-82.4", BRASS, 0.55) +
+        stroke(`${tear(-1).replace(" Z", "")} M${tear(1).slice(1).replace(" Z", "")}`, BRASS, 0.4, 0.9) +
+        stroke("M-6.6,-82.8 L-7.4,-83 M6.6,-82.8 L7.4,-83", BRASS, 0.5),
+    };
+  },
+  shades: (A, c) => {
+    const band = "M-7.2,-83.6 C-3,-84.6 3,-84.6 7.2,-83.6 L7,-80.6 C4,-79.2 1.6,-79.6 0,-80.2 C-1.6,-79.6 -4,-79.2 -7,-80.6 Z";
+    return {
+      face: fill(band, mix(c.energy, "#05080c", 0.7), 0.6) + stroke("M-6.4,-83 C-3,-83.8 0,-83.8 2.6,-83.4", "#ffffff", 0.45, 0.5),
+      glow: stroke("M-6.6,-81.6 C-3,-82 3,-82 6.6,-81.6", c.energy, 0.5, 0.7),
+    };
+  },
+  eyepatch: () => ({
+    face:
+      stroke("M-7.4,-85.6 L7.4,-79.6", INK, 1.1) +
+      stroke("M-7.4,-85.6 L7.4,-79.6", "#1e1b18", 0.6) +
+      fill("M-5.6,-83.4 C-4,-84.6 -1.8,-84.4 -0.8,-83 C-0.6,-81 -1.4,-79.2 -3.2,-78.8 C-5,-79 -6,-80.8 -5.6,-83.4 Z", "#16130f", 0.6) +
+      stroke("M-4.6,-83.2 C-3.6,-83.8 -2.2,-83.8 -1.6,-83.2", "#4a443c", 0.4, 0.8),
+  }),
+  cybereye: (A, c) => ({
+    face:
+      fill("M0.9,-84.8 L5.8,-85 L6.8,-81.8 L5.6,-78.6 L1.2,-78.6 L0.4,-81.6 Z", "#2a3038", 0.55) +
+      dot(3.2, -81.7, 1.9, "#05080c", 0.45) +
+      stroke("M5.8,-85 L7.2,-86.2 M6.8,-81.8 L7.6,-81.8", "#5a6470", 0.45),
+    glow: dot(3.2, -81.7, 1.2, c.energy) + dot(3.2, -81.7, 0.5, "#ffffff"),
+  }),
+  // A brass ring over the right eye, its glass catching the light from the
+  // top left (a gradient of its own, under a scoped id), and its chain.
+  monocle: (A, c, K) => {
+    const glass = K.uid("glass");
+    K.defs(
+      `<radialGradient id="${glass}" cx=".35" cy=".3" r=".8">` +
+        `<stop offset="0" stop-color="#ffffff" stop-opacity=".45"/>` +
+        `<stop offset=".5" stop-color="#cfe6ff" stop-opacity=".12"/>` +
+        `<stop offset="1" stop-color="#cfe6ff" stop-opacity=".28"/></radialGradient>`,
+    );
+    return {
+      face:
+        `<circle cx="3.1" cy="-81.7" r="2.4" fill="url(#${glass})" stroke="${BRASS}" stroke-width=".6"/>` +
+        stroke("M2,-83.2 C2.8,-83.6 3.8,-83.6 4.4,-83", "#ffffff", 0.35, 0.7) +
+        stroke("M4.8,-80 C6.2,-77 6.8,-74 6.4,-70.6", BRASS, 0.35, 0.9),
+    };
+  },
+};
+
+/** Everything else worn on the face. */
+export const FACE = {
+  scar: (A, c) => {
+    const d = "M2.2,-86.4 L3.4,-83.8 L3.2,-82.6 M3.6,-80.4 L4.6,-77.6 L5.4,-76.4";
+    return { face: stroke(d, mix(c.skin.shadow, "#7a2a28", 0.35), 0.75, 0.9) + stroke(d, mix(c.skin.color, "#ffffff", 0.35), 0.25, 0.7) };
+  },
+  // Two stripes under each eye, in an ochre red of their own, never the suit's.
+  warpaint: () => {
+    const paint = "#b0302a";
+    const stripe = (s, y) => `M${f(s * 1.8)},${f(y)} L${f(s * 6.6)},${f(y - 0.8)} L${f(s * 6.4)},${f(y + 0.6)} L${f(s * 2)},${f(y + 1.1)} Z`;
+    return {
+      face: [-1, 1].map((s) => `<path d="${stripe(s, -79.6)}" fill="${paint}" opacity=".85"/><path d="${stripe(s, -77.6)}" fill="${paint}" opacity=".7"/>`).join(""),
+    };
+  },
+  cigar: () => ({
+    face:
+      fill("M2,-74.4 L7.6,-75.8 L7.8,-74.6 L2.2,-73.4 Z", "#5a3a22", 0.45) +
+      stroke("M3.4,-74.6 L3.6,-73.8", BRASS, 0.5) +
+      fill("M7.6,-75.8 L8.4,-76 L8.6,-74.8 L7.8,-74.6 Z", "#6a6a6a", 0.35) +
+      stroke("M8.6,-76.6 C9.4,-78 8.4,-79.4 9.2,-81 C9.8,-82.4 9,-83.6 9.6,-85", "#d8dde2", 0.4, 0.35),
+    glow: dot(8.5, -75.4, 0.6, "#ff7a2a"),
+  }),
+  nosestrip: () => ({
+    face: fill("M-2.8,-79.4 L2.8,-79.6 L2.9,-78.2 L-2.7,-78 Z", "#e8e2d6", 0.4) + stroke("M-1.6,-79.2 L-1.5,-78.2 M0,-79.3 L0.1,-78.2 M1.6,-79.4 L1.7,-78.3", "#b8b0a2", 0.3),
+  }),
+  piercings: () => {
+    const metal = "#d6dde5";
+    return {
+      face:
+        stroke("M3.4,-85.4 L5,-84.2", INK, 0.7) +
+        dot(3.4, -85.4, 0.45, metal) +
+        dot(5, -84.2, 0.45, metal) +
+        `<circle cx="1.6" cy="-73" r=".9" fill="none" stroke="${INK}" stroke-width=".7"/><circle cx="1.6" cy="-73" r=".9" fill="none" stroke="${metal}" stroke-width=".35"/>`,
+    };
+  },
+  freckles: (A, c) => {
+    const tone = mix(c.skin.shadow, "#5a3a22", 0.4);
+    const pts = [[-5, -78.6], [-4, -79.4], [-3.2, -78.2], [-2.2, -79], [-1.4, -79.8], [1.4, -79.8], [2.2, -79], [3.2, -78.2], [4, -79.4], [5, -78.6], [-4.4, -77.6], [4.4, -77.6]];
+    return { face: `<g fill="${tone}" opacity=".7">${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r=".32"/>`).join("")}</g>` };
+  },
+  beard: (A, c) => {
+    const hair = c.hair.color;
+    const beard =
+      "M-6.9,-79 C-6.6,-76 -5.4,-73.4 -3.6,-72 C-2.2,-70.8 -1,-70.4 0,-70.4 C1,-70.4 2.2,-70.8 3.6,-72 C5.4,-73.4 6.6,-76 6.9,-79 " +
+      "C6,-77 5,-75.8 3.6,-75.6 C2.4,-75.4 1.6,-76.4 0,-76.4 C-1.6,-76.4 -2.4,-75.4 -3.6,-75.6 C-5,-75.8 -6,-77 -6.9,-79 Z";
+    const mouth = "M-2.4,-74.6 C-1,-75 1,-75 2.4,-74.6 C1.2,-73.2 -1.2,-73.2 -2.4,-74.6 Z";
+    return {
+      face:
+        `<path d="${beard}" fill="${hair}" opacity=".88"/>` +
+        `<path d="${mouth}" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
+        stroke("M-2.6,-74.6 C-1.2,-74.1 1.2,-74.1 2.6,-74.6", INK, 0.45, 0.8) +
+        stroke("M-4.6,-73.6 C-2,-71.4 2,-71.4 4.6,-73.6", mix(hair, "#ffffff", 0.3), 0.35, 0.5),
+    };
+  },
+};

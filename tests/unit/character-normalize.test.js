@@ -31,9 +31,17 @@ describe("normalizeBadge", () => {
 describe("normalizeAccessories", () => {
   it("fills every slot and drops unknown ids and slots", () => {
     expect(normalizeAccessories({ back: "backpack", waist: "nope", tail: "x" })).toEqual({
-      back: "backpack", waist: "none", helmet: "none", arms: "none", neck: "none", legs: "none",
+      back: "backpack", waist: "none", helmet: "none", arms: "none", neck: "none", legs: "none", eyes: "none", face: "none",
     });
     expect(normalizeAccessories(null).back).toBe("none");
+  });
+
+  it("keeps eyes and face picks, and reads a save from before those slots as none", () => {
+    expect(normalizeAccessories({ eyes: "monocle", face: "beard" })).toMatchObject({ eyes: "monocle", face: "beard" });
+    // An item in the wrong slot is not that slot's item.
+    expect(normalizeAccessories({ eyes: "beard", face: "monocle" })).toMatchObject({ eyes: "none", face: "none" });
+    const old = normalizeAccessories({ back: "backpack", waist: "belt", helmet: "lamp", arms: "screen", neck: "tags", legs: "shins" });
+    expect(old).toMatchObject({ back: "backpack", legs: "shins", eyes: "none", face: "none" });
   });
 });
 

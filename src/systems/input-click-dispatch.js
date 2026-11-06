@@ -66,7 +66,7 @@ export function handleCreatorClick(game, e) {
   }
 
   // Same window the renderer uses (listRows), derived from panel height.
-  const maxVisible = listRows(L, curCat);
+  const maxVisible = listRows(L, curCat, game.character);
   const selIdx = curCat.multi
     ? Math.min(Math.max(game.creatorPlacementSel | 0, 0), items.length - 1)
     : getIndex(game.character, curCat.key);

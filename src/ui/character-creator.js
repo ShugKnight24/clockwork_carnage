@@ -15,13 +15,14 @@ import {
 } from "../data/index.js";
 import { takesVisor } from "../data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS } from "../data/accessories.js";
 import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.js";
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
 import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
 import { FACE_HELMETS } from "../data/wardrobe-themes/index.js";
+import { faceSlotBlock } from "../rendering/svg-art/wardrobe-themes/index.js";
 import { drawPrompt } from "./input-glyphs.js";
 
 // ── Shared category definitions (used by render + click handler) ──
@@ -114,7 +115,10 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   const titleY = isMobile ? 34 : 44;
   const tabGap = isMobile ? 4 : 8;
   const n = CREATOR_CATEGORIES.length;
-  const minTabW = isMobile ? 28 : 42;
+  // A touch phone on its side (shortTouch, below) is short of rows, not of
+  // width: its tabs narrow to fit their short labels so the strip keeps to
+  // two rows and the lists keep their height.
+  const minTabW = isMobile ? 28 : isTouch && h < 500 ? 38 : 42;
   const maxTabW = isMobile ? 46 : 86;
   // Two dozen-odd tabs no longer fit on one row, so the strip wraps: take the
   // fewest rows that let every tab keep its minimum width, then spread the
@@ -221,10 +225,54 @@ export function drawHairColorHint(ctx, x, y, input) {
   return drawPrompt(ctx, x, y, HAIR_COLOR_PROMPT, { input, look: "legacy", align: "right", size: 10, color: "rgba(255,255,255,0.45)" });
 }
 
-/** How many option rows a tab's list shows: the HAIR tab gives the foot of the panel to its colours. */
-export function listRows(L, curCat) {
-  if (curCat.key !== "hair") return Math.min(curCat.data.length, L.maxBySpace);
-  const free = Math.floor((L.panelH - 16 - hairColorSwatches(L).h) / L.itemH);
+/** Words of `text` in lines of at most `max` characters (the list's monospace font). */
+function wrapChars(text, max) {
+  const lines = [];
+  for (const word of text.split(" ")) {
+    const last = lines.length - 1;
+    if (last >= 0 && lines[last].length + 1 + word.length <= max) lines[last] += ` ${word}`;
+    else lines.push(word);
+  }
+  return lines;
+}
+
+/** Line height and character width of the foot's note, bold 10px monospace. */
+const NOTE_LINE = 13;
+const NOTE_CHAR = 6.1;
+
+/**
+ * The foot of the list panel on the eyes and face tabs: a note when the
+ * helmet worn hides the slot ("Hidden under the …") or leaves it no room
+ * ("No room under the …"), the way the visor tab notes a helmet with no
+ * visor. Null when there is nothing to say. Shared by the renderer and the
+ * click handler, like hairColorSwatches.
+ * `head` lines are the note's heading, `sub` the line under it; the first
+ * baseline is at `noteY`, one NOTE_LINE apart.
+ * @returns {{ top: number, h: number, head: string[], sub: string[], noteY: number } | null}
+ */
+export function faceSlotFoot(L, curCat, ch) {
+  if (!FACE_SLOTS.includes(curCat.slot)) return null;
+  const helmet = pieceOf(ch, "helmet");
+  const block = faceSlotBlock(helmet.id, curCat.slot);
+  if (!block) return null;
+  const pad = 10;
+  const max = Math.max(8, Math.floor((L.listW - 2 * pad) / NOTE_CHAR));
+  const head = wrapChars(`${block === "hidden" ? "Hidden" : "No room"} under the ${helmet.name}`.toUpperCase(), max);
+  const sub = wrapChars(block === "hidden" ? "Shows with an open helmet" : "Shows with another helmet", max);
+  const h = pad + (head.length + sub.length) * NOTE_LINE + pad;
+  const top = L.contentY + L.panelH - h;
+  return { top, h, head, sub, noteY: top + pad + NOTE_LINE - 3 };
+}
+
+/**
+ * How many option rows a tab's list shows: the HAIR tab gives the foot of
+ * the panel to its colours, the eyes and face tabs to their note (ch: the
+ * character, for the helmet worn).
+ */
+export function listRows(L, curCat, ch) {
+  const foot = curCat.key === "hair" ? hairColorSwatches(L).h : faceSlotFoot(L, curCat, ch)?.h || 0;
+  if (!foot) return Math.min(curCat.data.length, L.maxBySpace);
+  const free = Math.floor((L.panelH - 16 - foot) / L.itemH);
   return Math.min(curCat.data.length, Math.max(2, free));
 }
 
@@ -327,7 +375,9 @@ function optionTile(curCat, idx, ch, sig) {
     const layer = badgeLayer(variant, "low");
     tile = { id: layer.id, box: BADGE_BOX, defs: "", markup: layer.markup };
   } else if (curCat.slot) {
-    tile = { id: `legacy-gear:${curCat.slot}:${lookKey(variant)}`, box: GEAR_VIEW[curCat.slot], ...agentMarkup(variant) };
+    // Eyes and face tiles show the bare head, so the item reads whatever the helmet.
+    const stage = FACE_SLOTS.includes(curCat.slot) ? { pose: "idle", peek: true } : IDLE_STAGE;
+    tile = { id: `legacy-gear:${curCat.slot}:${stage.peek ? 1 : 0}:${lookKey(variant)}`, box: GEAR_VIEW[curCat.slot], ...agentMarkup(variant, stage) };
   }
   _tiles.set(cacheKey, tile);
   return tile;
@@ -1103,7 +1153,7 @@ export function renderCharacterCreator(
   const lookSig = lookKey(char);
   const hasTile = BADGE_TILE_KEYS.has(curCat.key) || !!curCat.slot;
   const listX = L.contentX;
-  const maxVisible = listRows(L, curCat);
+  const maxVisible = listRows(L, curCat, char);
   const listH = L.panelH;
 
   ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
@@ -1213,6 +1263,18 @@ export function renderCharacterCreator(
         ctx.stroke();
       }
     });
+  }
+
+  // ─── Eyes / face: the helmet worn hides the slot ───
+  const foot = faceSlotFoot(L, curCat, char);
+  if (foot) {
+    ctx.textAlign = "left";
+    ctx.font = "bold 10px monospace";
+    ctx.fillStyle = "rgba(255, 200, 90, 0.8)";
+    foot.head.forEach((line, i) => ctx.fillText(line, listX + 10, foot.noteY + i * NOTE_LINE));
+    ctx.font = "10px monospace";
+    ctx.fillStyle = "rgba(180,200,220,0.55)";
+    foot.sub.forEach((line, i) => ctx.fillText(line, listX + 10, foot.noteY + (foot.head.length + i) * NOTE_LINE));
   }
 
   // ─── Character preview (center panel) ───

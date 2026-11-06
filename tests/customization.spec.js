@@ -60,6 +60,73 @@ test("a hair colour picked in the showroom changes the figure and survives a rel
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).hairColor)).toBe("pink");
 });
 
+/** Own every lockable piece, and have the showroom see it. */
+const grantAll = (page) =>
+  page.evaluate(async () => {
+    const g = window.ccDebug.game;
+    const m = await import("/src/systems/unlocks.js");
+    for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.id);
+    const room = document.querySelector("agent-showroom");
+    room._unlockCtx = null; // the showroom caches the context per open
+    room.renderAll(false);
+  });
+
+/** Grid position of piece `id` in the table behind showroom key `key`. */
+const posOf = (page, key, id) =>
+  page.evaluate(async ([k, i]) => (await import("/src/core/character-fields.js")).getIndex({ [k]: i, accessories: { [k.slice(4)]: i } }, k), [key, id]);
+
+test("eyewear and a face item show under an open helmet; a closed helmet says they are hidden", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  const figure = () => room(page).locator(".figure").innerHTML();
+  await tab(page, "helmet").click();
+  await opt(page, "helmet", await posOf(page, "helmet", "wide")).click();
+  await tab(page, "gear").click();
+  await opt(page, "acc.eyes", await posOf(page, "acc.eyes", "aviators")).click();
+  await opt(page, "acc.face", await posOf(page, "acc.face", "scar")).click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories)).toMatchObject({ eyes: "aviators", face: "scar" });
+  await expect.poll(figure).toContain('data-acc="aviators"');
+  expect(await figure()).toContain('data-acc="scar"');
+  const note = (slot) => room(page).locator(`[data-note="face-slot"][data-slot="${slot}"]`);
+  await expect(note("eyes")).toBeHidden();
+  await expect(note("face")).toBeHidden();
+  // A closed helmet: the picks are kept, not drawn, and both sections say why.
+  await tab(page, "helmet").click();
+  await opt(page, "helmet", await posOf(page, "helmet", "standard")).click();
+  await tab(page, "gear").click();
+  await expect.poll(figure).not.toContain('data-acc="aviators"');
+  expect(await figure()).not.toContain('data-acc="scar"');
+  await expect(note("eyes")).toBeVisible();
+  await expect(note("eyes")).toHaveText(/^Hidden under the Standard Dome/);
+  await expect(note("face")).toHaveText(/^Hidden under the Standard Dome/);
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories)).toMatchObject({ eyes: "aviators", face: "scar" });
+  // The Marshal's brim: eyewear over the bandana, no room for the rest.
+  await tab(page, "helmet").click();
+  await opt(page, "helmet", await posOf(page, "helmet", "brim")).click();
+  await tab(page, "gear").click();
+  await expect.poll(figure).toContain('data-acc="aviators"');
+  expect(await figure()).not.toContain('data-acc="scar"');
+  await expect(note("eyes")).toBeHidden();
+  await expect(note("face")).toHaveText(/^No room under the Marshal's Brim/);
+});
+
+test("presets and looks saved before the eyes and face slots keep the eyewear and face item worn", async ({ page }) => {
+  await openCreator(page);
+  await page.evaluate(() => {
+    const g = window.ccDebug.game;
+    g.character.accessories = { ...g.character.accessories, eyes: "aviators", face: "scar" };
+    localStorage.setItem("cc_saved_looks", JSON.stringify([
+      { name: "Old", look: { version: 2, color: "solar_gold", accessories: { back: "backpack", waist: "none", helmet: "none", arms: "none", neck: "none", legs: "none" } } },
+    ]));
+    document.querySelector("agent-showroom").renderLooks();
+  });
+  await room(page).locator(".look .preset").nth(0).click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories)).toMatchObject({ back: "backpack", eyes: "aviators", face: "scar" });
+  // A preset sets the gear, never the eyewear or face item.
+  await room(page).locator('.preset[data-preset="0"]').click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories)).toMatchObject({ back: "none", waist: "belt", eyes: "aviators", face: "scar" });
+});
+
 test("presets and looks saved before hair colour keep the hair colour picked", async ({ page }) => {
   await openCreator(page);
   const ch = () => page.evaluate(() => ({ ...window.ccDebug.game.character }));

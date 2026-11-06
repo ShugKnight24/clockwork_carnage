@@ -23,7 +23,7 @@
  *       map: the rig splits glow per limb (the fallen agent leaves out the
  *       light of the arm trapped under the body).
  *
- *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors, seats? } }
+ *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors, seats?, faceSlots? } }
  *     paint: the whole head under the helmet (not called for a face peek,
  *       which the rig draws bare). `front` is the head, `glow` its lit parts.
  *       K is the rig's helmet kit; none of it knows a helmet id, so all a
@@ -42,6 +42,12 @@
  *           earGlow } — a steel shell from its outline, the dome's sheen and
  *           rim light, and the bolted ear cups at ±half (ears: false for a
  *           one-piece shell)
+ *         K.faceAccessories() -> { front, glow } — the eyes and face items
+ *           the look wears, already fitted to the build (only the slots
+ *           faceSlots leaves room for). A helmet that draws the face inside
+ *           its own layering (the Ranger bubble's glass) calls it and places
+ *           them right over its K.face; one that never calls it gets them
+ *           drawn over its whole head by the rig
  *         K.mix(a, b, t) — blend two hex colours
  *     anchors: { top, half, rail, badge } — where helmet gear seats, in rig
  *       units. `top` is the top of the shell (crown gear), `half` its
@@ -53,6 +59,12 @@
  *       mapped to booleans; a seat left out is taken. A helmet that already
  *       wears what a seat holds (the Centurion's crest) turns it off, and
  *       the helmet-slot accessory for that seat is not drawn on it.
+ *     faceSlots: on a helmet that shows the face (its entry says
+ *       `face: true`), which face slots it leaves room for, words from
+ *       FACE_SLOTS mapped to booleans; a slot left out has room. A helmet
+ *       that covers the eyes or the jaw (the LED mask's band and shell)
+ *       turns that slot off, and the item worn there is kept but not drawn.
+ *       A closed helmet hides both slots and declares none.
  *
  *   shoulders: { [id]: { paint(c, s, K) -> markup, maxShoulderScale? } }
  *     paint: one shoulder, drawn for the right side and mirrored for the
@@ -91,7 +103,8 @@
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
-import { WARDROBE_THEMES, THEME_TABLES } from "../../../data/wardrobe-themes/index.js";
+import { WARDROBE_THEMES, THEME_TABLES, FACE_HELMETS } from "../../../data/wardrobe-themes/index.js";
+import { FACE_SLOTS } from "../../../data/accessories.js";
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
 import exo from "./exo.js";
@@ -180,6 +193,32 @@ export function helmetSeats(id) {
 }
 
 /**
+ * Which face slots (FACE_SLOTS: eyes, face) show under a helmet: none under
+ * one that hides the face, else every slot its art leaves room for.
+ * @param {string} id helmet id
+ * @returns {Record<string, boolean>}
+ */
+export function helmetFaceSlots(id) {
+  const open = FACE_HELMETS.has(id);
+  const slots = helmetArt(id).faceSlots || {};
+  return Object.fromEntries(FACE_SLOTS.map((slot) => [slot, open && slots[slot] !== false]));
+}
+
+/**
+ * Why a face slot does not show under a helmet, for the creator's note:
+ * "hidden" under a helmet that hides the face, "room" under an open one
+ * with no room for the slot, null when it shows.
+ * @param {string} id helmet id
+ * @param {string} slot a word from FACE_SLOTS
+ * @returns {"hidden"|"room"|null}
+ */
+export function faceSlotBlock(id, slot) {
+  if (!FACE_SLOTS.includes(slot)) throw new Error(`faceSlotBlock: "${slot}" is not a face slot (${FACE_SLOTS.join(", ")})`);
+  if (!FACE_HELMETS.has(id)) return "hidden";
+  return helmetFaceSlots(id)[slot] ? null : "room";
+}
+
+/**
  * Whether a frame replaces one of the rig's stock layers.
  * @param {string} id frame id
  * @param {string} what a word from HIDES
@@ -245,6 +284,14 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
       for (const [seat, on] of Object.entries(a.seats || {})) {
         if (!HELMET_SEATS.includes(seat)) errors.push(`helmets: "${id}" seats unknown seat "${seat}" (${HELMET_SEATS.join(", ")})`);
         else if (typeof on !== "boolean") errors.push(`helmets: "${id}" seats.${seat} is not true or false`);
+      }
+      if ("faceSlots" in a) {
+        const entry = themes.flatMap((d) => d.helmets || []).find((e) => e.id === id);
+        if (entry && entry.face !== true) errors.push(`helmets: "${id}" declares faceSlots but hides the face (its entry has no face: true)`);
+        for (const [slot, on] of Object.entries(a.faceSlots || {})) {
+          if (!FACE_SLOTS.includes(slot)) errors.push(`helmets: "${id}" faceSlots unknown slot "${slot}" (${FACE_SLOTS.join(", ")})`);
+          else if (typeof on !== "boolean") errors.push(`helmets: "${id}" faceSlots.${slot} is not true or false`);
+        }
       }
     }
     for (const [id, a] of Object.entries(t.shoulders || {})) {

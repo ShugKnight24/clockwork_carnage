@@ -15,7 +15,7 @@ import {
   CAMO_STYLES,
 } from "../../../src/data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, layer } from "../../../src/data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES } from "../../../src/data/accessories.js";
+import { ACCESSORIES } from "../../../src/data/accessories.js";
 import { cloneLook, LOOK_TABLES } from "../../../src/core/character-fields.js";
 import { CAST_KEYS } from "../../../src/rendering/svg-art/agent-rig.js";
 import { WARDROBE_THEMES } from "../../../src/data/wardrobe-themes/index.js";
@@ -46,6 +46,12 @@ const ids = (table) => table.map((e) => e.id);
 const at = (list, i) => list[i % list.length];
 
 const worn = (table) => ids(table).filter((id) => id !== "none");
+
+// The accessory slots the matrix's looks cycle through: the ones they were
+// recorded with. Slots added later (the eyes and face slots) are covered by
+// their own entries at the end (FACE_LOOKS), so adding one never changes the
+// earlier looks.
+const LOOK_SLOTS = ["back", "waist", "helmet", "arms", "neck", "legs"];
 
 // One look per Field Issue helmet; frames, shoulders and visors cycle
 // alongside so every legacy piece appears at least once, and the first six
@@ -78,7 +84,7 @@ const lookAt = (i, { helmet, frame, shoulder }) => ({
     finish: at(ids(FINISHES), i),
     placements: ids(PLACEMENTS),
   },
-  accessories: Object.fromEntries(ACCESSORY_SLOTS.map(({ id }) => [id, at(worn(ACCESSORIES[id]), i)])),
+  accessories: Object.fromEntries(LOOK_SLOTS.map((id) => [id, at(worn(ACCESSORIES[id]), i)])),
 });
 
 const [ISSUE, ...THEMES] = WARDROBE_THEMES;
@@ -173,8 +179,33 @@ function buildMatrix() {
     const name = `hair-${hairColor}-${ids.helmet}-${ids.hair}-masc-idle`;
     return { name, ids: { ...ids, hairColor, body: "masc" }, opts: { pose: "idle" }, kind: "svg" };
   });
-  return [...issue, ...[...themed, ...hair].map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
+  // Eyes and face items, appended: every item worn on an open helmet in both
+  // builds (the feminine jaw narrows them), on each helmet that shows the
+  // face (the Marshal's brim takes eyewear only, the bubble draws them inside
+  // its glass), fallen, and on a bare-headed peek under a closed helmet.
+  const face = [];
+  const wearing = (eyes, item) => ({ ...DEFAULT_CHARACTER.accessories, eyes, face: item });
+  for (const [eyes, item, helmet, hair] of FACE_LOOKS) {
+    for (const body of ids(BODY_TYPES)) {
+      const name = `face-${eyes}-${item}-${helmet}-${body}-idle`;
+      face.push({ name, ids: { helmet, hair, body, accessories: wearing(eyes, item) }, opts: { pose: "idle" }, kind: "svg" });
+    }
+  }
+  face.push({ name: "cast-hero_fallen-face-cybereye-beard-wide-masc", ids: { helmet: "wide", body: "masc", accessories: wearing("cybereye", "beard") }, opts: { key: "hero_fallen" }, kind: "cast" });
+  face.push({ name: "bust-peek-face-monocle-scar-standard-fem", ids: { helmet: "standard", body: "fem", accessories: wearing("monocle", "scar") }, opts: { pose: "bust", peek: true }, kind: "svg" });
+  return [...issue, ...[...themed, ...hair, ...face].map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
 }
+
+/** Eyes item, face item, helmet and hair cut of the appended face looks. */
+const FACE_LOOKS = [
+  ["aviators", "scar", "wide", "short"],
+  ["shades", "cigar", "mohawk", "buzz"],
+  ["eyepatch", "beard", "bubble", "long"],
+  ["cybereye", "freckles", "brim", "short"],
+  ["monocle", "piercings", "wide", "curtain"],
+  ["aviators", "nosestrip", "bubble", "hawk"],
+  ["shades", "warpaint", "mohawk", "short"],
+];
 
 /** @type {{ name: string, ids: object, opts: object, kind: "svg"|"cast" }[]} */
 export const GOLDEN_MATRIX = buildMatrix();

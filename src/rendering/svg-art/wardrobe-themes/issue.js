@@ -599,9 +599,12 @@ function openHelm(path, visorY, extra) {
     const s = K.helmetShell(c, { path, half: w });
     const liner = `<path d="M${f(-w + 1.2)},-86 C${f(-w + 1.2)},-92 -5,-94.4 0,-94.4 C5,-94.4 ${f(w - 1.2)},-92 ${f(w - 1.2)},-86 L${f(w - 1.6)},-70 L${f(-w + 1.6)},-70 Z" fill="#070a10"/>`;
     const visorUp = K.raisedVisor(c, visorY);
+    // Eyes and face items on the face, under the hair and the shell, so the
+    // cheek guards close over them.
+    const acc = K.faceAccessories();
     return {
-      front: K.hairBack(c) + liner + K.face(c) + K.hair(c, true) + s.shell + s.dome + extra(c, K) + s.ears + visorUp.body,
-      glow: s.earGlow + visorUp.glow + K.eyeGlow(c, 0.35),
+      front: K.hairBack(c) + liner + K.face(c) + acc.front + K.hair(c, true) + s.shell + s.dome + extra(c, K) + s.ears + visorUp.body,
+      glow: s.earGlow + visorUp.glow + K.eyeGlow(c, 0.35) + acc.glow,
     };
   };
 }

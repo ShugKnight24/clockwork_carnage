@@ -444,11 +444,13 @@ describe("painters name only their own ids and the rig's shared defs", () => {
 
   it.each(ACCESSORY_SLOTS.map((s) => s.id))("accessories %s", (slot) => {
     const c = lookOf({});
-    const A = rigAnchors(STAND, [0, 0], "standing");
+    // Under an open helmet, so the eyes and face slots are drawn too.
+    const A = rigAnchors(STAND, [0, 0], "standing", "wide");
     for (const { id } of ACCESSORIES[slot]) {
       if (id === "none") continue;
       const out = paintAccessories({ [slot]: id }, A, c);
-      const markup = ["back", "front", "top", "glow", "head", "headGlow", "defs"].map((k) => out[k]).join("");
+      const markup = ["back", "front", "top", "glow", "head", "headGlow", "face", "faceGlow", "defs"].map((k) => out[k]).join("");
+      expect(markup, `${slot} ${id} draws`).not.toBe("");
       expectOwn(markup, `acc-${slot}-${id}-`, `${slot} ${id}`);
     }
   });
@@ -580,6 +582,16 @@ describe("validateWardrobe", () => {
     expect(run({ crown: false, side: true })).toEqual([]);
     expect(run({ crown: false, chin: false })).toEqual([expect.stringMatching(/"h" seats unknown seat "chin"/)]);
     expect(run({ brow: "no" })).toEqual([expect.stringMatching(/"h" seats\.brow is not true or false/)]);
+  });
+
+  it("reports an unknown faceSlots word, one that is not true or false, and faceSlots on a helmet that hides the face", () => {
+    const open = (id) => ({ id: "a", name: "a", frames: [], shoulders: [], helmets: [{ ...entry(id), face: true }] });
+    const run = (faceSlots, themes = [open("h")]) => validateWardrobe(themes, [{ id: "a", helmets: { h: { ...helm(), faceSlots } } }]);
+    expect(run({ eyes: false })).toEqual([]);
+    expect(run({ eyes: true, face: false })).toEqual([]);
+    expect(run({ eyes: false, chin: false })).toEqual([expect.stringMatching(/"h" faceSlots unknown slot "chin"/)]);
+    expect(run({ face: "no" })).toEqual([expect.stringMatching(/"h" faceSlots\.face is not true or false/)]);
+    expect(run({ eyes: false }, [theme("a", [], ["h"])])).toEqual([expect.stringMatching(/"h" declares faceSlots but hides the face/)]);
   });
 
   it("reports a shoulder without art, shoulder art without an entry, and one filed under another theme", () => {
