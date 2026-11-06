@@ -34,6 +34,7 @@ import {
   takesVisor,
 } from "../../src/data/cosmetics.js";
 import { bonusText } from "../../src/data/gear-stats.js";
+import { classStats } from "../../src/ui/class-stats.js";
 import { frameShape } from "../../src/rendering/svg-art/frames.js";
 import { faceSlotBlock, frameHides } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import * as Skins from "../../src/data/weapon-skins.js";
@@ -329,19 +330,6 @@ function faceSlotNote(ch, slot) {
   return "";
 }
 
-/** Stat lines for a loadout, mirroring Game.applyLoadoutBonuses. */
-function classStats(cls) {
-  const b = cls.bonuses || {};
-  const chrono = { phantom: 120, enforcer: 80 }[cls.id] ?? 100;
-  return [
-    { label: "Health", value: b.maxHealth ?? 100, base: 100, max: 150 },
-    { label: "Speed", value: 3.5 + (b.moveSpeed ?? 0), base: 3.5, max: 4.5, fmt: (v) => v.toFixed(1) },
-    { label: "Fire rate", value: 1 / (b.fireRateMultiplier ?? 1), base: 1, max: 1.25, fmt: (v) => `${Math.round(v * 100)}%` },
-    { label: "Stamina", value: b.maxStamina ?? 100, base: 100, max: 150 },
-    { label: "Chrono", value: chrono, base: 100, max: 130 },
-    { label: "Damage", value: cls.id === "enforcer" ? 1.15 : 1, base: 1, max: 1.25, fmt: (v) => `${Math.round(v * 100)}%` },
-  ];
-}
 
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
