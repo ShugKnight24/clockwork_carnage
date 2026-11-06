@@ -18,11 +18,12 @@ import marshal from "./marshal.js";
 import ronin from "./ronin.js";
 import horologist from "./horologist.js";
 import runner from "./runner.js";
+import diver from "./diver.js";
 
 /** The tables a theme fills, by key. */
 export const THEME_TABLES = Object.freeze(["frames", "helmets", "shoulders"]);
 
-const THEMES = [issue, exo, marshal, ronin, horologist, runner];
+const THEMES = [issue, exo, marshal, ronin, horologist, runner, diver];
 
 /** Every theme in creator order, each with all three tables; frozen through. */
 export const WARDROBE_THEMES = deepFreeze(

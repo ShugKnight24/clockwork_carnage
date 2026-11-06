@@ -1,0 +1,1039 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-74 -116 148 182" class="" role="img" aria-label="Agent preview">
+<defs>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-steel" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#d3dcd9"/>
+<stop offset="0.18" stop-color="#9fadab"/>
+<stop offset="0.5" stop-color="#5d6c6b"/>
+<stop offset="0.82" stop-color="#2c3636"/>
+<stop offset="1" stop-color="#161c1d"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-steelDk" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#7b8988"/>
+<stop offset="0.45" stop-color="#455151"/>
+<stop offset="1" stop-color="#0f1414"/>
+</linearGradient>
+<pattern id="diver-0-porthole-diving-lantern-masc-idle-suit" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="scale(1) rotate(-12)">
+<rect width="18" height="18" fill="#283039"/>
+<rect x="1.5" y="0" width="1.5" height="1.5" fill="#566373"/>
+<rect x="4.5" y="0" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="7.5" y="0" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="9" y="0" width="1.5" height="1.5" fill="#566373"/>
+<rect x="10.5" y="0" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="13.5" y="0" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="0" y="1.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="1.5" y="1.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="4.5" y="1.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="7.5" y="1.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="9" y="1.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="12" y="1.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="16.5" y="1.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="1.5" y="3" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="3" y="3" width="1.5" height="1.5" fill="#566373"/>
+<rect x="4.5" y="3" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="6" y="3" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="9" y="3" width="1.5" height="1.5" fill="#566373"/>
+<rect x="10.5" y="3" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="13.5" y="3" width="1.5" height="1.5" fill="#566373"/>
+<rect x="15" y="3" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="1.5" y="4.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="9" y="4.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="10.5" y="4.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="12" y="4.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="13.5" y="4.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="16.5" y="4.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="0" y="6" width="1.5" height="1.5" fill="#566373"/>
+<rect x="6" y="6" width="1.5" height="1.5" fill="#566373"/>
+<rect x="9" y="6" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="10.5" y="6" width="1.5" height="1.5" fill="#566373"/>
+<rect x="12" y="6" width="1.5" height="1.5" fill="#566373"/>
+<rect x="16.5" y="6" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="7.5" y="7.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="10.5" y="7.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="12" y="7.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="13.5" y="7.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="15" y="7.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="1.5" y="9" width="1.5" height="1.5" fill="#566373"/>
+<rect x="3" y="9" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="4.5" y="9" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="10.5" y="9" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="12" y="9" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="13.5" y="9" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="15" y="9" width="1.5" height="1.5" fill="#566373"/>
+<rect x="16.5" y="9" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="0" y="10.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="1.5" y="10.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="4.5" y="10.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="6" y="10.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="9" y="10.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="10.5" y="10.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="12" y="10.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="1.5" y="12" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="3" y="12" width="1.5" height="1.5" fill="#566373"/>
+<rect x="4.5" y="12" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="6" y="12" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="7.5" y="12" width="1.5" height="1.5" fill="#566373"/>
+<rect x="9" y="12" width="1.5" height="1.5" fill="#566373"/>
+<rect x="10.5" y="12" width="1.5" height="1.5" fill="#566373"/>
+<rect x="12" y="12" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="3" y="13.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="6" y="13.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="10.5" y="13.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="12" y="13.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="16.5" y="13.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="0" y="15" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="3" y="15" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="10.5" y="15" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="12" y="15" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="16.5" y="15" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="1.5" y="16.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="3" y="16.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="4.5" y="16.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="6" y="16.5" width="1.5" height="1.5" fill="#3c4857"/>
+<rect x="7.5" y="16.5" width="1.5" height="1.5" fill="#566373"/>
+<rect x="13.5" y="16.5" width="1.5" height="1.5" fill="#171b21"/>
+<rect x="15" y="16.5" width="1.5" height="1.5" fill="#171b21"/>
+</pattern>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">
+<stop offset="0" stop-color="#405187"/>
+<stop offset="0.3" stop-color="#213573"/>
+<stop offset="0.62" stop-color="#16244e"/>
+<stop offset="1" stop-color="#070c19"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-paint" x1="0" y1="0" x2="1" y2="0.4">
+<stop offset="0" stop-color="#6f85c8"/>
+<stop offset="0.45" stop-color="#2244aa"/>
+<stop offset="1" stop-color="#0b1637"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-visor" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#0f1e38"/>
+<stop offset="0.42" stop-color="#3c78e0"/>
+<stop offset="0.58" stop-color="#cbdeff"/>
+<stop offset="1" stop-color="#0c182e"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-mirrorGlass" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#3c4a5c"/>
+<stop offset="0.35" stop-color="#0b1119"/>
+<stop offset="0.55" stop-color="#1b3259"/>
+<stop offset="0.7" stop-color="#05080d"/>
+<stop offset="1" stop-color="#1a2330"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-gun" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#5a7a40"/>
+<stop offset="0.3" stop-color="#243418"/>
+<stop offset="1" stop-color="#070c04"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-goldGlass" x1="0" y1="0" x2="0.25" y2="1">
+<stop offset="0" stop-color="#3a2405"/>
+<stop offset="0.28" stop-color="#b47a16"/>
+<stop offset="0.42" stop-color="#ffe39a"/>
+<stop offset="0.56" stop-color="#c88a1c"/>
+<stop offset="1" stop-color="#2a1803"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-skin" x1="0" y1="0" x2="1" y2="0.3">
+<stop offset="0" stop-color="#b4bbc8"/>
+<stop offset="0.42" stop-color="#9fa8b8"/>
+<stop offset="0.8" stop-color="#6c7483"/>
+<stop offset="1" stop-color="#4a5260"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-hair" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#464241"/>
+<stop offset="0.45" stop-color="#120d0b"/>
+<stop offset="1" stop-color="#070504"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-leather" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#3a3430"/>
+<stop offset="0.45" stop-color="#1c1815"/>
+<stop offset="1" stop-color="#080706"/>
+</linearGradient>
+<radialGradient id="diver-0-porthole-diving-lantern-masc-idle-shade">
+<stop offset="0" stop-color="#000" stop-opacity="0.7"/>
+<stop offset="1" stop-color="#000" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="diver-0-porthole-diving-lantern-masc-idle-sheen">
+<stop offset="0" stop-color="#fff" stop-opacity="0.5"/>
+<stop offset="1" stop-color="#fff" stop-opacity="0"/>
+</radialGradient>
+<filter id="diver-0-porthole-diving-lantern-masc-idle-glow" x="-1" y="-1" width="3" height="3">
+<feGaussianBlur stdDeviation="1.3"/>
+</filter>
+<filter id="diver-0-porthole-diving-lantern-masc-idle-bloom" x="-1" y="-1" width="3" height="3">
+<feGaussianBlur stdDeviation="3"/>
+</filter>
+<filter id="diver-0-porthole-diving-lantern-masc-idle-ao" x="-0.5" y="-0.5" width="2" height="2">
+<feGaussianBlur stdDeviation="1.5"/>
+</filter>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-pecShade" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/>
+<stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+<stop offset="0.8" stop-color="#000000" stop-opacity="0.18"/>
+<stop offset="1" stop-color="#000000" stop-opacity="0.38"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-cyl" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#ffffff" stop-opacity="0.05"/>
+<stop offset="0.28" stop-color="#ffffff" stop-opacity="0.14"/>
+<stop offset="0.5" stop-color="#000000" stop-opacity="0"/>
+<stop offset="0.82" stop-color="#000000" stop-opacity="0.34"/>
+<stop offset="1" stop-color="#000000" stop-opacity="0.18"/>
+</linearGradient>
+<pattern id="diver-0-porthole-diving-lantern-masc-idle-weave" width="0.9" height="0.9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+<rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
+<rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
+</pattern>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#f6dc8e"/>
+<stop offset="0.22" stop-color="#d1a247"/>
+<stop offset="0.55" stop-color="#8f6324"/>
+<stop offset="0.85" stop-color="#4f3311"/>
+<stop offset="1" stop-color="#2c1b08"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#b98a3a"/>
+<stop offset="0.5" stop-color="#6b4818"/>
+<stop offset="1" stop-color="#2a1906"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-frame-diving-copper" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#e09a68"/>
+<stop offset="0.3" stop-color="#b0613a"/>
+<stop offset="0.7" stop-color="#6a3218"/>
+<stop offset="1" stop-color="#341607"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas" x1="0" y1="0" x2="1" y2="0.25">
+<stop offset="0" stop-color="#7d7052"/>
+<stop offset="0.45" stop-color="#4a4130"/>
+<stop offset="1" stop-color="#1e1a12"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead" x1="0" y1="0" x2="1" y2="0.3">
+<stop offset="0" stop-color="#7c8288"/>
+<stop offset="0.4" stop-color="#4a5056"/>
+<stop offset="1" stop-color="#1b1e22"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#f6dc8e"/>
+<stop offset="0.22" stop-color="#d1a247"/>
+<stop offset="0.55" stop-color="#8f6324"/>
+<stop offset="0.85" stop-color="#4f3311"/>
+<stop offset="1" stop-color="#2c1b08"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass-dk" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#b98a3a"/>
+<stop offset="0.5" stop-color="#6b4818"/>
+<stop offset="1" stop-color="#2a1906"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-copper" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#e09a68"/>
+<stop offset="0.3" stop-color="#b0613a"/>
+<stop offset="0.7" stop-color="#6a3218"/>
+<stop offset="1" stop-color="#341607"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-canvas" x1="0" y1="0" x2="1" y2="0.25">
+<stop offset="0" stop-color="#7d7052"/>
+<stop offset="0.45" stop-color="#4a4130"/>
+<stop offset="1" stop-color="#1e1a12"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-lead" x1="0" y1="0" x2="1" y2="0.3">
+<stop offset="0" stop-color="#7c8288"/>
+<stop offset="0.4" stop-color="#4a5056"/>
+<stop offset="1" stop-color="#1b1e22"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#f6dc8e"/>
+<stop offset="0.22" stop-color="#d1a247"/>
+<stop offset="0.55" stop-color="#8f6324"/>
+<stop offset="0.85" stop-color="#4f3311"/>
+<stop offset="1" stop-color="#2c1b08"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass-dk" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#b98a3a"/>
+<stop offset="0.5" stop-color="#6b4818"/>
+<stop offset="1" stop-color="#2a1906"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-copper" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#e09a68"/>
+<stop offset="0.3" stop-color="#b0613a"/>
+<stop offset="0.7" stop-color="#6a3218"/>
+<stop offset="1" stop-color="#341607"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-canvas" x1="0" y1="0" x2="1" y2="0.25">
+<stop offset="0" stop-color="#7d7052"/>
+<stop offset="0.45" stop-color="#4a4130"/>
+<stop offset="1" stop-color="#1e1a12"/>
+</linearGradient>
+<linearGradient id="diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-lead" x1="0" y1="0" x2="1" y2="0.3">
+<stop offset="0" stop-color="#7c8288"/>
+<stop offset="0.4" stop-color="#4a5056"/>
+<stop offset="1" stop-color="#1b1e22"/>
+</linearGradient>
+<radialGradient id="diver-0-porthole-diving-lantern-masc-idle-aura">
+<stop offset="0" stop-color="#4488ff" stop-opacity="0.16"/>
+<stop offset="0.6" stop-color="#4488ff" stop-opacity="0.05"/>
+<stop offset="1" stop-color="#000" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<ellipse cx="0" cy="-24" rx="52" ry="86" fill="url(#diver-0-porthole-diving-lantern-masc-idle-aura)" class="ag-aura"/>
+<g class="ag-fig">
+<g class="ag-shadow">
+<ellipse cx="0" cy="58.6" rx="38" ry="4.8" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)"/>
+</g>
+<g class="ag-yaw-back">
+<g>
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
+<path d="M-11.6,-72 L11.6,-72 L13,-48 L-13,-48 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M-9.8,-70 L9.8,-70" fill="none" stroke="#eef6f4" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<g data-acc="antenna">
+<rect x="-9" y="-74" width="24" height="22" rx="2" fill="#1e2946" stroke="#0a0d12" stroke-width="1"/>
+<path d="M13,-68 L24,-112" fill="none" stroke="#0a0d12" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13,-68 L24,-112" fill="none" stroke="#3a414a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="15.55" y="-84.2" width="2.6" height="1.6" rx="0.4" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="18.85" y="-97.4" width="2.6" height="1.6" rx="0.4" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="10" y="-71" width="6" height="5" rx="1" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.9"/>
+<circle cx="24" cy="-112" r="1.5" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.8"/>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-cape">
+<g class="ag-cape">
+<g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-body">
+<g>
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
+<path d="M-5.4,-66 L-5.6,-80.4 C-5.8,-84.8 -13.6,-84.8 -13.8,-80.4 L-14,-60 L-5.4,-60 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-copper)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-6.8,-79.8 C-7,-82.6 -9,-83.4 -10,-83.4" fill="none" stroke="#ffd2b0" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-5.6,-74 L-13.9,-74" fill="none" stroke="#04060b" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.4,-83.6 L-11,-83.6 L-11,-86.4 L-8.4,-86.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-7.4,-86.4 L-12,-86.4 L-12,-87.8 L-7.4,-87.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M5.4,-66 L5.6,-80.4 C5.8,-84.8 13.6,-84.8 13.8,-80.4 L14,-60 L5.4,-60 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-copper)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M6.8,-79.8 C7,-82.6 9,-83.4 10,-83.4" fill="none" stroke="#ffd2b0" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.6,-74 L13.9,-74" fill="none" stroke="#04060b" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.4,-83.6 L11,-83.6 L11,-86.4 L8.4,-86.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M7.4,-86.4 L12,-86.4 L12,-87.8 L7.4,-87.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M-7,-70 L7,-70 L8,-56 L-8,-56 Z" fill="#1f1a14" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-17.5,-19.6C-17.8,-18.2 -18.8,-14.2 -19.1,-11.3C-19.4,-8.5 -19.5,-5.9 -19.2,-2.5C-19,0.8 -18.1,5.5 -17.6,9C-17.1,12.5 -16.5,17 -16.3,18.6C-16.7,24.2 -5.5,24.9 -5.1,19.3C-4.9,18.8 -4.5,17.7 -4.1,16.3C-3.6,15 -2.9,13.8 -2.5,11.1C-2.1,8.5 -2,4.1 -1.6,0.5C-1.2,-3.2 -0.3,-7.7 0,-10.9C0.3,-14 0,-17.2 0,-18.5C0.6,-27.3 -17,-28.4 -17.5,-19.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-17.5,-19.6C-17.8,-18.2 -18.8,-14.2 -19.1,-11.3C-19.4,-8.5 -19.5,-5.9 -19.2,-2.5C-19,0.8 -18.1,5.5 -17.6,9C-17.1,12.5 -16.5,17 -16.3,18.6C-16.7,24.2 -5.5,24.9 -5.1,19.3C-4.9,18.8 -4.5,17.7 -4.1,16.3C-3.6,15 -2.9,13.8 -2.5,11.1C-2.1,8.5 -2,4.1 -1.6,0.5C-1.2,-3.2 -0.3,-7.7 0,-10.9C0.3,-14 0,-17.2 0,-18.5C0.6,-27.3 -17,-28.4 -17.5,-19.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-17.5,-19.6C-17.8,-18.2 -18.8,-14.2 -19.1,-11.3C-19.4,-8.5 -19.5,-5.9 -19.2,-2.5C-19,0.8 -18.1,5.5 -17.6,9C-17.1,12.5 -16.5,17 -16.3,18.6C-16.7,24.2 -5.5,24.9 -5.1,19.3C-4.9,18.8 -4.5,17.7 -4.1,16.3C-3.6,15 -2.9,13.8 -2.5,11.1C-2.1,8.5 -2,4.1 -1.6,0.5C-1.2,-3.2 -0.3,-7.7 0,-10.9C0.3,-14 0,-17.2 0,-18.5C0.6,-27.3 -17,-28.4 -17.5,-19.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-17.5,-11.2C-17.5,-9.7 -17.9,-5.8 -17.6,-2.4C-17.4,0.9 -16.3,7.2 -16,9.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M-0.4,-10.9C-0.7,-9 -1.6,-3.2 -2,0.5C-2.4,4.1 -2.5,8.4 -2.9,11.1C-3.3,13.7 -4.2,15.4 -4.5,16.3" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-16.1,18.6C-16.5,19.6 -18.3,22.5 -18.7,24.6C-19.1,26.8 -18.8,28.8 -18.5,31.5C-18.2,34.2 -17.2,37.9 -16.8,41C-16.5,44 -16.5,48.3 -16.4,49.7C-16.7,53.5 -9.2,54 -8.9,50.3C-8.7,49.1 -8.3,46 -7.5,43.5C-6.7,41 -4.9,37.5 -4.1,35C-3.3,32.6 -2.7,31.5 -2.8,28.9C-2.9,26.3 -4.6,21 -4.9,19.4C-4.5,13.8 -15.7,13 -16.1,18.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.1,18.6C-16.5,19.6 -18.3,22.5 -18.7,24.6C-19.1,26.8 -18.8,28.8 -18.5,31.5C-18.2,34.2 -17.2,37.9 -16.8,41C-16.5,44 -16.5,48.3 -16.4,49.7C-16.7,53.5 -9.2,54 -8.9,50.3C-8.7,49.1 -8.3,46 -7.5,43.5C-6.7,41 -4.9,37.5 -4.1,35C-3.3,32.6 -2.7,31.5 -2.8,28.9C-2.9,26.3 -4.6,21 -4.9,19.4C-4.5,13.8 -15.7,13 -16.1,18.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-16.1,18.6C-16.5,19.6 -18.3,22.5 -18.7,24.6C-19.1,26.8 -18.8,28.8 -18.5,31.5C-18.2,34.2 -17.2,37.9 -16.8,41C-16.5,44 -16.5,48.3 -16.4,49.7C-16.7,53.5 -9.2,54 -8.9,50.3C-8.7,49.1 -8.3,46 -7.5,43.5C-6.7,41 -4.9,37.5 -4.1,35C-3.3,32.6 -2.7,31.5 -2.8,28.9C-2.9,26.3 -4.6,21 -4.9,19.4C-4.5,13.8 -15.7,13 -16.1,18.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-17.1,24.8C-17.1,25.9 -17.2,28.9 -16.9,31.6C-16.6,34.3 -15.6,39.5 -15.3,41.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M-3.2,28.9C-3.4,29.9 -3.7,32.6 -4.5,35C-5.3,37.4 -7.3,42.1 -7.9,43.5" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<ellipse cx="-8" cy="-12.6" rx="7.6" ry="3.2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)" opacity="0.85"/>
+<ellipse cx="-9.6" cy="7.7" rx="6.4" ry="2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)" opacity="0.7"/>
+<ellipse cx="-10.9" cy="26.6" rx="5.4" ry="1.8" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)" opacity="0.75"/>
+<g transform="translate(-10.4,19) rotate(4.1)">
+<path d="M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-16.8,-15C-16.9,-14 -17.6,-11.5 -17.7,-9.3C-17.9,-7.1 -17.9,-3.9 -17.8,-1.7C-17.7,0.5 -17,3.1 -16.9,4.1C-17.3,10.8 -4,11.6 -3.6,4.9C-3.5,4.3 -3.2,3.1 -2.9,1.2C-2.6,-0.7 -2.2,-3.9 -2,-6.4C-1.8,-8.9 -1.6,-12.7 -1.5,-14C-1,-21.6 -16.3,-22.6 -16.8,-15Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-16.8,-15C-16.9,-14 -17.6,-11.5 -17.7,-9.3C-17.9,-7.1 -17.9,-3.9 -17.8,-1.7C-17.7,0.5 -17,3.1 -16.9,4.1C-17.3,10.8 -4,11.6 -3.6,4.9C-3.5,4.3 -3.2,3.1 -2.9,1.2C-2.6,-0.7 -2.2,-3.9 -2,-6.4C-1.8,-8.9 -1.6,-12.7 -1.5,-14C-1,-21.6 -16.3,-22.6 -16.8,-15Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.8,-15C-16.9,-14 -17.6,-11.5 -17.7,-9.3C-17.9,-7.1 -17.9,-3.9 -17.8,-1.7C-17.7,0.5 -17,3.1 -16.9,4.1C-17.3,10.8 -4,11.6 -3.6,4.9C-3.5,4.3 -3.2,3.1 -2.9,1.2C-2.6,-0.7 -2.2,-3.9 -2,-6.4C-1.8,-8.9 -1.6,-12.7 -1.5,-14C-1,-21.6 -16.3,-22.6 -16.8,-15Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-16.1,-9.2C-16.2,-7.9 -16.2,-2.9 -16.2,-1.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="1.4" stroke-linecap="round"/>
+<path d="M-2.4,-6.4C-2.5,-5.2 -3.1,-0.1 -3.3,1.1" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(-9.7,8.4) rotate(3.6)">
+<path d="M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z" fill="#14181d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-3.9,-1.7 L-0.9,-1.7 L-0.9,1.7 L-3.9,1.7 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.4" stroke-linejoin="round"/>
+</g>
+<path d="M-15.1,-14.1C-15.4,-13 -16.7,-10.1 -16.8,-7.2C-17,-4.3 -16.1,1.6 -16,3.4C-16.2,6.8 -9.5,7.2 -9.2,3.8C-9.1,0.9 -8.3,-10.8 -8.1,-13.7C-7.9,-17.2 -14.9,-17.6 -15.1,-14.1Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M-12.6,-12.8C-12.5,-11.5 -12.5,-7.9 -12.3,-5.2C-12.1,-2.4 -11.6,2 -11.4,3.5" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.8,-12.8C-11.7,-11.5 -11.7,-7.8 -11.5,-5.1C-11.3,-2.4 -10.8,2.1 -10.6,3.5" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-10.9,-12.7C-10.8,-11.4 -10.8,-7.8 -10.6,-5C-10.4,-2.3 -9.9,2.2 -9.7,3.6" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-10.3,5.3C-10.4,7.4 -10.8,15.7 -10.9,17.8C-11.1,20 -6.7,20.3 -6.5,18.1C-6,17.6 -4.1,16.4 -3.6,15.1C-3.1,13.9 -2.9,12.3 -3.5,10.7C-4.1,9.1 -6.4,6.4 -7,5.5C-6.9,3.8 -10.2,3.6 -10.3,5.3Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M-16.3,24.8C-16.5,25.4 -17.5,27.1 -17.6,28.6C-17.7,30.2 -17.1,32.4 -16.9,33.9C-16.7,35.5 -16.3,37.2 -16.2,37.9C-16.5,42.2 -7.9,42.8 -7.6,38.5C-7.4,37.9 -6.7,36.1 -6.2,34.7C-5.7,33.3 -4.6,31.7 -4.5,30.2C-4.4,28.7 -5.4,26.4 -5.6,25.6C-5.2,20.2 -16,19.4 -16.3,24.8Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-16.3,24.8C-16.5,25.4 -17.5,27.1 -17.6,28.6C-17.7,30.2 -17.1,32.4 -16.9,33.9C-16.7,35.5 -16.3,37.2 -16.2,37.9C-16.5,42.2 -7.9,42.8 -7.6,38.5C-7.4,37.9 -6.7,36.1 -6.2,34.7C-5.7,33.3 -4.6,31.7 -4.5,30.2C-4.4,28.7 -5.4,26.4 -5.6,25.6C-5.2,20.2 -16,19.4 -16.3,24.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.3,24.8C-16.5,25.4 -17.5,27.1 -17.6,28.6C-17.7,30.2 -17.1,32.4 -16.9,33.9C-16.7,35.5 -16.3,37.2 -16.2,37.9C-16.5,42.2 -7.9,42.8 -7.6,38.5C-7.4,37.9 -6.7,36.1 -6.2,34.7C-5.7,33.3 -4.6,31.7 -4.5,30.2C-4.4,28.7 -5.4,26.4 -5.6,25.6C-5.2,20.2 -16,19.4 -16.3,24.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-16.1,28.8C-15.9,29.6 -15.5,33.2 -15.4,34" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M-4.9,30.2C-5.2,30.9 -6.3,33.9 -6.6,34.7" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-13.1,26.1C-13,26.9 -12.7,29.2 -12.7,31C-12.6,32.8 -12.7,35.9 -12.7,36.8" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12.3,26.1C-12.2,27 -11.9,29.2 -11.9,31C-11.8,32.8 -11.9,35.9 -11.9,36.9" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.4,26.2C-11.3,27 -11,29.3 -11,31.1C-10.9,32.9 -11,36 -11,37" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.1,28.3L-11.5,35.1" fill="none" stroke="#060d20" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.1,28.3L-11.5,35.1" fill="none" stroke="#162c6f" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-16.8,37.2C-16.8,38.4 -16.5,42.3 -16.6,44.5C-16.6,46.6 -17.2,49.3 -17.3,50.3C-17.6,54.8 -8.5,55.5 -8.2,50.9C-8.2,50 -8.3,47.2 -8.1,45.1C-7.9,42.9 -7.1,39.1 -6.9,37.9C-6.5,33 -16.4,32.3 -16.8,37.2Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-16.8,37.2C-16.8,38.4 -16.5,42.3 -16.6,44.5C-16.6,46.6 -17.2,49.3 -17.3,50.3C-17.6,54.8 -8.5,55.5 -8.2,50.9C-8.2,50 -8.3,47.2 -8.1,45.1C-7.9,42.9 -7.1,39.1 -6.9,37.9C-6.5,33 -16.4,32.3 -16.8,37.2Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.8,37.2C-16.8,38.4 -16.5,42.3 -16.6,44.5C-16.6,46.6 -17.2,49.3 -17.3,50.3C-17.6,54.8 -8.5,55.5 -8.2,50.9C-8.2,50 -8.3,47.2 -8.1,45.1C-7.9,42.9 -7.1,39.1 -6.9,37.9C-6.5,33 -16.4,32.3 -16.8,37.2Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<g transform="translate(-12,41.3) rotate(4.1)">
+<path d="M-3.8,0 L3.8,0 M-3.7,2.8 L3.7,2.8" fill="none" stroke="#05070a" stroke-width="0.9" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-10.6,22.1) rotate(4.1)">
+<path d="M-5.4,0.2 L-6.2,0.4 M5.4,0.2 L6.2,0.4" fill="none" stroke="#14181d" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-5.6 C3.6,-5.6 5.4,-3.4 5.4,-0.4 C5.4,2.8 3.2,5 0,5.6 C-3.2,5 -5.4,2.8 -5.4,-0.4 C-5.4,-3.4 -3.6,-5.6 0,-5.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M0,-3.8 C2.4,-3.8 3.6,-2.2 3.6,-0.2 C3.6,2 2,3.4 0,3.8 C-2,3.4 -3.6,2 -3.6,-0.2 C-3.6,-2.2 -2.4,-3.8 0,-3.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-2.6,-2.6 C-1.4,-3.4 0,-3.5 0.8,-3.4" fill="none" stroke="#eaf4ff" stroke-width="0.6" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-12.6,50) rotate(4.1)">
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C5,3 5.2,6.6 4.4,8 L-6.8,8 C-7.6,6.6 -7.4,3 -4.7,2 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-7.1,6.4 L4.7,6.4 L4.4,8 L-6.8,8 Z" fill="#07090d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C5,3 5.2,6.6 4.4,8 L-6.8,8 C-7.6,6.6 -7.4,3 -4.7,2 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-5.4,2.2 C-3.2,0.8 0.8,0.8 3,2.2 L3.8,5.6 L-6.2,5.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-4.2,2.6 C-2.2,1.8 -0.2,1.8 1.2,2.4" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M0,-18.5C0,-17.2 -0.3,-14 0,-10.9C0.3,-7.7 1.2,-3.2 1.6,0.5C2,4.1 2.1,8.5 2.5,11.1C2.9,13.8 3.6,15 4.1,16.3C4.5,17.7 4.9,18.8 5.1,19.3C5.5,24.9 16.7,24.2 16.3,18.6C16.5,17 17.1,12.5 17.6,9C18.1,5.5 19,0.8 19.2,-2.5C19.5,-5.9 19.4,-8.5 19.1,-11.3C18.8,-14.2 17.8,-18.2 17.5,-19.6C17,-28.4 -0.6,-27.3 0,-18.5Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M0,-18.5C0,-17.2 -0.3,-14 0,-10.9C0.3,-7.7 1.2,-3.2 1.6,0.5C2,4.1 2.1,8.5 2.5,11.1C2.9,13.8 3.6,15 4.1,16.3C4.5,17.7 4.9,18.8 5.1,19.3C5.5,24.9 16.7,24.2 16.3,18.6C16.5,17 17.1,12.5 17.6,9C18.1,5.5 19,0.8 19.2,-2.5C19.5,-5.9 19.4,-8.5 19.1,-11.3C18.8,-14.2 17.8,-18.2 17.5,-19.6C17,-28.4 -0.6,-27.3 0,-18.5Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M0,-18.5C0,-17.2 -0.3,-14 0,-10.9C0.3,-7.7 1.2,-3.2 1.6,0.5C2,4.1 2.1,8.5 2.5,11.1C2.9,13.8 3.6,15 4.1,16.3C4.5,17.7 4.9,18.8 5.1,19.3C5.5,24.9 16.7,24.2 16.3,18.6C16.5,17 17.1,12.5 17.6,9C18.1,5.5 19,0.8 19.2,-2.5C19.5,-5.9 19.4,-8.5 19.1,-11.3C18.8,-14.2 17.8,-18.2 17.5,-19.6C17,-28.4 -0.6,-27.3 0,-18.5Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M1.6,-11C1.9,-9.1 2.8,-3.3 3.2,0.4C3.6,4 3.9,9.2 4.1,11" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M18.7,-11.3C18.7,-9.8 19.1,-5.9 18.8,-2.5C18.6,0.9 17.5,7.1 17.2,9" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M4.9,19.4C4.6,21 2.9,26.3 2.8,28.9C2.7,31.5 3.3,32.6 4.1,35C4.9,37.5 6.7,41 7.5,43.5C8.3,46 8.7,49.1 8.9,50.3C9.2,54 16.7,53.5 16.4,49.7C16.5,48.3 16.5,44 16.8,41C17.2,37.9 18.2,34.2 18.5,31.5C18.8,28.8 19.1,26.8 18.7,24.6C18.3,22.5 16.5,19.6 16.1,18.6C15.7,13 4.5,13.8 4.9,19.4Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M4.9,19.4C4.6,21 2.9,26.3 2.8,28.9C2.7,31.5 3.3,32.6 4.1,35C4.9,37.5 6.7,41 7.5,43.5C8.3,46 8.7,49.1 8.9,50.3C9.2,54 16.7,53.5 16.4,49.7C16.5,48.3 16.5,44 16.8,41C17.2,37.9 18.2,34.2 18.5,31.5C18.8,28.8 19.1,26.8 18.7,24.6C18.3,22.5 16.5,19.6 16.1,18.6C15.7,13 4.5,13.8 4.9,19.4Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M4.9,19.4C4.6,21 2.9,26.3 2.8,28.9C2.7,31.5 3.3,32.6 4.1,35C4.9,37.5 6.7,41 7.5,43.5C8.3,46 8.7,49.1 8.9,50.3C9.2,54 16.7,53.5 16.4,49.7C16.5,48.3 16.5,44 16.8,41C17.2,37.9 18.2,34.2 18.5,31.5C18.8,28.8 19.1,26.8 18.7,24.6C18.3,22.5 16.5,19.6 16.1,18.6C15.7,13 4.5,13.8 4.9,19.4Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M4.4,28.8C4.6,29.8 4.9,32.5 5.7,34.9C6.4,37.4 8.5,42 9,43.4" fill="none" stroke="#eaf4ff" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M18.3,24.7C18.2,25.8 18.4,28.8 18.1,31.5C17.8,34.3 16.7,39.4 16.4,41" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<ellipse cx="8" cy="-12.6" rx="7.6" ry="3.2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)" opacity="0.85"/>
+<ellipse cx="9.6" cy="7.7" rx="6.4" ry="2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)" opacity="0.7"/>
+<ellipse cx="10.9" cy="26.6" rx="5.4" ry="1.8" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)" opacity="0.75"/>
+<g transform="translate(10.4,19) rotate(-4.1)">
+<path d="M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M1.5,-14C1.6,-12.7 1.8,-8.9 2,-6.4C2.2,-3.9 2.6,-0.7 2.9,1.2C3.2,3.1 3.5,4.3 3.6,4.9C4,11.6 17.3,10.8 16.9,4.1C17,3.1 17.7,0.5 17.8,-1.7C17.9,-3.9 17.9,-7.1 17.7,-9.3C17.6,-11.5 16.9,-14 16.8,-15C16.3,-22.6 1,-21.6 1.5,-14Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M1.5,-14C1.6,-12.7 1.8,-8.9 2,-6.4C2.2,-3.9 2.6,-0.7 2.9,1.2C3.2,3.1 3.5,4.3 3.6,4.9C4,11.6 17.3,10.8 16.9,4.1C17,3.1 17.7,0.5 17.8,-1.7C17.9,-3.9 17.9,-7.1 17.7,-9.3C17.6,-11.5 16.9,-14 16.8,-15C16.3,-22.6 1,-21.6 1.5,-14Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M1.5,-14C1.6,-12.7 1.8,-8.9 2,-6.4C2.2,-3.9 2.6,-0.7 2.9,1.2C3.2,3.1 3.5,4.3 3.6,4.9C4,11.6 17.3,10.8 16.9,4.1C17,3.1 17.7,0.5 17.8,-1.7C17.9,-3.9 17.9,-7.1 17.7,-9.3C17.6,-11.5 16.9,-14 16.8,-15C16.3,-22.6 1,-21.6 1.5,-14Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M3.6,-6.5C3.7,-5.3 4.3,-0.2 4.5,1.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="1.4" stroke-linecap="round"/>
+<path d="M17.3,-9.3C17.4,-8 17.4,-2.9 17.4,-1.7" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(9.7,8.4) rotate(-3.6)">
+<path d="M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z" fill="#14181d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M0.9,-1.7 L3.9,-1.7 L3.9,1.7 L0.9,1.7 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.4" stroke-linejoin="round"/>
+</g>
+<path d="M8.1,-13.7C8.3,-10.8 9.1,0.9 9.2,3.8C9.5,7.2 16.2,6.8 16,3.4C16.1,1.6 17,-4.3 16.8,-7.2C16.7,-10.1 15.4,-13 15.1,-14.1C14.9,-17.6 7.9,-17.2 8.1,-13.7Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M12.6,-12.8C12.5,-11.5 12.5,-7.9 12.3,-5.2C12.1,-2.4 11.6,2 11.4,3.5" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.8,-12.8C11.7,-11.5 11.7,-7.8 11.5,-5.1C11.3,-2.4 10.8,2.1 10.6,3.5" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10.9,-12.7C10.8,-11.4 10.8,-7.8 10.6,-5C10.4,-2.3 9.9,2.2 9.7,3.6" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7,5.5C6.4,6.4 4.1,9.1 3.5,10.7C2.9,12.3 3.1,13.9 3.6,15.1C4.1,16.4 6,17.6 6.5,18.1C6.7,20.3 11.1,20 10.9,17.8C10.8,15.7 10.4,7.4 10.3,5.3C10.2,3.6 6.9,3.8 7,5.5Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M4,10.7C4,11.4 4,14.4 4,15.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.6" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M5.6,25.6C5.4,26.4 4.4,28.7 4.5,30.2C4.6,31.7 5.7,33.3 6.2,34.7C6.7,36.1 7.4,37.9 7.6,38.5C7.9,42.8 16.5,42.2 16.2,37.9C16.3,37.2 16.7,35.5 16.9,33.9C17.1,32.4 17.7,30.2 17.6,28.6C17.5,27.1 16.5,25.4 16.3,24.8C16,19.4 5.2,20.2 5.6,25.6Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M5.6,25.6C5.4,26.4 4.4,28.7 4.5,30.2C4.6,31.7 5.7,33.3 6.2,34.7C6.7,36.1 7.4,37.9 7.6,38.5C7.9,42.8 16.5,42.2 16.2,37.9C16.3,37.2 16.7,35.5 16.9,33.9C17.1,32.4 17.7,30.2 17.6,28.6C17.5,27.1 16.5,25.4 16.3,24.8C16,19.4 5.2,20.2 5.6,25.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M5.6,25.6C5.4,26.4 4.4,28.7 4.5,30.2C4.6,31.7 5.7,33.3 6.2,34.7C6.7,36.1 7.4,37.9 7.6,38.5C7.9,42.8 16.5,42.2 16.2,37.9C16.3,37.2 16.7,35.5 16.9,33.9C17.1,32.4 17.7,30.2 17.6,28.6C17.5,27.1 16.5,25.4 16.3,24.8C16,19.4 5.2,20.2 5.6,25.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M6,30.1C6.3,30.9 7.4,33.8 7.7,34.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M17.2,28.7C17.1,29.6 16.6,33.1 16.5,34" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M13.1,26.1C13,26.9 12.7,29.2 12.7,31C12.6,32.8 12.7,35.9 12.7,36.8" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.3,26.1C12.2,27 11.9,29.2 11.9,31C11.8,32.8 11.9,35.9 11.9,36.9" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.4,26.2C11.3,27 11,29.3 11,31.1C10.9,32.9 11,36 11,37" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.1,28.3L11.5,35.1" fill="none" stroke="#060d20" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.1,28.3L11.5,35.1" fill="none" stroke="#162c6f" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.9,37.9C7.1,39.1 7.9,42.9 8.1,45.1C8.3,47.2 8.2,50 8.2,50.9C8.5,55.5 17.6,54.8 17.3,50.3C17.2,49.3 16.6,46.6 16.6,44.5C16.5,42.3 16.8,38.4 16.8,37.2C16.4,32.3 6.5,33 6.9,37.9Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M6.9,37.9C7.1,39.1 7.9,42.9 8.1,45.1C8.3,47.2 8.2,50 8.2,50.9C8.5,55.5 17.6,54.8 17.3,50.3C17.2,49.3 16.6,46.6 16.6,44.5C16.5,42.3 16.8,38.4 16.8,37.2C16.4,32.3 6.5,33 6.9,37.9Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M6.9,37.9C7.1,39.1 7.9,42.9 8.1,45.1C8.3,47.2 8.2,50 8.2,50.9C8.5,55.5 17.6,54.8 17.3,50.3C17.2,49.3 16.6,46.6 16.6,44.5C16.5,42.3 16.8,38.4 16.8,37.2C16.4,32.3 6.5,33 6.9,37.9Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<g transform="translate(12,41.3) rotate(-4.1)">
+<path d="M-3.8,0 L3.8,0 M-3.7,2.8 L3.7,2.8" fill="none" stroke="#05070a" stroke-width="0.9" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(10.6,22.1) rotate(-4.1)">
+<path d="M-5.4,0.2 L-6.2,0.4 M5.4,0.2 L6.2,0.4" fill="none" stroke="#14181d" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-5.6 C3.6,-5.6 5.4,-3.4 5.4,-0.4 C5.4,2.8 3.2,5 0,5.6 C-3.2,5 -5.4,2.8 -5.4,-0.4 C-5.4,-3.4 -3.6,-5.6 0,-5.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M0,-3.8 C2.4,-3.8 3.6,-2.2 3.6,-0.2 C3.6,2 2,3.4 0,3.8 C-2,3.4 -3.6,2 -3.6,-0.2 C-3.6,-2.2 -2.4,-3.8 0,-3.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-2.6,-2.6 C-1.4,-3.4 0,-3.5 0.8,-3.4" fill="none" stroke="#eaf4ff" stroke-width="0.6" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(12.6,50) rotate(-4.1)">
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C7.4,3 7.6,6.6 6.8,8 L-4.4,8 C-5.2,6.6 -5,3 -4.7,2 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-4.7,6.4 L7.1,6.4 L6.8,8 L-4.4,8 Z" fill="#07090d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C7.4,3 7.6,6.6 6.8,8 L-4.4,8 C-5.2,6.6 -5,3 -4.7,2 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-3,2.2 C-0.8,0.8 3.2,0.8 5.4,2.2 L6.2,5.6 L-3.8,5.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-1.8,2.6 C0.2,1.8 2.2,1.8 3.6,2.4" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-17.6,-18.8C-17.8,-17.5 -18.8,-13.7 -19.1,-11C-19.4,-8.4 -19.5,-6 -19.2,-2.8C-19,0.4 -18.1,4.7 -17.6,8.1C-17.1,11.4 -16.5,15.6 -16.2,17.1C-16.6,22.6 -5.6,23.3 -5.2,17.8C-5,17.3 -4.6,16.3 -4.2,15C-3.8,13.7 -3.1,12.6 -2.7,10.1C-2.3,7.6 -2.2,3.5 -1.8,0.1C-1.5,-3.4 -0.6,-7.6 -0.4,-10.6C-0.1,-13.6 -0.3,-16.6 -0.3,-17.8C0.2,-26.4 -17,-27.5 -17.6,-18.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-17.6,-18.8C-17.8,-17.5 -18.8,-13.7 -19.1,-11C-19.4,-8.4 -19.5,-6 -19.2,-2.8C-19,0.4 -18.1,4.7 -17.6,8.1C-17.1,11.4 -16.5,15.6 -16.2,17.1C-16.6,22.6 -5.6,23.3 -5.2,17.8C-5,17.3 -4.6,16.3 -4.2,15C-3.8,13.7 -3.1,12.6 -2.7,10.1C-2.3,7.6 -2.2,3.5 -1.8,0.1C-1.5,-3.4 -0.6,-7.6 -0.4,-10.6C-0.1,-13.6 -0.3,-16.6 -0.3,-17.8C0.2,-26.4 -17,-27.5 -17.6,-18.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-17.6,-18.8C-17.8,-17.5 -18.8,-13.7 -19.1,-11C-19.4,-8.4 -19.5,-6 -19.2,-2.8C-19,0.4 -18.1,4.7 -17.6,8.1C-17.1,11.4 -16.5,15.6 -16.2,17.1C-16.6,22.6 -5.6,23.3 -5.2,17.8C-5,17.3 -4.6,16.3 -4.2,15C-3.8,13.7 -3.1,12.6 -2.7,10.1C-2.3,7.6 -2.2,3.5 -1.8,0.1C-1.5,-3.4 -0.6,-7.6 -0.4,-10.6C-0.1,-13.6 -0.3,-16.6 -0.3,-17.8C0.2,-26.4 -17,-27.5 -17.6,-18.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-17.5,-10.9C-17.5,-9.6 -17.9,-5.9 -17.6,-2.7C-17.4,0.5 -16.2,6.3 -16,8.2" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M-0.8,-10.6C-1,-8.8 -1.9,-3.4 -2.2,0.1C-2.6,3.5 -2.7,7.6 -3.1,10C-3.5,12.5 -4.4,14.1 -4.6,15" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-6.7,-7.6 q-2,4 -1,9" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-16.3,19.8C-16.7,20.4 -18.4,21.9 -18.7,23.1C-19,24.3 -18.7,25.5 -18.3,27C-17.9,28.6 -16.8,30.7 -16.3,32.4C-15.9,34.1 -15.7,36.5 -15.6,37.3C-15.9,41.1 -8.3,41.7 -8,37.9C-7.8,37.2 -7.5,35.5 -6.8,34.1C-6.1,32.7 -4.4,30.8 -3.7,29.4C-3,28.1 -2.4,27.5 -2.6,26C-2.8,24.6 -4.6,21.5 -5,20.6C-4.6,15 -15.9,14.2 -16.3,19.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.3,19.8C-16.7,20.4 -18.4,21.9 -18.7,23.1C-19,24.3 -18.7,25.5 -18.3,27C-17.9,28.6 -16.8,30.7 -16.3,32.4C-15.9,34.1 -15.7,36.5 -15.6,37.3C-15.9,41.1 -8.3,41.7 -8,37.9C-7.8,37.2 -7.5,35.5 -6.8,34.1C-6.1,32.7 -4.4,30.8 -3.7,29.4C-3,28.1 -2.4,27.5 -2.6,26C-2.8,24.6 -4.6,21.5 -5,20.6C-4.6,15 -15.9,14.2 -16.3,19.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-16.3,19.8C-16.7,20.4 -18.4,21.9 -18.7,23.1C-19,24.3 -18.7,25.5 -18.3,27C-17.9,28.6 -16.8,30.7 -16.3,32.4C-15.9,34.1 -15.7,36.5 -15.6,37.3C-15.9,41.1 -8.3,41.7 -8,37.9C-7.8,37.2 -7.5,35.5 -6.8,34.1C-6.1,32.7 -4.4,30.8 -3.7,29.4C-3,28.1 -2.4,27.5 -2.6,26C-2.8,24.6 -4.6,21.5 -5,20.6C-4.6,15 -15.9,14.2 -16.3,19.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-17.1,23.3C-17.1,23.9 -17.1,25.6 -16.7,27.1C-16.4,28.7 -15.1,31.6 -14.7,32.5" fill="none" stroke="#eaf4ff" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M-3,26C-3.2,26.6 -3.4,28.1 -4.1,29.4C-4.8,30.8 -6.7,33.3 -7.2,34.1" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(-10.5,20.2) rotate(4.1)">
+<path d="M0,-5.6 C3.8,-5.6 5.8,-3.4 5.8,-0.2 C5.8,3 3.4,5.4 0,5.8 C-3.4,5.4 -5.8,3 -5.8,-0.2 C-5.8,-3.4 -3.8,-5.6 0,-5.6 Z" fill="#2a2421" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-10.5,20.2) rotate(4.1)">
+<path d="M-4,-2.4 C-1.6,-3.8 1.6,-3.8 4,-2.4" fill="none" stroke="#5a504a" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-10.5,20.2) rotate(4.1)">
+<path d="M-3.6,-3 L-3.6,3.4" fill="none" stroke="#120f0d" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-10.5,20.2) rotate(4.1)">
+<path d="M3.6,-3 L3.6,3.4" fill="none" stroke="#120f0d" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-20,37 C-16.6,36 -10.6,36 -7.2,37 L-6.6,52 L-20.6,52 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-20,37 C-16.6,36 -10.6,36 -7.2,37 L-6.6,52 L-20.6,52 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-19,38.4 L-19.4,50" fill="none" stroke="#b8c0c8" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-20.2,39.9 L-7,39.9 L-6.8,42.1 L-20.4,42.1 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<rect x="-17.5" y="39.5" width="2.6" height="3" rx="0.4" fill="none" stroke="#f0cf7a" stroke-width="0.55"/>
+<path d="M-16.2,39.9 L-16.2,42.1" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-20.5,45.7 L-6.7,45.7 L-6.5,47.9 L-20.7,47.9 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<rect x="-17.5" y="45.3" width="2.6" height="3" rx="0.4" fill="none" stroke="#f0cf7a" stroke-width="0.55"/>
+<path d="M-16.2,45.7 L-16.2,47.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-20.6,51 L-6.6,51 C-4.2,52 -3.6,55 -3.8,57 L-23.4,57 C-23.6,55 -23,52 -20.6,51 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-18.6,51.6 C-15.6,50.6 -11.6,50.6 -8.6,51.6 C-7.4,53.4 -7.4,55.4 -8.2,56.8 L-19,56.8 C-19.8,55.4 -19.8,53.4 -18.6,51.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-17.6,52 C-15.2,51.2 -12.6,51.2 -11,51.5" fill="none" stroke="#fff1c2" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-17.2" cy="55" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-10" cy="55" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-23.8,56.8 L-3.4,56.8 L-3.8,59.6 L-23.4,59.6 Z" fill="#16120f" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M-21.6,58.2 L-5.6,58.2" fill="none" stroke="#3a3029" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0.3,-17.8C0.3,-16.6 0.1,-13.6 0.4,-10.6C0.6,-7.6 1.5,-3.4 1.8,0.1C2.2,3.5 2.3,7.6 2.7,10.1C3.1,12.6 3.8,13.7 4.2,15C4.6,16.3 5,17.3 5.2,17.8C5.6,23.3 16.6,22.6 16.2,17.1C16.5,15.6 17.1,11.4 17.6,8.1C18.1,4.7 19,0.4 19.2,-2.8C19.5,-6 19.4,-8.4 19.1,-11C18.8,-13.7 17.8,-17.5 17.6,-18.8C17,-27.5 -0.2,-26.4 0.3,-17.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M0.3,-17.8C0.3,-16.6 0.1,-13.6 0.4,-10.6C0.6,-7.6 1.5,-3.4 1.8,0.1C2.2,3.5 2.3,7.6 2.7,10.1C3.1,12.6 3.8,13.7 4.2,15C4.6,16.3 5,17.3 5.2,17.8C5.6,23.3 16.6,22.6 16.2,17.1C16.5,15.6 17.1,11.4 17.6,8.1C18.1,4.7 19,0.4 19.2,-2.8C19.5,-6 19.4,-8.4 19.1,-11C18.8,-13.7 17.8,-17.5 17.6,-18.8C17,-27.5 -0.2,-26.4 0.3,-17.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M0.3,-17.8C0.3,-16.6 0.1,-13.6 0.4,-10.6C0.6,-7.6 1.5,-3.4 1.8,0.1C2.2,3.5 2.3,7.6 2.7,10.1C3.1,12.6 3.8,13.7 4.2,15C4.6,16.3 5,17.3 5.2,17.8C5.6,23.3 16.6,22.6 16.2,17.1C16.5,15.6 17.1,11.4 17.6,8.1C18.1,4.7 19,0.4 19.2,-2.8C19.5,-6 19.4,-8.4 19.1,-11C18.8,-13.7 17.8,-17.5 17.6,-18.8C17,-27.5 -0.2,-26.4 0.3,-17.8Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M2,-10.7C2.2,-8.9 3.1,-3.5 3.4,0C3.8,3.4 4.1,8.3 4.3,10" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M18.7,-11C18.7,-9.7 19.1,-6 18.8,-2.8C18.6,0.4 17.4,6.3 17.2,8.1" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M6.7,-7.6 q2,4 1,9" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5,20.6C4.6,21.5 2.8,24.6 2.6,26C2.4,27.5 3,28.1 3.7,29.4C4.4,30.8 6.1,32.7 6.8,34.1C7.5,35.5 7.8,37.2 8,37.9C8.3,41.7 15.9,41.1 15.6,37.3C15.7,36.5 15.9,34.1 16.3,32.4C16.8,30.7 17.9,28.6 18.3,27C18.7,25.5 19,24.3 18.7,23.1C18.4,21.9 16.7,20.4 16.3,19.8C15.9,14.2 4.6,15 5,20.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M5,20.6C4.6,21.5 2.8,24.6 2.6,26C2.4,27.5 3,28.1 3.7,29.4C4.4,30.8 6.1,32.7 6.8,34.1C7.5,35.5 7.8,37.2 8,37.9C8.3,41.7 15.9,41.1 15.6,37.3C15.7,36.5 15.9,34.1 16.3,32.4C16.8,30.7 17.9,28.6 18.3,27C18.7,25.5 19,24.3 18.7,23.1C18.4,21.9 16.7,20.4 16.3,19.8C15.9,14.2 4.6,15 5,20.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M5,20.6C4.6,21.5 2.8,24.6 2.6,26C2.4,27.5 3,28.1 3.7,29.4C4.4,30.8 6.1,32.7 6.8,34.1C7.5,35.5 7.8,37.2 8,37.9C8.3,41.7 15.9,41.1 15.6,37.3C15.7,36.5 15.9,34.1 16.3,32.4C16.8,30.7 17.9,28.6 18.3,27C18.7,25.5 19,24.3 18.7,23.1C18.4,21.9 16.7,20.4 16.3,19.8C15.9,14.2 4.6,15 5,20.6Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M4.2,25.9C4.4,26.5 4.6,28 5.3,29.3C6,30.7 7.9,33.2 8.4,34" fill="none" stroke="#eaf4ff" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M18.3,23.2C18.2,23.8 18.3,25.5 17.9,27C17.5,28.6 16.3,31.5 15.9,32.4" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(10.5,20.2) rotate(-4.1)">
+<path d="M0,-5.6 C3.8,-5.6 5.8,-3.4 5.8,-0.2 C5.8,3 3.4,5.4 0,5.8 C-3.4,5.4 -5.8,3 -5.8,-0.2 C-5.8,-3.4 -3.8,-5.6 0,-5.6 Z" fill="#2a2421" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+</g>
+<g transform="translate(10.5,20.2) rotate(-4.1)">
+<path d="M-4,-2.4 C-1.6,-3.8 1.6,-3.8 4,-2.4" fill="none" stroke="#5a504a" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(10.5,20.2) rotate(-4.1)">
+<path d="M-3.6,-3 L-3.6,3.4" fill="none" stroke="#120f0d" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(10.5,20.2) rotate(-4.1)">
+<path d="M3.6,-3 L3.6,3.4" fill="none" stroke="#120f0d" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M7.2,37 C10.6,36 16.6,36 20,37 L20.6,52 L6.6,52 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M7.2,37 C10.6,36 16.6,36 20,37 L20.6,52 L6.6,52 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M8.2,38.4 L7.8,50" fill="none" stroke="#b8c0c8" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7,39.9 L20.2,39.9 L20.4,42.1 L6.8,42.1 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<rect x="14.9" y="39.5" width="2.6" height="3" rx="0.4" fill="none" stroke="#f0cf7a" stroke-width="0.55"/>
+<path d="M16.2,39.9 L16.2,42.1" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.7,45.7 L20.5,45.7 L20.7,47.9 L6.5,47.9 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<rect x="14.9" y="45.3" width="2.6" height="3" rx="0.4" fill="none" stroke="#f0cf7a" stroke-width="0.55"/>
+<path d="M16.2,45.7 L16.2,47.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.6,51 L20.6,51 C23,52 23.6,55 23.4,57 L3.8,57 C3.6,55 4.2,52 6.6,51 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M8.6,51.6 C11.6,50.6 15.6,50.6 18.6,51.6 C19.8,53.4 19.8,55.4 19,56.8 L8.2,56.8 C7.4,55.4 7.4,53.4 8.6,51.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M9.6,52 C12,51.2 14.6,51.2 16.2,51.5" fill="none" stroke="#fff1c2" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="10" cy="55" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="17.2" cy="55" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M3.4,56.8 L23.8,56.8 L23.4,59.6 L3.8,59.6 Z" fill="#16120f" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M5.6,58.2 L21.6,58.2" fill="none" stroke="#3a3029" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-10.7,-68 L10.7,-68 L19.1,-64 C22.6,-62 23,-57 21.1,-52 C18.9,-46 14.9,-40 13.3,-33 C13.1,-29 13.5,-24 14.3,-20 L14.5,-15 C9.7,-14 4.8,-13 0,-12 C-4.8,-13 -9.7,-14 -14.5,-15 L-14.1,-20 C-13.5,-24 -13.1,-29 -13.3,-33 C-14.9,-40 -18.9,-46 -21.1,-52 C-23,-57 -22.6,-62 -19.1,-64 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-10.7,-68 L10.7,-68 L19.1,-64 C22.6,-62 23,-57 21.1,-52 C18.9,-46 14.9,-40 13.3,-33 C13.1,-29 13.5,-24 14.3,-20 L14.5,-15 C9.7,-14 4.8,-13 0,-12 C-4.8,-13 -9.7,-14 -14.5,-15 L-14.1,-20 C-13.5,-24 -13.1,-29 -13.3,-33 C-14.9,-40 -18.9,-46 -21.1,-52 C-23,-57 -22.6,-62 -19.1,-64 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)"/>
+<path d="M-10.8,-31.4 C-5.4,-30.6 5.4,-30.6 10.8,-31.4 L10.7,-27.6 C5.5,-26.8 -5.5,-26.8 -10.7,-27.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-10.8,-31.4 C-5.4,-30.6 5.4,-30.6 10.8,-31.4 L10.7,-27.6 C5.5,-26.8 -5.5,-26.8 -10.7,-27.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-9.7,-30.5 C-5.4,-29.9 -1,-29.8 -0.6,-29.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-30.6 L0,-27" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10.7,-30.8 L10.6,-28" fill="none" stroke="#3aa4ff" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-10.3,-35.4 C-5.1,-34.6 5.2,-34.6 10.3,-35.4 L10.1,-31.6 C5.2,-30.8 -5.1,-30.8 -10.1,-31.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-10.3,-35.4 C-5.1,-34.6 5.2,-34.6 10.3,-35.4 L10.1,-31.6 C5.2,-30.8 -5.1,-30.8 -10.1,-31.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-9.2,-34.5 C-5.1,-33.9 -0.9,-33.8 -0.6,-33.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-34.6 L0,-31" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10.1,-34.8 L10,-32" fill="none" stroke="#3aa4ff" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-10.3,-39.4 C-5.1,-38.6 5.1,-38.6 10.3,-39.4 L9.5,-35.6 C4.9,-34.8 -4.9,-34.8 -9.5,-35.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-10.3,-39.4 C-5.1,-38.6 5.1,-38.6 10.3,-39.4 L9.5,-35.6 C4.9,-34.8 -4.9,-34.8 -9.5,-35.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-9,-38.5 C-5,-37.9 -1,-37.8 -0.6,-37.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-38.6 L0,-35" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10,-38.8 L9.4,-36" fill="none" stroke="#3aa4ff" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-18,-65 C-9.6,-66.8 9.6,-66.8 18,-65 C21.9,-60 21.7,-53.6 19.2,-48.4 C16.8,-43.8 13.1,-40.8 10.1,-39.4 C5.9,-38.6 2.9,-37.7 0,-36.6 C-2.9,-37.7 -5.9,-38.6 -10.1,-39.4 C-13.1,-40.8 -16.8,-43.8 -19.2,-48.4 C-21.7,-53.6 -21.9,-60 -18,-65 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-18,-65 C-9.6,-66.8 9.6,-66.8 18,-65 C21.9,-60 21.7,-53.6 19.2,-48.4 C16.8,-43.8 13.1,-40.8 10.1,-39.4 C5.9,-38.6 2.9,-37.7 0,-36.6 C-2.9,-37.7 -5.9,-38.6 -10.1,-39.4 C-13.1,-40.8 -16.8,-43.8 -19.2,-48.4 C-21.7,-53.6 -21.9,-60 -18,-65 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-17.5,-48.6 C-11.5,-43.4 -5.2,-43.6 -0.9,-46.6 M17.5,-48.6 C11.5,-43.4 5.2,-43.6 0.9,-46.6" fill="none" stroke="#000000" stroke-width="3" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-1.2,-63.8 C-6.5,-65 -14.4,-64.6 -18.8,-60.8 C-21,-56.8 -20,-51.8 -17.5,-48.8 C-12.3,-44.4 -5.5,-44.6 -1.1,-47.6 C-0.7,-52.8 -0.7,-58.6 -1.2,-63.8 Z" fill="none" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M-1.2,-63.8 C-6.5,-65 -14.4,-64.6 -18.8,-60.8 C-21,-56.8 -20,-51.8 -17.5,-48.8 C-12.3,-44.4 -5.5,-44.6 -1.1,-47.6 C-0.7,-52.8 -0.7,-58.6 -1.2,-63.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-pecShade)"/>
+<path d="M-2.6,-62.6 C-7.2,-63.6 -13.9,-63.2 -17.3,-60" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-16.8,-50 C-12.3,-46.2 -6.1,-46.2 -2.2,-48.6" fill="none" stroke="#000000" stroke-width="0.9" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1.2,-63.8 C6.5,-65 14.4,-64.6 18.8,-60.8 C21,-56.8 20,-51.8 17.5,-48.8 C12.3,-44.4 5.5,-44.6 1.1,-47.6 C0.7,-52.8 0.7,-58.6 1.2,-63.8 Z" fill="none" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M1.2,-63.8 C6.5,-65 14.4,-64.6 18.8,-60.8 C21,-56.8 20,-51.8 17.5,-48.8 C12.3,-44.4 5.5,-44.6 1.1,-47.6 C0.7,-52.8 0.7,-58.6 1.2,-63.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-pecShade)"/>
+<path d="M2.6,-62.6 C7.2,-63.6 13.9,-63.2 17.3,-60" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M16.8,-50 C12.3,-46.2 6.1,-46.2 2.2,-48.6" fill="none" stroke="#000000" stroke-width="0.9" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-8" cy="-56" rx="7" ry="5" fill="url(#diver-0-porthole-diving-lantern-masc-idle-sheen)" opacity="0.55"/>
+<path d="M0,-65.6 L0,-37.2" fill="none" stroke="#04060b" stroke-width="0.55" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-0.7,-65.2 L-0.6,-38" fill="none" stroke="#b8cadb" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.7,-50 C-11.7,-44.6 -5.3,-44.8 -0.7,-47.6" fill="none" stroke="#04060b" stroke-width="0.55" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.7,-50 C11.7,-44.6 5.3,-44.8 0.7,-47.6" fill="none" stroke="#04060b" stroke-width="0.55" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-16.2,-49 C-11.4,-45.6 -6.4,-45.6 -2.2,-47.2" fill="none" stroke="#dfe9f4" stroke-width="0.4" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-15.9,-60.8 C-11.9,-62.8 -7.2,-63.2 -2.9,-62.4" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.8,-58.4 C20.1,-54 18.6,-50 16.2,-46.2" fill="none" stroke="#3aa4ff" stroke-width="0.75" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="-54" r="3.4" fill="#070c12" stroke="#6f8aa3" stroke-width="0.6"/>
+<circle cx="0" cy="-54" r="3.4" fill="none" stroke="#04060b" stroke-width="0.3"/>
+<circle cx="0" cy="-54" r="1.9" fill="#162c6f"/>
+<path d="M-13.2,-27.9 C-5.8,-26.9 5.8,-26.9 13.2,-27.9 L14.1,-22.6 C5.8,-21.4 -5.8,-21.4 -14.1,-22.6 Z" fill="#131822" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-12.7,-26.9 C-5.8,-26 5.8,-26 12.7,-26.9" fill="none" stroke="#3a4656" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12.3,-27.4 L-7.7,-27 L-7.9,-21.4 L-12.4,-21.9 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M12.3,-27.4 L7.7,-27 L7.9,-21.4 L12.4,-21.9 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-12.1,-25.2 L-7.8,-24.9 M12.1,-25.2 L7.8,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.6"/>
+<rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#162c6f"/>
+<path d="M-4.4,-22 L4.4,-22 L3.5,-14 L0,-11.6 L-3.5,-14 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-4.6,-22.4 L-14,-23 C-15.2,-19 -15.6,-15 -15.3,-10.8 L-7.2,-9.2 C-5.9,-12.8 -5.1,-18 -4.6,-22.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-4.6,-22.4 L-14,-23 C-15.2,-19 -15.6,-15 -15.3,-10.8 L-7.2,-9.2 C-5.9,-12.8 -5.1,-18 -4.6,-22.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M4.6,-22.4 L14,-23 C15.2,-19 15.6,-15 15.3,-10.8 L7.2,-9.2 C5.9,-12.8 5.1,-18 4.6,-22.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-13.3,-21.4 C-10.6,-21.2 -7.7,-21 -5.4,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-13.9,-17 L-6,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.9,-17 L6,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.8,-20.6 C15.2,-17 15.4,-14 15.1,-11.4" fill="none" stroke="#3aa4ff" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-19.2,-64.8 C-21.2,-56 -19,-46 -15.1,-38 C-13.8,-34 -13.6,-30 -13.8,-27.4 L13.8,-27.4 C13.6,-30 13.8,-34 15.1,-38 C19,-46 21.2,-56 19.2,-64.8 C9.6,-66.6 -9.6,-66.6 -19.2,-64.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-19.2,-64.8 C-21.2,-56 -19,-46 -15.1,-38 C-13.8,-34 -13.6,-30 -13.8,-27.4 L13.8,-27.4 C13.6,-30 13.8,-34 15.1,-38 C19,-46 21.2,-56 19.2,-64.8 C9.6,-66.6 -9.6,-66.6 -19.2,-64.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-16.2,-46 C-12.6,-44 -10.2,-42 -8.7,-38 M16.2,-46 C12.6,-44 10.2,-42 8.7,-38" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-14.3,-31 L14.3,-31" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-14.3,-31 L14.3,-31" fill="none" stroke="#3a2d22" stroke-width="2.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.9,-34 L-8.7,-34 L-8.8,-28 L-12.1,-28 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-11.5,-33.2 L-9.2,-33.2" fill="none" stroke="#b8c0c8" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-7,-34 L-3.8,-34 L-3.8,-28 L-7.1,-28 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-6.5,-33.2 L-4.3,-33.2" fill="none" stroke="#b8c0c8" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4,-34 L7.2,-34 L7.3,-28 L4,-28 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M4.5,-33.2 L6.7,-33.2" fill="none" stroke="#b8c0c8" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.9,-34 L12.1,-34 L12.3,-28 L9,-28 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-lead)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M9.4,-33.2 L11.6,-33.2" fill="none" stroke="#b8c0c8" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-2.5,-33.4 L2.5,-33.4 L2.5,-28.6 L-2.5,-28.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-1.3,-32.4 L1.3,-32.4 L1.3,-29.6 L-1.3,-29.6 Z" fill="none" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-21.8,-71 C-25.5,-62 -22.4,-50 -17.9,-46 C-13.9,-43 -9.6,-45 -8.5,-50.4" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-21.8,-71 C-25.5,-62 -22.4,-50 -17.9,-46 C-13.9,-43 -9.6,-45 -8.5,-50.4" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-21.8,-71 C-25.5,-62 -22.4,-50 -17.9,-46 C-13.9,-43 -9.6,-45 -8.5,-50.4" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-21.8,-71 C-25.5,-62 -22.4,-50 -17.9,-46 C-13.9,-43 -9.6,-45 -8.5,-50.4" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M21.8,-71 C25.5,-62 22.4,-50 17.9,-46 C13.9,-43 9.6,-45 8.5,-50.4" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M21.8,-71 C25.5,-62 22.4,-50 17.9,-46 C13.9,-43 9.6,-45 8.5,-50.4" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M21.8,-71 C25.5,-62 22.4,-50 17.9,-46 C13.9,-43 9.6,-45 8.5,-50.4" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M21.8,-71 C25.5,-62 22.4,-50 17.9,-46 C13.9,-43 9.6,-45 8.5,-50.4" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M-18.7,-66.6 C-11.8,-71.4 11.8,-71.4 18.7,-66.6 C21,-62 20.6,-57.4 17.8,-53.4 C11.2,-50 5.1,-48.6 0,-48.4 C-5.1,-48.6 -11.2,-50 -17.8,-53.4 C-20.6,-57.4 -21,-62 -18.7,-66.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M-17.2,-64.8 C-10.7,-68.6 -3.6,-69.4 0,-69.4" fill="none" stroke="#fff1c2" stroke-width="0.8" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.8,-62 C20.1,-58.4 19.4,-56 17.4,-53.8" fill="none" stroke="#3aa4ff" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-16.2,-55.6 C-10.1,-52.6 -4.5,-51.4 0,-51.2 C4.5,-51.4 10.1,-52.6 16.2,-55.6" fill="none" stroke="#4f3311" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-8" cy="-62" rx="5" ry="2.6" fill="url(#diver-0-porthole-diving-lantern-masc-idle-sheen)" opacity="0.7"/>
+<circle cx="-14.6" cy="-63.6" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-15.2" cy="-59.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-14" cy="-55.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-10.2" cy="-52.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-5.2" cy="-50.6" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="0" cy="-50" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="5.2" cy="-50.6" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="10.2" cy="-52.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="14" cy="-55.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="15.2" cy="-59.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="14.6" cy="-63.6" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-11.4,-69 C-7.1,-71 7.1,-71 11.4,-69 L10.3,-66.2 C6,-67.6 -6,-67.6 -10.3,-66.2 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M-10.3,-68.6 C-4.8,-70.2 4.8,-70.2 10.3,-68.6" fill="none" stroke="#fff1c2" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-11" cy="-64.6" r="1.5" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.5"/>
+<path d="M-16.5,-65.4 L-9.8,-65.4 L-10,-63.8 L-16.3,-63.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<circle cx="11" cy="-64.6" r="1.5" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.5"/>
+<path d="M9.8,-65.4 L16.5,-65.4 L16.3,-63.8 L10,-63.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<circle cx="-7.4" cy="-51.4" r="2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.6"/>
+<circle cx="7.4" cy="-51.4" r="2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.6"/>
+<circle cx="0" cy="-58.4" r="3.4" fill="#0a0806" stroke="#04060b" stroke-width="0.7"/>
+<circle cx="0" cy="-58.4" r="3.4" fill="none" stroke="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke-width="0.9"/>
+<path d="M0,-58.4 L1.9,-60.2" fill="none" stroke="#e9c470" stroke-width="0.45" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<g data-acc="holster">
+<rect x="9" y="-21" width="4" height="18" rx="0.8" fill="#3a2a1c" stroke="#0a0d12" stroke-width="0.9"/>
+<rect x="9" y="-20" width="4" height="6" rx="1" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.8"/>
+<rect x="7.5" y="-15" width="7" height="16" rx="2" fill="#3a2a1c" stroke="#0a0d12" stroke-width="1"/>
+<path d="M8.3,-12.5 L13,-12.5" fill="none" stroke="#615549" stroke-width="0.6" stroke-linecap="round"/>
+<rect x="5.5" y="-5" width="11" height="2.4" rx="0.8" fill="#2e2216" stroke="#0a0d12" stroke-width="0.8"/>
+<circle cx="11" cy="-3.8" r="0.7" fill="#d9a441"/>
+</g>
+<g data-acc="bandolier">
+<g transform="translate(-15.5,-64) rotate(62.95)">
+<rect x="0" y="-2.5" width="52.77" height="5" rx="1" fill="#3a2a1c" stroke="#0a0d12" stroke-width="1"/>
+<path d="M1,1.4 L50.4,1.4" fill="none" stroke="#5a4632" stroke-width="0.5" stroke-linecap="round"/>
+<rect x="10.61" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="10.61" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+<rect x="15.89" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="15.89" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+<rect x="21.16" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="21.16" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+<rect x="26.44" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="26.44" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+<rect x="31.72" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="31.72" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+<rect x="37" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="37" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+<rect x="42.27" y="-3.4" width="2" height="4" rx="0.6" fill="#d9a441" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="42.27" y="-3.4" width="2" height="1.2" rx="0.4" fill="#8d6b2a"/>
+</g>
+</g>
+<g data-acc="shins">
+<g transform="translate(-10.2,19) rotate(4.07)">
+<path d="M-4.1,1 C-1.9,-0.6 1.9,-0.6 4.1,1 L3.5,22 C1.4,23.2 -1.4,23.2 -3.5,22 Z" fill="#183077" stroke="#0a0d12" stroke-width="1"/>
+<path d="M0,2 L0,20.6" fill="none" stroke="#0e1d47" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-2.7,2.6 L-2.4,19.6" fill="none" stroke="#5d6ea0" stroke-width="0.5" stroke-linecap="round"/>
+<circle cx="-2" cy="4.4" r="0.7" fill="#c0c8d0" stroke="#0a0d12" stroke-width="0.3"/>
+<circle cx="2" cy="18.6" r="0.7" fill="#c0c8d0" stroke="#0a0d12" stroke-width="0.3"/>
+</g>
+<g transform="translate(10.2,19) rotate(-4.05)">
+<path d="M-4.1,1 C-1.9,-0.6 1.9,-0.6 4.1,1 L3.5,22 C1.4,23.2 -1.4,23.2 -3.5,22 Z" fill="#183077" stroke="#0a0d12" stroke-width="1"/>
+<path d="M0,2 L0,20.6" fill="none" stroke="#0e1d47" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-2.7,2.6 L-2.4,19.6" fill="none" stroke="#5d6ea0" stroke-width="0.5" stroke-linecap="round"/>
+<circle cx="-2" cy="4.4" r="0.7" fill="#c0c8d0" stroke="#0a0d12" stroke-width="0.3"/>
+<circle cx="2" cy="18.6" r="0.7" fill="#c0c8d0" stroke="#0a0d12" stroke-width="0.3"/>
+</g>
+</g>
+<path d="M-30.1,-63.7C-30.3,-62.7 -31.3,-59.8 -31.6,-57.4C-31.8,-55 -31.9,-52.4 -31.8,-49.4C-31.7,-46.4 -31.3,-42.7 -31.1,-39.7C-30.9,-36.7 -30.7,-33 -30.7,-31.6C-31.2,-25.8 -19.5,-24.8 -19,-30.6C-18.8,-31.4 -18.3,-33.1 -17.8,-35.3C-17.2,-37.5 -16,-41.2 -15.7,-43.8C-15.3,-46.5 -15.7,-48.1 -15.7,-51.2C-15.6,-54.3 -15.4,-60.5 -15.4,-62.4C-14.7,-69.8 -29.5,-71.1 -30.1,-63.7ZM-30.8,-31.1C-31,-30.3 -32.1,-28.3 -32,-26.3C-32,-24.3 -31.2,-22.3 -30.7,-19.1C-30.1,-15.9 -29.1,-9.1 -28.8,-7.1C-28.8,-3.1 -20.7,-3.1 -20.7,-7.1C-20.5,-8.7 -19.9,-13.7 -19.5,-16.7C-19.1,-19.7 -18.2,-22.7 -18.1,-25.1C-18.1,-27.5 -18.8,-30.1 -18.9,-31.1C-18.9,-37 -30.8,-37 -30.8,-31.1Z" fill="#000" opacity="0.55" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(1.8,1.6)"/>
+<path d="M-30.1,-63.7C-30.3,-62.7 -31.3,-59.8 -31.6,-57.4C-31.8,-55 -31.9,-52.4 -31.8,-49.4C-31.7,-46.4 -31.3,-42.7 -31.1,-39.7C-30.9,-36.7 -30.7,-33 -30.7,-31.6C-31.2,-25.8 -19.5,-24.8 -19,-30.6C-18.8,-31.4 -18.3,-33.1 -17.8,-35.3C-17.2,-37.5 -16,-41.2 -15.7,-43.8C-15.3,-46.5 -15.7,-48.1 -15.7,-51.2C-15.6,-54.3 -15.4,-60.5 -15.4,-62.4C-14.7,-69.8 -29.5,-71.1 -30.1,-63.7ZM-30.8,-31.1C-31,-30.3 -32.1,-28.3 -32,-26.3C-32,-24.3 -31.2,-22.3 -30.7,-19.1C-30.1,-15.9 -29.1,-9.1 -28.8,-7.1C-28.8,-3.1 -20.7,-3.1 -20.7,-7.1C-20.5,-8.7 -19.9,-13.7 -19.5,-16.7C-19.1,-19.7 -18.2,-22.7 -18.1,-25.1C-18.1,-27.5 -18.8,-30.1 -18.9,-31.1C-18.9,-37 -30.8,-37 -30.8,-31.1Z" fill="none" stroke="#04060b" stroke-width="2.2" stroke-linejoin="round"/>
+<path d="M-30.1,-63.7C-30.3,-62.7 -31.3,-59.8 -31.6,-57.4C-31.8,-55 -31.9,-52.4 -31.8,-49.4C-31.7,-46.4 -31.3,-42.7 -31.1,-39.7C-30.9,-36.7 -30.7,-33 -30.7,-31.6C-31.2,-25.8 -19.5,-24.8 -19,-30.6C-18.8,-31.4 -18.3,-33.1 -17.8,-35.3C-17.2,-37.5 -16,-41.2 -15.7,-43.8C-15.3,-46.5 -15.7,-48.1 -15.7,-51.2C-15.6,-54.3 -15.4,-60.5 -15.4,-62.4C-14.7,-69.8 -29.5,-71.1 -30.1,-63.7ZM-30.8,-31.1C-31,-30.3 -32.1,-28.3 -32,-26.3C-32,-24.3 -31.2,-22.3 -30.7,-19.1C-30.1,-15.9 -29.1,-9.1 -28.8,-7.1C-28.8,-3.1 -20.7,-3.1 -20.7,-7.1C-20.5,-8.7 -19.9,-13.7 -19.5,-16.7C-19.1,-19.7 -18.2,-22.7 -18.1,-25.1C-18.1,-27.5 -18.8,-30.1 -18.9,-31.1C-18.9,-37 -30.8,-37 -30.8,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)"/>
+<path d="M-30.1,-63.7C-30.3,-62.7 -31.3,-59.8 -31.6,-57.4C-31.8,-55 -31.9,-52.4 -31.8,-49.4C-31.7,-46.4 -31.3,-42.7 -31.1,-39.7C-30.9,-36.7 -30.7,-33 -30.7,-31.6C-31.2,-25.8 -19.5,-24.8 -19,-30.6C-18.8,-31.4 -18.3,-33.1 -17.8,-35.3C-17.2,-37.5 -16,-41.2 -15.7,-43.8C-15.3,-46.5 -15.7,-48.1 -15.7,-51.2C-15.6,-54.3 -15.4,-60.5 -15.4,-62.4C-14.7,-69.8 -29.5,-71.1 -30.1,-63.7ZM-30.8,-31.1C-31,-30.3 -32.1,-28.3 -32,-26.3C-32,-24.3 -31.2,-22.3 -30.7,-19.1C-30.1,-15.9 -29.1,-9.1 -28.8,-7.1C-28.8,-3.1 -20.7,-3.1 -20.7,-7.1C-20.5,-8.7 -19.9,-13.7 -19.5,-16.7C-19.1,-19.7 -18.2,-22.7 -18.1,-25.1C-18.1,-27.5 -18.8,-30.1 -18.9,-31.1C-18.9,-37 -30.8,-37 -30.8,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-30.3,-58.7C-30.5,-57.8 -31.3,-55.1 -31.5,-53C-31.7,-50.9 -31.8,-49 -31.6,-46.1C-31.5,-43.2 -30.9,-37.3 -30.8,-35.6C-31.3,-29.4 -19,-28.4 -18.5,-34.5C-18.1,-35.8 -16.6,-40.3 -16.2,-42.4C-15.9,-44.5 -16.3,-44.5 -16.3,-47.1C-16.2,-49.6 -16.1,-55.7 -16,-57.5C-15.4,-64.6 -29.7,-65.8 -30.3,-58.7Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-30.3,-58.7C-30.5,-57.8 -31.3,-55.1 -31.5,-53C-31.7,-50.9 -31.8,-49 -31.6,-46.1C-31.5,-43.2 -30.9,-37.3 -30.8,-35.6C-31.3,-29.4 -19,-28.4 -18.5,-34.5C-18.1,-35.8 -16.6,-40.3 -16.2,-42.4C-15.9,-44.5 -16.3,-44.5 -16.3,-47.1C-16.2,-49.6 -16.1,-55.7 -16,-57.5C-15.4,-64.6 -29.7,-65.8 -30.3,-58.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-30.3,-58.7C-30.5,-57.8 -31.3,-55.1 -31.5,-53C-31.7,-50.9 -31.8,-49 -31.6,-46.1C-31.5,-43.2 -30.9,-37.3 -30.8,-35.6C-31.3,-29.4 -19,-28.4 -18.5,-34.5C-18.1,-35.8 -16.6,-40.3 -16.2,-42.4C-15.9,-44.5 -16.3,-44.5 -16.3,-47.1C-16.2,-49.6 -16.1,-55.7 -16,-57.5C-15.4,-64.6 -29.7,-65.8 -30.3,-58.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-29.9,-52.9C-29.9,-51.7 -30,-47.1 -30.1,-45.9" fill="none" stroke="#eaf4ff" stroke-opacity="0.6" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M-16.7,-47.1C-16.7,-46.3 -16.6,-43.2 -16.6,-42.4" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-24.4,-52.4C-24.4,-51 -24.3,-47 -24.5,-44.3C-24.7,-41.6 -25.2,-37.6 -25.4,-36.3" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-23.6,-52.3C-23.6,-51 -23.5,-46.9 -23.7,-44.2C-23.9,-41.5 -24.4,-37.5 -24.6,-36.2" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-22.7,-52.2C-22.7,-50.9 -22.6,-46.8 -22.8,-44.1C-23,-41.5 -23.5,-37.5 -23.7,-36.1" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-24.7,-48.5C-24.9,-46.3 -25.5,-37.4 -25.7,-35.1C-25.9,-33 -21.6,-32.6 -21.4,-34.8C-20.9,-35.3 -18.8,-36.7 -18.2,-37.9C-17.6,-39 -17.2,-40.1 -17.6,-41.8C-18,-43.6 -20.2,-47.1 -20.7,-48.2C-20.5,-50.2 -24.5,-50.6 -24.7,-48.5Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M-17.7,-46.2Q-23.4,-44.7 -28.9,-47.2" fill="none" stroke="#04060b" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-31.1,-28.7C-31.2,-28 -31.8,-26.5 -31.7,-24.7C-31.6,-22.9 -30.9,-20.1 -30.5,-17.8C-30.1,-15.4 -29.5,-11.7 -29.3,-10.5C-29.3,-5.9 -20.3,-5.9 -20.3,-10.5C-20,-12.7 -18.7,-20.6 -18.5,-23.6C-18.2,-26.6 -18.8,-27.9 -18.8,-28.7C-18.8,-34.9 -31.1,-34.9 -31.1,-28.7Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-31.1,-28.7C-31.2,-28 -31.8,-26.5 -31.7,-24.7C-31.6,-22.9 -30.9,-20.1 -30.5,-17.8C-30.1,-15.4 -29.5,-11.7 -29.3,-10.5C-29.3,-5.9 -20.3,-5.9 -20.3,-10.5C-20,-12.7 -18.7,-20.6 -18.5,-23.6C-18.2,-26.6 -18.8,-27.9 -18.8,-28.7C-18.8,-34.9 -31.1,-34.9 -31.1,-28.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-31.1,-28.7C-31.2,-28 -31.8,-26.5 -31.7,-24.7C-31.6,-22.9 -30.9,-20.1 -30.5,-17.8C-30.1,-15.4 -29.5,-11.7 -29.3,-10.5C-29.3,-5.9 -20.3,-5.9 -20.3,-10.5C-20,-12.7 -18.7,-20.6 -18.5,-23.6C-18.2,-26.6 -18.8,-27.9 -18.8,-28.7C-18.8,-34.9 -31.1,-34.9 -31.1,-28.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-30.1,-24.7C-29.9,-23.5 -29.1,-18.9 -28.9,-17.8" fill="none" stroke="#eaf4ff" stroke-opacity="0.5" stroke-width="1" stroke-linecap="round"/>
+<path d="M-24.6,-23.9L-24.6,-11.4" fill="none" stroke="#060d20" stroke-width="1.1" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(-24.6,-7.1) rotate(0)">
+<path d="M-4.6,-2.6 L4.6,-2.6 L4.9,0.6 L-4.9,0.6 Z" fill="#0a0f16" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-4.2,-1.9 L4.2,-1.9" fill="none" stroke="#6f8aa3" stroke-width="0.35" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-24.6,-16.2) rotate(0)">
+<rect x="-3.2" y="-2.7" width="6.4" height="5.4" rx="0.9" fill="#0a0f16" stroke="#04060b" stroke-width="0.5"/>
+<rect x="-2.2" y="-1.7" width="4.4" height="3.4" rx="0.4" fill="#162c6f"/>
+</g>
+<g transform="translate(-24.6,-7.1) rotate(0) scale(0.82 1.1) translate(0 -1)">
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-2.2,7.5 L-2.3,12.3 M0,7.3 L0,12.9 M2.2,7.5 L2.3,12.3" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4,7.8 C-1.4,7.2 1.4,7.2 4,7.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M3.6,1.8 C6,3.4 6.1,7.4 4.4,10.4 C3.6,11.3 2.2,11.1 2,10 C2.9,7.8 3.1,5.4 2.3,3.4 Z" fill="#23272c" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M4.6,3.6 C5.2,5.6 5,7.6 4.2,9.4" fill="none" stroke="#eaf4ff" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M15.4,-62.4C15.4,-60.5 15.6,-54.3 15.7,-51.2C15.7,-48.1 15.3,-46.5 15.7,-43.8C16,-41.2 17.2,-37.5 17.8,-35.3C18.3,-33.1 18.8,-31.4 19,-30.6C19.5,-24.8 31.2,-25.8 30.7,-31.6C30.7,-33 30.9,-36.7 31.1,-39.7C31.3,-42.7 31.7,-46.4 31.8,-49.4C31.9,-52.4 31.8,-55 31.6,-57.4C31.3,-59.8 30.3,-62.7 30.1,-63.7C29.5,-71.1 14.7,-69.8 15.4,-62.4ZM18.9,-31.1C18.8,-30.1 18.1,-27.5 18.1,-25.1C18.2,-22.7 19.1,-19.7 19.5,-16.7C19.9,-13.7 20.5,-8.7 20.7,-7.1C20.7,-3.1 28.8,-3.1 28.8,-7.1C29.1,-9.1 30.1,-15.9 30.7,-19.1C31.2,-22.3 32,-24.3 32,-26.3C32.1,-28.3 31,-30.3 30.8,-31.1C30.8,-37 18.9,-37 18.9,-31.1Z" fill="#000" opacity="0.55" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(-1.8,1.6)"/>
+<path d="M15.4,-62.4C15.4,-60.5 15.6,-54.3 15.7,-51.2C15.7,-48.1 15.3,-46.5 15.7,-43.8C16,-41.2 17.2,-37.5 17.8,-35.3C18.3,-33.1 18.8,-31.4 19,-30.6C19.5,-24.8 31.2,-25.8 30.7,-31.6C30.7,-33 30.9,-36.7 31.1,-39.7C31.3,-42.7 31.7,-46.4 31.8,-49.4C31.9,-52.4 31.8,-55 31.6,-57.4C31.3,-59.8 30.3,-62.7 30.1,-63.7C29.5,-71.1 14.7,-69.8 15.4,-62.4ZM18.9,-31.1C18.8,-30.1 18.1,-27.5 18.1,-25.1C18.2,-22.7 19.1,-19.7 19.5,-16.7C19.9,-13.7 20.5,-8.7 20.7,-7.1C20.7,-3.1 28.8,-3.1 28.8,-7.1C29.1,-9.1 30.1,-15.9 30.7,-19.1C31.2,-22.3 32,-24.3 32,-26.3C32.1,-28.3 31,-30.3 30.8,-31.1C30.8,-37 18.9,-37 18.9,-31.1Z" fill="none" stroke="#04060b" stroke-width="2.2" stroke-linejoin="round"/>
+<path d="M15.4,-62.4C15.4,-60.5 15.6,-54.3 15.7,-51.2C15.7,-48.1 15.3,-46.5 15.7,-43.8C16,-41.2 17.2,-37.5 17.8,-35.3C18.3,-33.1 18.8,-31.4 19,-30.6C19.5,-24.8 31.2,-25.8 30.7,-31.6C30.7,-33 30.9,-36.7 31.1,-39.7C31.3,-42.7 31.7,-46.4 31.8,-49.4C31.9,-52.4 31.8,-55 31.6,-57.4C31.3,-59.8 30.3,-62.7 30.1,-63.7C29.5,-71.1 14.7,-69.8 15.4,-62.4ZM18.9,-31.1C18.8,-30.1 18.1,-27.5 18.1,-25.1C18.2,-22.7 19.1,-19.7 19.5,-16.7C19.9,-13.7 20.5,-8.7 20.7,-7.1C20.7,-3.1 28.8,-3.1 28.8,-7.1C29.1,-9.1 30.1,-15.9 30.7,-19.1C31.2,-22.3 32,-24.3 32,-26.3C32.1,-28.3 31,-30.3 30.8,-31.1C30.8,-37 18.9,-37 18.9,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-suit)"/>
+<path d="M15.4,-62.4C15.4,-60.5 15.6,-54.3 15.7,-51.2C15.7,-48.1 15.3,-46.5 15.7,-43.8C16,-41.2 17.2,-37.5 17.8,-35.3C18.3,-33.1 18.8,-31.4 19,-30.6C19.5,-24.8 31.2,-25.8 30.7,-31.6C30.7,-33 30.9,-36.7 31.1,-39.7C31.3,-42.7 31.7,-46.4 31.8,-49.4C31.9,-52.4 31.8,-55 31.6,-57.4C31.3,-59.8 30.3,-62.7 30.1,-63.7C29.5,-71.1 14.7,-69.8 15.4,-62.4ZM18.9,-31.1C18.8,-30.1 18.1,-27.5 18.1,-25.1C18.2,-22.7 19.1,-19.7 19.5,-16.7C19.9,-13.7 20.5,-8.7 20.7,-7.1C20.7,-3.1 28.8,-3.1 28.8,-7.1C29.1,-9.1 30.1,-15.9 30.7,-19.1C31.2,-22.3 32,-24.3 32,-26.3C32.1,-28.3 31,-30.3 30.8,-31.1C30.8,-37 18.9,-37 18.9,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M16,-57.5C16.1,-55.7 16.2,-49.6 16.3,-47.1C16.3,-44.5 15.9,-44.5 16.2,-42.4C16.6,-40.3 18.1,-35.8 18.5,-34.5C19,-28.4 31.3,-29.4 30.8,-35.6C30.9,-37.3 31.5,-43.2 31.6,-46.1C31.8,-49 31.7,-50.9 31.5,-53C31.3,-55.1 30.5,-57.8 30.3,-58.7C29.7,-65.8 15.4,-64.6 16,-57.5Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M16,-57.5C16.1,-55.7 16.2,-49.6 16.3,-47.1C16.3,-44.5 15.9,-44.5 16.2,-42.4C16.6,-40.3 18.1,-35.8 18.5,-34.5C19,-28.4 31.3,-29.4 30.8,-35.6C30.9,-37.3 31.5,-43.2 31.6,-46.1C31.8,-49 31.7,-50.9 31.5,-53C31.3,-55.1 30.5,-57.8 30.3,-58.7C29.7,-65.8 15.4,-64.6 16,-57.5Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M16,-57.5C16.1,-55.7 16.2,-49.6 16.3,-47.1C16.3,-44.5 15.9,-44.5 16.2,-42.4C16.6,-40.3 18.1,-35.8 18.5,-34.5C19,-28.4 31.3,-29.4 30.8,-35.6C30.9,-37.3 31.5,-43.2 31.6,-46.1C31.8,-49 31.7,-50.9 31.5,-53C31.3,-55.1 30.5,-57.8 30.3,-58.7C29.7,-65.8 15.4,-64.6 16,-57.5Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M17.9,-47.2C17.9,-46.4 17.8,-43.3 17.8,-42.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.6" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M31.1,-53C31.1,-51.8 31.2,-47.2 31.3,-46" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M24.4,-52.4C24.4,-51 24.3,-47 24.5,-44.3C24.7,-41.6 25.2,-37.6 25.4,-36.3" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M23.6,-52.3C23.6,-51 23.5,-46.9 23.7,-44.2C23.9,-41.5 24.4,-37.5 24.6,-36.2" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22.7,-52.2C22.7,-50.9 22.6,-46.8 22.8,-44.1C23,-41.5 23.5,-37.5 23.7,-36.1" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M20.7,-48.2C20.2,-47.1 18,-43.6 17.6,-41.8C17.2,-40.1 17.6,-39 18.2,-37.9C18.8,-36.7 20.9,-35.3 21.4,-34.8C21.6,-32.6 25.9,-33 25.7,-35.1C25.5,-37.4 24.9,-46.3 24.7,-48.5C24.5,-50.6 20.5,-50.2 20.7,-48.2Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M18.2,-41.9C18.3,-41.2 18.7,-38.6 18.8,-37.9" fill="none" stroke="#eaf4ff" stroke-opacity="0.75" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M28.9,-47.2Q23.4,-44.7 17.7,-46.2" fill="none" stroke="#04060b" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M18.8,-28.7C18.8,-27.9 18.2,-26.6 18.5,-23.6C18.7,-20.6 20,-12.7 20.3,-10.5C20.3,-5.9 29.3,-5.9 29.3,-10.5C29.5,-11.7 30.1,-15.4 30.5,-17.8C30.9,-20.1 31.6,-22.9 31.7,-24.7C31.8,-26.5 31.2,-28 31.1,-28.7C31.1,-34.9 18.8,-34.9 18.8,-28.7Z" fill="#000" opacity="0.45" filter="url(#diver-0-porthole-diving-lantern-masc-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M18.8,-28.7C18.8,-27.9 18.2,-26.6 18.5,-23.6C18.7,-20.6 20,-12.7 20.3,-10.5C20.3,-5.9 29.3,-5.9 29.3,-10.5C29.5,-11.7 30.1,-15.4 30.5,-17.8C30.9,-20.1 31.6,-22.9 31.7,-24.7C31.8,-26.5 31.2,-28 31.1,-28.7C31.1,-34.9 18.8,-34.9 18.8,-28.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M18.8,-28.7C18.8,-27.9 18.2,-26.6 18.5,-23.6C18.7,-20.6 20,-12.7 20.3,-10.5C20.3,-5.9 29.3,-5.9 29.3,-10.5C29.5,-11.7 30.1,-15.4 30.5,-17.8C30.9,-20.1 31.6,-22.9 31.7,-24.7C31.8,-26.5 31.2,-28 31.1,-28.7C31.1,-34.9 18.8,-34.9 18.8,-28.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M31.3,-24.7C31.1,-23.5 30.3,-18.9 30.1,-17.8" fill="none" stroke="#3aa4ff" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M24.6,-23.9L24.6,-11.4" fill="none" stroke="#060d20" stroke-width="1.1" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(24.6,-7.1) rotate(0)">
+<path d="M-4.6,-2.6 L4.6,-2.6 L4.9,0.6 L-4.9,0.6 Z" fill="#0a0f16" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-4.2,-1.9 L4.2,-1.9" fill="none" stroke="#6f8aa3" stroke-width="0.35" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(24.6,-7.1) rotate(0) scale(0.82 1.1) translate(0 -1)">
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-2.2,7.5 L-2.3,12.3 M0,7.3 L0,12.9 M2.2,7.5 L2.3,12.3" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4,7.8 C-1.4,7.2 1.4,7.2 4,7.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-3.6,1.8 C-6,3.4 -6.1,7.4 -4.4,10.4 C-3.6,11.3 -2.2,11.1 -2,10 C-2.9,7.8 -3.1,5.4 -2.3,3.4 Z" fill="#23272c" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-4.6,3.6 C-5.2,5.6 -5,7.6 -4.2,9.4" fill="none" stroke="#eaf4ff" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-30,-63.7C-30.2,-62.6 -31.1,-59.8 -31.4,-57.4C-31.7,-55 -31.7,-52.3 -31.7,-49.4C-31.6,-46.4 -31.1,-42.7 -31,-39.7C-30.8,-36.7 -30.6,-33 -30.6,-31.6C-31.1,-26 -19.7,-25 -19.3,-30.6C-19.1,-31.4 -18.6,-33.2 -18.1,-35.4C-17.6,-37.6 -16.4,-41.2 -16.1,-43.8C-15.7,-46.5 -16.1,-48.1 -16.1,-51.2C-16,-54.3 -15.8,-60.6 -15.7,-62.4C-15.1,-69.6 -29.3,-70.8 -30,-63.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-30,-63.7C-30.2,-62.6 -31.1,-59.8 -31.4,-57.4C-31.7,-55 -31.7,-52.3 -31.7,-49.4C-31.6,-46.4 -31.1,-42.7 -31,-39.7C-30.8,-36.7 -30.6,-33 -30.6,-31.6C-31.1,-26 -19.7,-25 -19.3,-30.6C-19.1,-31.4 -18.6,-33.2 -18.1,-35.4C-17.6,-37.6 -16.4,-41.2 -16.1,-43.8C-15.7,-46.5 -16.1,-48.1 -16.1,-51.2C-16,-54.3 -15.8,-60.6 -15.7,-62.4C-15.1,-69.6 -29.3,-70.8 -30,-63.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-30,-63.7C-30.2,-62.6 -31.1,-59.8 -31.4,-57.4C-31.7,-55 -31.7,-52.3 -31.7,-49.4C-31.6,-46.4 -31.1,-42.7 -31,-39.7C-30.8,-36.7 -30.6,-33 -30.6,-31.6C-31.1,-26 -19.7,-25 -19.3,-30.6C-19.1,-31.4 -18.6,-33.2 -18.1,-35.4C-17.6,-37.6 -16.4,-41.2 -16.1,-43.8C-15.7,-46.5 -16.1,-48.1 -16.1,-51.2C-16,-54.3 -15.8,-60.6 -15.7,-62.4C-15.1,-69.6 -29.3,-70.8 -30,-63.7Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-29.8,-57.3C-29.8,-55.9 -30.1,-52.2 -30.1,-49.2C-30,-46.3 -29.5,-41.2 -29.4,-39.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.18" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M-16.5,-51.3C-16.5,-50 -16.1,-46.5 -16.5,-43.9C-16.8,-41.2 -18.2,-36.8 -18.5,-35.4" fill="none" stroke="#3aa4ff" stroke-opacity="0.35" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-30.8,-31.1C-31,-30.6 -32.1,-29.3 -32,-27.9C-32,-26.6 -31.2,-25.3 -30.7,-23.2C-30.1,-21.1 -29.1,-16.6 -28.8,-15.3C-28.8,-11.3 -20.9,-11.3 -20.9,-15.3C-20.7,-16.3 -20.1,-19.6 -19.7,-21.6C-19.3,-23.6 -18.5,-25.6 -18.4,-27.1C-18.3,-28.7 -19,-30.4 -19.1,-31.1C-19.1,-36.9 -30.8,-36.9 -30.8,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-30.8,-31.1C-31,-30.6 -32.1,-29.3 -32,-27.9C-32,-26.6 -31.2,-25.3 -30.7,-23.2C-30.1,-21.1 -29.1,-16.6 -28.8,-15.3C-28.8,-11.3 -20.9,-11.3 -20.9,-15.3C-20.7,-16.3 -20.1,-19.6 -19.7,-21.6C-19.3,-23.6 -18.5,-25.6 -18.4,-27.1C-18.3,-28.7 -19,-30.4 -19.1,-31.1C-19.1,-36.9 -30.8,-36.9 -30.8,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M-30.8,-31.1C-31,-30.6 -32.1,-29.3 -32,-27.9C-32,-26.6 -31.2,-25.3 -30.7,-23.2C-30.1,-21.1 -29.1,-16.6 -28.8,-15.3C-28.8,-11.3 -20.9,-11.3 -20.9,-15.3C-20.7,-16.3 -20.1,-19.6 -19.7,-21.6C-19.3,-23.6 -18.5,-25.6 -18.4,-27.1C-18.3,-28.7 -19,-30.4 -19.1,-31.1C-19.1,-36.9 -30.8,-36.9 -30.8,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M-30.4,-27.9C-30.2,-27.1 -29.3,-24 -29.1,-23.2" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="round"/>
+<path d="M-18.8,-27.1C-19,-26.2 -19.9,-22.5 -20.1,-21.6" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(-24.6,-31.1) rotate(5)">
+<path d="M4,-1 q-3,2 -7,0" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-24.6,-11.9) rotate(0)">
+<path d="M-5,-4.2 L5,-4.2 L4.6,3 L-4.6,3 Z" fill="#2a2421" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-24.6,-11.9) rotate(0)">
+<path d="M-4.8,-3.4 L4.8,-3.4" fill="none" stroke="#5a504a" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-24.6,-11.9) rotate(0)">
+<path d="M-1.6,-3 L1.6,-1 M1.6,-3 L-1.6,-1 M-1.6,-1 L1.6,1 M1.6,-1 L-1.6,1 M-1.6,1 L1.6,2.6 M1.6,1 L-1.6,2.6" fill="none" stroke="#d9c79a" stroke-width="0.5" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-24.6,-11.9) rotate(0)">
+<path d="M-5.2,2.6 L5.2,2.6 L5.2,4 L-5.2,4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+</g>
+<path d="M15.7,-62.4C15.8,-60.6 16,-54.3 16.1,-51.2C16.1,-48.1 15.7,-46.5 16.1,-43.8C16.4,-41.2 17.6,-37.6 18.1,-35.4C18.6,-33.2 19.1,-31.4 19.3,-30.6C19.7,-25 31.1,-26 30.6,-31.6C30.6,-33 30.8,-36.7 31,-39.7C31.1,-42.7 31.6,-46.4 31.7,-49.4C31.7,-52.3 31.7,-55 31.4,-57.4C31.1,-59.8 30.2,-62.6 30,-63.7C29.3,-70.8 15.1,-69.6 15.7,-62.4Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M15.7,-62.4C15.8,-60.6 16,-54.3 16.1,-51.2C16.1,-48.1 15.7,-46.5 16.1,-43.8C16.4,-41.2 17.6,-37.6 18.1,-35.4C18.6,-33.2 19.1,-31.4 19.3,-30.6C19.7,-25 31.1,-26 30.6,-31.6C30.6,-33 30.8,-36.7 31,-39.7C31.1,-42.7 31.6,-46.4 31.7,-49.4C31.7,-52.3 31.7,-55 31.4,-57.4C31.1,-59.8 30.2,-62.6 30,-63.7C29.3,-70.8 15.1,-69.6 15.7,-62.4Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M15.7,-62.4C15.8,-60.6 16,-54.3 16.1,-51.2C16.1,-48.1 15.7,-46.5 16.1,-43.8C16.4,-41.2 17.6,-37.6 18.1,-35.4C18.6,-33.2 19.1,-31.4 19.3,-30.6C19.7,-25 31.1,-26 30.6,-31.6C30.6,-33 30.8,-36.7 31,-39.7C31.1,-42.7 31.6,-46.4 31.7,-49.4C31.7,-52.3 31.7,-55 31.4,-57.4C31.1,-59.8 30.2,-62.6 30,-63.7C29.3,-70.8 15.1,-69.6 15.7,-62.4Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M17.7,-51.4C17.7,-50.1 17.7,-45.2 17.7,-44" fill="none" stroke="#eaf4ff" stroke-opacity="0.18" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M31,-57.4C31,-56 31.3,-52.3 31.3,-49.4C31.2,-46.4 30.7,-41.3 30.6,-39.7" fill="none" stroke="#3aa4ff" stroke-opacity="0.35" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M19.1,-31.1C19,-30.4 18.3,-28.7 18.4,-27.1C18.5,-25.6 19.3,-23.6 19.7,-21.6C20.1,-19.6 20.7,-16.3 20.9,-15.3C20.9,-11.3 28.8,-11.3 28.8,-15.3C29.1,-16.6 30.1,-21.1 30.7,-23.2C31.2,-25.3 32,-26.6 32,-27.9C32.1,-29.3 31,-30.6 30.8,-31.1C30.8,-36.9 19.1,-36.9 19.1,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-canvas)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M19.1,-31.1C19,-30.4 18.3,-28.7 18.4,-27.1C18.5,-25.6 19.3,-23.6 19.7,-21.6C20.1,-19.6 20.7,-16.3 20.9,-15.3C20.9,-11.3 28.8,-11.3 28.8,-15.3C29.1,-16.6 30.1,-21.1 30.7,-23.2C31.2,-25.3 32,-26.6 32,-27.9C32.1,-29.3 31,-30.6 30.8,-31.1C30.8,-36.9 19.1,-36.9 19.1,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-weave)"/>
+<path d="M19.1,-31.1C19,-30.4 18.3,-28.7 18.4,-27.1C18.5,-25.6 19.3,-23.6 19.7,-21.6C20.1,-19.6 20.7,-16.3 20.9,-15.3C20.9,-11.3 28.8,-11.3 28.8,-15.3C29.1,-16.6 30.1,-21.1 30.7,-23.2C31.2,-25.3 32,-26.6 32,-27.9C32.1,-29.3 31,-30.6 30.8,-31.1C30.8,-36.9 19.1,-36.9 19.1,-31.1Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)"/>
+<path d="M20,-27.1C20.2,-26.2 21.1,-22.5 21.3,-21.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="round"/>
+<path d="M31.6,-27.9C31.4,-27.1 30.5,-24 30.3,-23.2" fill="none" stroke="#3aa4ff" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(24.6,-31.1) rotate(-5)">
+<path d="M-4,-1 q3,2 7,0" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(24.6,-11.9) rotate(0)">
+<path d="M-5,-4.2 L5,-4.2 L4.6,3 L-4.6,3 Z" fill="#2a2421" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+</g>
+<g transform="translate(24.6,-11.9) rotate(0)">
+<path d="M-4.8,-3.4 L4.8,-3.4" fill="none" stroke="#5a504a" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(24.6,-11.9) rotate(0)">
+<path d="M-1.6,-3 L1.6,-1 M1.6,-3 L-1.6,-1 M-1.6,-1 L1.6,1 M1.6,-1 L-1.6,1 M-1.6,1 L1.6,2.6 M1.6,1 L-1.6,2.6" fill="none" stroke="#d9c79a" stroke-width="0.5" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(24.6,-11.9) rotate(0)">
+<path d="M-5.2,2.6 L5.2,2.6 L5.2,4 L-5.2,4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+</g>
+<ellipse cx="-22.2" cy="-50" rx="7" ry="3.4" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)"/>
+<ellipse cx="22.2" cy="-50" rx="7" ry="3.4" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shade)"/>
+<g transform="translate(-16.2,-64) scale(1.2) translate(14,64)">
+<g transform="rotate(-1.1 -12 -65)">
+<path d="M-11,-67 C-16,-69.4 -23,-68.4 -25.6,-63 C-26.8,-60.2 -26.4,-57.2 -25,-55.2 C-22.2,-56.8 -19.2,-57.2 -16.4,-56.6 C-16.2,-60.8 -14.4,-64.4 -11,-65.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass)" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M-13.4,-66 C-17,-67.6 -21.6,-67 -24,-63.4" fill="none" stroke="#fff1c2" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-15.4" cy="-63.2" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-21.2" cy="-62.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+</g>
+</g>
+<g transform="translate(16.2,-64) scale(1.2) translate(-14,64)">
+<g transform="rotate(1.1 12 -65)">
+<path d="M11,-67 C16,-69.4 23,-68.4 25.6,-63 C26.8,-60.2 26.4,-57.2 25,-55.2 C22.2,-56.8 19.2,-57.2 16.4,-56.6 C16.2,-60.8 14.4,-64.4 11,-65.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass)" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M13.4,-66 C17,-67.6 21.6,-67 24,-63.4" fill="none" stroke="#fff1c2" stroke-width="0.7" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="15.4" cy="-63.2" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="21.2" cy="-62.4" r="0.7" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M25.6,-62 C26.6,-59.8 26.4,-57.4 25.2,-55.6" fill="none" stroke="#3aa4ff" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M18,-61.4 L20.6,-61.4 L20.6,-70.4 L18,-70.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass-dk)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M17.4,-71.6 L26.6,-71.6 L26.6,-69.6 L17.4,-69.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass-dk)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<circle cx="19.3" cy="-63.2" r="0.5" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M17.4,-73.6 L26.6,-73.6 L26,-70.4 L18,-70.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M18.8,-82.6 L25.2,-82.6 L25.6,-73.4 L18.4,-73.4 Z" fill="#85b2ff" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M20.8,-82.4 L20.7,-73.6 M23.2,-82.4 L23.3,-73.6 M18.6,-78 L25.4,-78" fill="none" stroke="#04060b" stroke-width="1.1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M20.8,-82.4 L20.7,-73.6 M23.2,-82.4 L23.3,-73.6 M18.6,-78 L25.4,-78" fill="none" stroke="#c99a3e" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M18.8,-82.4 L18.4,-73.6 M25.2,-82.4 L25.6,-73.6" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.4,-82.4 L26.6,-82.4 L25,-85.6 L19,-85.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-shoulder-lantern-brass)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M18.4,-83.4 L23,-85" fill="none" stroke="#fff1c2" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="22" cy="-87.2" r="1.8" fill="none" stroke="#04060b" stroke-width="1.3"/>
+<circle cx="22" cy="-87.2" r="1.8" fill="none" stroke="#c99a3e" stroke-width="0.6"/>
+<ellipse cx="22" cy="-78" rx="9" ry="10" fill="#4488ff" opacity="0.12" filter="url(#diver-0-porthole-diving-lantern-masc-idle-bloom)"/>
+<g filter="url(#diver-0-porthole-diving-lantern-masc-idle-glow)" fill="#4488ff" stroke="#4488ff">
+<rect x="21.3" y="-81" width="1.4" height="5.4" rx="0.6"/>
+</g>
+<g fill="#cbdeff" stroke="#cbdeff" opacity="0.9">
+<rect x="21.3" y="-81" width="1.4" height="5.4" rx="0.6"/>
+</g>
+</g>
+</g>
+<g transform="translate(10.4,-57.4) rotate(0) scale(0.077)">
+<g data-finish="stencil">
+<path d="M0,-48 L6.9,-47.59 L10.9,-40.57 L15.7,-38.8 L24.4,-41.57 L28.3,-38.08 L28.4,-29.7 L32,-25.57 L40,-24 L42.8,-18.37 L39.3,-10.87 L40.4,-5.48 L46.7,0 L46.4,6.27 L39.7,10.87 L38,16.07 L40.9,24 L37.5,29.22 L29.3,29.7 L25.3,33.32 L23.8,41.57 L18.2,44.35 L10.8,40.57 L5.4,41.64 L0,48 L-6.2,47.59 L-10.8,40.57 L-15.9,38.8 L-23.8,41.57 L-28.9,38.08 L-29.3,29.7 L-32.8,25.57 L-40.9,24 L-43.5,18.37 L-39.7,10.87 L-40.6,5.48 L-46.7,0 L-46.2,-6.27 L-39.3,-10.87 L-37.5,-16.07 L-40,-24 L-36.4,-29.22 L-28.4,-29.7 L-24.2,-33.32 L-24.4,-41.57 L-19.4,-44.35 L-10.9,-40.57 L-5.6,-41.64 Z" fill="none" stroke="#a8b4c0" stroke-width="5" opacity="0.18" transform="scale(1.04)"/>
+<path d="M0,-48 L6.9,-47.59 L10.9,-40.57 L15.7,-38.8 L24.4,-41.57 L28.3,-38.08 L28.4,-29.7 L32,-25.57 L40,-24 L42.8,-18.37 L39.3,-10.87 L40.4,-5.48 L46.7,0 L46.4,6.27 L39.7,10.87 L38,16.07 L40.9,24 L37.5,29.22 L29.3,29.7 L25.3,33.32 L23.8,41.57 L18.2,44.35 L10.8,40.57 L5.4,41.64 L0,48 L-6.2,47.59 L-10.8,40.57 L-15.9,38.8 L-23.8,41.57 L-28.9,38.08 L-29.3,29.7 L-32.8,25.57 L-40.9,24 L-43.5,18.37 L-39.7,10.87 L-40.6,5.48 L-46.7,0 L-46.2,-6.27 L-39.3,-10.87 L-37.5,-16.07 L-40,-24 L-36.4,-29.22 L-28.4,-29.7 L-24.2,-33.32 L-24.4,-41.57 L-19.4,-44.35 L-10.9,-40.57 L-5.6,-41.64 Z" fill="none" stroke="#a8b4c0" stroke-width="4" stroke-dasharray="22 5"/>
+<g opacity="0.92">
+<g transform="scale(6.2)">
+<path d="M-3.7,1.6 L0,3.2 L3.7,1.6" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.7,-0.3 L0,1.3 L3.7,-0.3" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.7,-2.2 L0,-0.6 L3.7,-2.2" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+</g>
+</g>
+</g>
+</g>
+<g transform="rotate(-1.1 -12 -65)">
+<g transform="translate(-24.4,-56) rotate(0) scale(0.062)">
+<g data-finish="stencil">
+<path d="M0,-48 L6.27,-47.59 L10.87,-40.57 L16.07,-38.8 L24,-41.57 L29.22,-38.08 L29.7,-29.7 L33.32,-25.57 L41.57,-24 L44.35,-18.37 L40.57,-10.87 L41.64,-5.48 L48,0 L47.59,6.27 L40.57,10.87 L38.8,16.07 L41.57,24 L38.08,29.22 L29.7,29.7 L25.57,33.32 L24,41.57 L18.37,44.35 L10.87,40.57 L5.48,41.64 L0,48 L-6.27,47.59 L-10.87,40.57 L-16.07,38.8 L-24,41.57 L-29.22,38.08 L-29.7,29.7 L-33.32,25.57 L-41.57,24 L-44.35,18.37 L-40.57,10.87 L-41.64,5.48 L-48,0 L-47.59,-6.27 L-40.57,-10.87 L-38.8,-16.07 L-41.57,-24 L-38.08,-29.22 L-29.7,-29.7 L-25.57,-33.32 L-24,-41.57 L-18.37,-44.35 L-10.87,-40.57 L-5.48,-41.64 Z" fill="none" stroke="#a8b4c0" stroke-width="4" stroke-dasharray="22 5"/>
+<g opacity="0.92">
+<g transform="scale(6.2)">
+<path d="M-3.8,1.6 L0,3.2 L3.8,1.6" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.8,-0.3 L0,1.3 L3.8,-0.3" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.8,-2.2 L0,-0.6 L3.8,-2.2" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g transform="translate(-27.6,-23.9) rotate(0) scale(0.044)">
+<g data-finish="stencil">
+<path d="M0,-48 L6.27,-47.59 L10.87,-40.57 L16.07,-38.8 L24,-41.57 L29.22,-38.08 L29.7,-29.7 L33.32,-25.57 L41.57,-24 L44.35,-18.37 L40.57,-10.87 L41.64,-5.48 L48,0 L47.59,6.27 L40.57,10.87 L38.8,16.07 L41.57,24 L38.08,29.22 L29.7,29.7 L25.57,33.32 L24,41.57 L18.37,44.35 L10.87,40.57 L5.48,41.64 L0,48 L-6.27,47.59 L-10.87,40.57 L-16.07,38.8 L-24,41.57 L-29.22,38.08 L-29.7,29.7 L-33.32,25.57 L-41.57,24 L-44.35,18.37 L-40.57,10.87 L-41.64,5.48 L-48,0 L-47.59,-6.27 L-40.57,-10.87 L-38.8,-16.07 L-41.57,-24 L-38.08,-29.22 L-29.7,-29.7 L-25.57,-33.32 L-24,-41.57 L-18.37,-44.35 L-10.87,-40.57 L-5.48,-41.64 Z" fill="none" stroke="#a8b4c0" stroke-width="4" stroke-dasharray="22 5"/>
+<g opacity="0.92">
+<g transform="scale(6.2)">
+<path d="M-3.8,1.6 L0,3.2 L3.8,1.6" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.8,-0.3 L0,1.3 L3.8,-0.3" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.8,-2.2 L0,-0.6 L3.8,-2.2" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+</g>
+</g>
+</g>
+</g>
+<g data-acc="launcher">
+<g transform="translate(-24.64,-19.11) rotate(0.01)">
+<rect x="-6.6" y="-4" width="4" height="12" rx="1" fill="#2a2f36" stroke="#0a0d12" stroke-width="1"/>
+<path d="M-5.8,-1 L-3.4,-1 M-5.8,3 L-3.4,3" fill="none" stroke="#12161b" stroke-width="0.5" stroke-linecap="round"/>
+<rect x="-3.4" y="-1.6" width="3" height="3.2" rx="0.6" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.8"/>
+<circle cx="-4.6" cy="8.6" r="2.2" fill="#d9a441" stroke="#0a0d12" stroke-width="0.9"/>
+<circle cx="-4.6" cy="8.6" r="1" fill="#05080c"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-glow">
+<g>
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
+<g filter="url(#diver-0-porthole-diving-lantern-masc-idle-glow)" fill="#4488ff" stroke="#4488ff">
+<rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
+</g>
+<g fill="#cbdeff" stroke="#cbdeff" opacity="0.9">
+<rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
+</g>
+<g filter="url(#diver-0-porthole-diving-lantern-masc-idle-glow)" fill="#4488ff" stroke="#4488ff">
+<path d="M-2.2,-57.4 A2.4,2.4 0 0 1 2.2,-57.4" fill="none" stroke-width="0.45"/>
+<circle cx="0" cy="-58.4" r="0.5"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<path d="M-2.2,-57.4 A2.4,2.4 0 0 1 2.2,-57.4" fill="none" stroke-width="0.45"/>
+<circle cx="0" cy="-58.4" r="0.5"/>
+</g>
+<g data-acc="antenna">
+<circle cx="24" cy="-112" r="1.2" fill="#4488ff"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-head">
+<g transform="translate(0,-6.3) translate(0,-67) scale(1) translate(0,67)">
+<g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<path d="M-13.6,-71.6 C-6,-74 6,-74 13.6,-71.6 L15.2,-67.4 C6,-65 -6,-65 -15.2,-67.4 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass-dk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M0,-100 C9.6,-100 15.6,-93.4 15.6,-84.4 C15.6,-77 12.6,-71.6 8.6,-69.4 L-8.6,-69.4 C-12.6,-71.6 -15.6,-77 -15.6,-84.4 C-15.6,-93.4 -9.6,-100 0,-100 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass)" stroke="#04060b" stroke-width="1.2" stroke-linejoin="round"/>
+<path d="M0,-100 C9.6,-100 15.6,-93.4 15.6,-84.4 C15.6,-77 12.6,-71.6 8.6,-69.4 L-8.6,-69.4 C-12.6,-71.6 -15.6,-77 -15.6,-84.4 C-15.6,-93.4 -9.6,-100 0,-100 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-cyl)" opacity="0.8"/>
+<ellipse cx="-7" cy="-93" rx="5" ry="3" fill="url(#diver-0-porthole-diving-lantern-masc-idle-sheen)"/>
+<path d="M-11.8,-93.4 C-8.6,-97.4 -4.6,-98.6 -1.6,-98.8" fill="none" stroke="#fff1c2" stroke-width="0.9" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.8,-89 C15.8,-85 15.6,-80.6 13.8,-76.6" fill="none" stroke="#3aa4ff" stroke-width="0.7" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-12.4" cy="-84.6" rx="2.8" ry="4" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass-dk)" stroke="#04060b" stroke-width="0.8"/>
+<ellipse cx="-12.6" cy="-84.6" rx="1.8" ry="2.9" fill="#112340" stroke="#04060b" stroke-width="0.5"/>
+<path d="M-14,-84.6 L-10.6,-84.6" fill="none" stroke="#3a2710" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="12.4" cy="-84.6" rx="2.8" ry="4" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass-dk)" stroke="#04060b" stroke-width="0.8"/>
+<ellipse cx="12.6" cy="-84.6" rx="1.8" ry="2.9" fill="#112340" stroke="#04060b" stroke-width="0.5"/>
+<path d="M10.8,-84.6 L14.2,-84.6" fill="none" stroke="#3a2710" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="-82.9" r="9.4" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass-dk)" stroke="#04060b" stroke-width="1"/>
+<circle cx="0" cy="-82.9" r="7.8" fill="#112340" stroke="#04060b" stroke-width="0.7"/>
+<g opacity="0.32">
+<path d="M-7,-83.6 C-8.9,-84.4 -9.6,-82 -9.2,-79.8 C-8.9,-78.2 -8,-77.4 -6.8,-77.8 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-skin)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M7,-83.6 C8.9,-84.4 9.6,-82 9.2,-79.8 C8.9,-78.2 8,-77.4 6.8,-77.8 Z" fill="#707988" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-7.2,-84 C-7.4,-79 -6.8,-75.5 -5,-73.3 C-3.6,-71.8 -1.8,-71.2 0,-71.2 C1.8,-71.2 3.6,-71.8 5,-73.3 C6.8,-75.5 7.4,-79 7.2,-84 C7,-89.5 4,-91.6 0,-91.6 C-4,-91.6 -7,-89.5 -7.2,-84 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-skin)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M1.6,-91.2 C5,-90.6 7.2,-88.4 7.2,-84 C7.4,-79 6.8,-75.5 5,-73.3 C3.6,-71.8 2,-71.3 0.8,-71.2 C3.8,-74 5.2,-78 4.6,-84 C4.3,-87.6 3,-89.8 1.6,-91.2 Z" fill="#4a5260" opacity="0.35"/>
+<ellipse cx="-3.2" cy="-87.4" rx="3.2" ry="2" fill="url(#diver-0-porthole-diving-lantern-masc-idle-sheen)"/>
+<ellipse cx="-3.1" cy="-82.3" rx="2.3" ry="1.2" fill="#4a5260" opacity="0.16"/>
+<path d="M-4.7,-81.6 Q-3.1,-83.3 -1.5,-81.7 Q-3.1,-80.3 -4.7,-81.6 Z" fill="#ece6de"/>
+<circle cx="-3" cy="-81.65" r="0.95" fill="#ddeeff"/>
+<circle cx="-3" cy="-81.65" r="0.95" fill="none" stroke="#636b73" stroke-width="0.2"/>
+<circle cx="-3" cy="-81.65" r="0.42" fill="#050505"/>
+<circle cx="-3.3" cy="-82.05" r="0.22" fill="#fff"/>
+<path d="M-4.9,-81.75 Q-3.1,-83.7 -1.3,-81.9 Q-3.1,-83.1 -4.9,-81.75 Z" fill="#7d8695"/>
+<path d="M-4.9,-81.7 Q-3.1,-83.3 -1.3,-81.8" fill="none" stroke="#1a100c" stroke-width="0.5" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4.4,-80.95 Q-3.1,-80.35 -1.8,-80.95" fill="none" stroke="#4a5260" stroke-width="0.25" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-5.9,-83.7 C-4.8,-85 -2.8,-85.3 -1.1,-84.5 L-1.2,-84 C-2.8,-84.6 -4.6,-84.4 -5.7,-83.4 Z" fill="#0e0a09"/>
+<ellipse cx="3.1" cy="-82.3" rx="2.3" ry="1.2" fill="#4a5260" opacity="0.16"/>
+<path d="M4.7,-81.6 Q3.1,-83.3 1.5,-81.7 Q3.1,-80.3 4.7,-81.6 Z" fill="#ece6de"/>
+<circle cx="3.2" cy="-81.65" r="0.95" fill="#ddeeff"/>
+<circle cx="3.2" cy="-81.65" r="0.95" fill="none" stroke="#636b73" stroke-width="0.2"/>
+<circle cx="3.2" cy="-81.65" r="0.42" fill="#050505"/>
+<circle cx="2.9" cy="-82.05" r="0.22" fill="#fff"/>
+<path d="M4.9,-81.75 Q3.1,-83.7 1.3,-81.9 Q3.1,-83.1 4.9,-81.75 Z" fill="#7d8695"/>
+<path d="M4.9,-81.7 Q3.1,-83.3 1.3,-81.8" fill="none" stroke="#1a100c" stroke-width="0.5" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4.4,-80.95 Q3.1,-80.35 1.8,-80.95" fill="none" stroke="#4a5260" stroke-width="0.25" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.9,-83.7 C4.8,-85 2.8,-85.3 1.1,-84.5 L1.2,-84 C2.8,-84.6 4.6,-84.4 5.7,-83.4 Z" fill="#0e0a09"/>
+<path d="M0.9,-82 C1.2,-80 1.6,-78.2 1.9,-77" fill="none" stroke="#4a5260" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-0.5,-80.6 L-0.4,-77.8" fill="none" stroke="#c1c6d1" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="0.5" cy="-76.1" rx="1.9" ry="0.55" fill="#4a5260" opacity="0.35"/>
+<path d="M-1.7,-76.7 C-1,-75.9 1,-75.9 1.7,-76.7" fill="none" stroke="#4a5260" stroke-width="0.45" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-4.2" cy="-78.2" rx="1.7" ry="1" fill="#b08f97" opacity="0.22"/>
+<ellipse cx="4.2" cy="-78.2" rx="1.7" ry="1" fill="#b08f97" opacity="0.16"/>
+<path d="M-2.4,-74 C-1,-74.3 1,-74.3 2.4,-74 C1.2,-73.3 -1.2,-73.3 -2.4,-74 Z" fill="#644d56"/>
+<path d="M-2.6,-74.05 C-1.2,-73.55 1.2,-73.55 2.6,-74.05" fill="none" stroke="#2c313a" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-1.3,-72.75 C-0.5,-72.5 0.5,-72.5 1.3,-72.75" fill="none" stroke="#bcc2cd" stroke-width="0.4" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-6.6,-79.6 L-4.4,-77.4 L-4.6,-74.4 M6.6,-79.6 L4.4,-77.4 L4.6,-74.4 M0,-91.4 L0,-87.8" fill="none" stroke="#3a424e" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7.3,-87 C7.6,-84 7.4,-80 6.9,-77 M7,-76.4 C6.4,-74.8 5.6,-73.6 4.6,-72.8" fill="none" stroke="#3aa4ff" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<circle cx="0" cy="-82.9" r="7.8" fill="#112340" opacity="0.55"/>
+<circle cx="8.6" cy="-82.9" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="6.1" cy="-76.8" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="0" cy="-74.3" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-6.1" cy="-76.8" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-8.6" cy="-82.9" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-6.1" cy="-89" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="0" cy="-91.5" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="6.1" cy="-89" r="0.6" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M0,-90.8 L0,-75 M-7.8,-82.9 L7.8,-82.9" fill="none" stroke="#04060b" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-90.8 L0,-75 M-7.8,-82.9 L7.8,-82.9" fill="none" stroke="#c99a3e" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="-82.9" r="1.6" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass)" stroke="#04060b" stroke-width="0.5"/>
+<path d="M-5.6,-87.4 C-4,-88.8 -2.4,-89.4 -1.4,-89.6" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-2.4,-99.6 L2.4,-99.6 L2,-102.6 L-2,-102.6 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass-dk)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-1.4,-102.6 L1.4,-102.6 L1.4,-104 L6.8,-104 L6.8,-101 L1.4,-101 Z" fill="url(#diver-0-porthole-diving-lantern-masc-idle-helmet-porthole-brass)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M6.8,-102.5 C11,-102.6 14.2,-100.4 15.8,-96.4" fill="none" stroke="#04060b" stroke-width="3.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.8,-102.5 C11,-102.6 14.2,-100.4 15.8,-96.4" fill="none" stroke="#5e5348" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.8,-102.5 C11,-102.6 14.2,-100.4 15.8,-96.4" fill="none" stroke="#a39280" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.8,-102.5 C11,-102.6 14.2,-100.4 15.8,-96.4" fill="none" stroke="#0c0a09" stroke-width="2" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<circle cx="-12.6" cy="-69.2" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-8.4" cy="-69" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="-4.2" cy="-69.1" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="0" cy="-69.2" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="4.2" cy="-69.1" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="8.4" cy="-69" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="12.6" cy="-69.2" r="0.9" fill="#e9c470" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-13,-70.6 C-6,-72.8 6,-72.8 13,-70.6" fill="none" stroke="#fff1c2" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(-10.4,-91.6) rotate(-20) scale(0.038)">
+<g data-finish="stencil">
+<path d="M0,-48 L6.27,-47.59 L10.87,-40.57 L16.07,-38.8 L24,-41.57 L29.22,-38.08 L29.7,-29.7 L33.32,-25.57 L41.57,-24 L44.35,-18.37 L40.57,-10.87 L41.64,-5.48 L48,0 L47.59,6.27 L40.57,10.87 L38.8,16.07 L41.57,24 L38.08,29.22 L29.7,29.7 L25.57,33.32 L24,41.57 L18.37,44.35 L10.87,40.57 L5.48,41.64 L0,48 L-6.27,47.59 L-10.87,40.57 L-16.07,38.8 L-24,41.57 L-29.22,38.08 L-29.7,29.7 L-33.32,25.57 L-41.57,24 L-44.35,18.37 L-40.57,10.87 L-41.64,5.48 L-48,0 L-47.59,-6.27 L-40.57,-10.87 L-38.8,-16.07 L-41.57,-24 L-38.08,-29.22 L-29.7,-29.7 L-25.57,-33.32 L-24,-41.57 L-18.37,-44.35 L-10.87,-40.57 L-5.48,-41.64 Z" fill="none" stroke="#a8b4c0" stroke-width="4" stroke-dasharray="22 5"/>
+<g opacity="0.92">
+<g transform="scale(6.2)">
+<path d="M-3.8,1.6 L0,3.2 L3.8,1.6" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.8,-0.3 L0,1.3 L3.8,-0.3" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+<path d="M-3.8,-2.2 L0,-0.6 L3.8,-2.2" fill="none" stroke="#a8b4c0" stroke-width="1.05" stroke-linejoin="round"/>
+</g>
+</g>
+</g>
+</g>
+<g data-acc="lamp">
+<rect x="-16.2" y="-86" width="2.6" height="2.8" rx="0.5" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.7"/>
+<rect x="-21.4" y="-87.2" width="7.4" height="5.2" rx="1.6" fill="#4a525c" stroke="#0a0d12" stroke-width="1"/>
+<path d="M-20.4,-86.2 L-15.2,-86.2" fill="none" stroke="#898f95" stroke-width="0.5" stroke-linecap="round"/>
+<circle cx="-18" cy="-84.4" r="2.3" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.8"/>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-visor">
+<g transform="translate(0,-6.3) translate(0,-67) scale(1) translate(0,67)">
+<g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<g filter="url(#diver-0-porthole-diving-lantern-masc-idle-glow)" fill="#ddeeff" opacity="0.55">
+<circle cx="-3" cy="-81.6" r="1.05"/>
+<circle cx="3.2" cy="-81.6" r="1.05"/>
+</g>
+<g fill="#eef7ff">
+<circle cx="-3" cy="-81.6" r="0.45"/>
+<circle cx="3.2" cy="-81.6" r="0.45"/>
+</g>
+<g filter="url(#diver-0-porthole-diving-lantern-masc-idle-glow)" fill="#4488ff" stroke="#4488ff">
+<circle cx="-12.4" cy="-85.6" r="0.5"/>
+<circle cx="12.4" cy="-85.6" r="0.5"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<circle cx="-12.4" cy="-85.6" r="0.5"/>
+<circle cx="12.4" cy="-85.6" r="0.5"/>
+</g>
+<g data-acc="lamp">
+<circle cx="-18" cy="-84.4" r="1.8" fill="#fff4c8"/>
+<circle cx="-18" cy="-84.4" r="3.6" fill="#fff4c8" opacity="0.18"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+</svg>

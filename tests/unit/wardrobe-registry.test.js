@@ -272,6 +272,16 @@ describe("the Neon Runner theme", () => {
   });
 });
 
+describe("the Abyssal Diver theme", () => {
+  it("the canvas suit covers the kit, collar, cape and limb light; the porthole is sealed, its crown and brow taken", () => {
+    expect([...FRAME_ART.diving.shape.hides]).toEqual(["kit", "collar", "cape", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "porthole").visor).toBe(false);
+    expect(FACE_HELMETS.has("porthole")).toBe(false);
+    expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "porthole").helmet).toEqual({ x: -10.4, y: -91.6, rot: -20, size: 3.8 });
+  });
+});
+
 describe("every theme piece draws cleanly", () => {
   // Each theme's own set: both builds and poses, realistic, the head tile,
   // a face peek and both builds fallen. No NaN or undefined in the markup,

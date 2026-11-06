@@ -83,9 +83,10 @@ import marshal from "./marshal.js";
 import ronin from "./ronin.js";
 import horologist from "./horologist.js";
 import runner from "./runner.js";
+import diver from "./diver.js";
 
 /** Art modules, one per data theme, in the data registry's order; frozen through. */
-const ART_THEMES = deepFreeze([issue, exo, marshal, ronin, horologist, runner]);
+const ART_THEMES = deepFreeze([issue, exo, marshal, ronin, horologist, runner, diver]);
 
 /**
  * The stock rig layers a frame may hide (shape.hides), and what each removes:
