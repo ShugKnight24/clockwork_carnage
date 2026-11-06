@@ -16,7 +16,8 @@ import {
   shoulderArt,
   validateWardrobe,
 } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
-import { rigAnchors, buildAgentSvg, buildCastModel } from "../../src/rendering/svg-art/agent-rig.js";
+import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, mix } from "../../src/rendering/svg-art/agent-rig.js";
+import { idScope } from "../../src/rendering/svg-art/id-scope.js";
 import { STAND } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
 
@@ -214,14 +215,12 @@ describe("the Exo-Frame theme", () => {
 
 // The themes in creator order; the spike's later themes join as they are ported.
 const THEME_ORDER = ["issue", "exo", "marshal", "ronin", "horologist", "runner", "diver", "ranger", "chronomancer"];
-const PORTED = ["issue", "exo", "marshal", "ronin", "horologist"];
 
 describe("the spike themes", () => {
-  const spike = () => WARDROBE_THEMES.filter((t) => !["issue", "exo"].includes(t.id));
+  const spike = () => WARDROBE_THEMES.filter((t) => !THEME_ORDER.slice(0, 2).includes(t.id));
 
   it("every theme ported so far is registered in theme order", () => {
     const ids = WARDROBE_THEMES.map((t) => t.id);
-    expect(ids).toEqual(PORTED);
     expect(ids).toEqual(THEME_ORDER.slice(0, ids.length));
   });
 
@@ -265,23 +264,52 @@ describe("the Horologist theme", () => {
 });
 
 describe("every theme piece draws cleanly", () => {
-  // Each theme's own set, both builds, both poses and fallen: no NaN or
-  // undefined in the markup, ids unique in the figure, every url(#…) one of its own.
+  // Each theme's own set: both builds and poses, realistic, the head tile,
+  // a face peek and both builds fallen. No NaN or undefined in the markup,
+  // ids unique in the figure (and, in an SVG, all under its prefix), every
+  // url(#…) one of its own.
   const looks = WARDROBE_THEMES.filter((t) => t.id !== "issue").map((t) => [t.id, { frame: t.frames[0].id, helmet: t.helmets[0].id, shoulder: t.shoulders[0].id }]);
-  const check = (markup) => {
+  const check = (markup, prefix) => {
     expect(markup).not.toMatch(/NaN|undefined/);
     const ids = [...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
+    if (prefix) expect(ids.filter((i) => !i.startsWith(prefix))).toEqual([]);
     for (const [, ref] of markup.matchAll(/url\(#([^)]+)\)/g)) expect(ids, ref).toContain(ref);
   };
   it.each(looks)("%s", (id, pieces) => {
+    const svg = (ids, opts) => check(buildAgentSvg(lookFromIds(ids), { ...opts, idPrefix: "t-" }), "t-");
     for (const body of ["masc", "fem"]) {
-      for (const pose of ["idle", "hero"]) check(buildAgentSvg(lookFromIds({ ...pieces, body }), { pose, idPrefix: "t-" }));
+      const ids = { ...pieces, body };
+      for (const pose of ["idle", "hero"]) {
+        svg(ids, { pose });
+        svg(ids, { pose, realistic: true });
+      }
+      svg(ids, { headOnly: true });
+      svg(ids, { headOnly: true, realistic: true });
+      svg(ids, { pose: "bust", peek: true });
+      for (const realistic of [false, true]) {
+        const fallen = buildCastModel(lookFromIds(ids), "hero_fallen", { realistic });
+        check(`<defs>${fallen.defs}</defs>` + fallen.layers.map((l) => l.markup).join(""));
+      }
     }
-    const fallen = buildCastModel(lookFromIds(pieces), "hero_fallen");
-    check(`<defs>${fallen.defs}</defs>` + fallen.layers.map((l) => l.markup).join(""));
   });
 });
+
+describe("frames draw each arm on its own", () => {
+  // The fallen agent paints each arm's frame layer at that arm's depth
+  // (withArm), so a frame's arms layer must come out the same arm by arm.
+  const arms = (id, P, c) => FRAME_ART[id].layers(P, c, { mix, ...idScope().kit(`frame-${id}`) }).arms;
+  it.each(Object.keys(FRAME_ART))("%s", (id) => {
+    for (const body of ["masc", "fem"]) {
+      const c = buildAgentParts(lookFromIds({ frame: id, body })).look;
+      for (const pose of ["standing", "armed", "fallen"]) {
+        const P = framePose(pose, c.fem);
+        expect(arms(id, withArm(P, 0), c) + arms(id, withArm(P, 1), c), `${body} ${pose}`).toBe(arms(id, P, c));
+      }
+    }
+  });
+});
+
 
 describe("shoulders", () => {
   it("every SHOULDER_STYLES id has SHOULDER_ART", () => {

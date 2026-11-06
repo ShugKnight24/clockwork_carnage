@@ -903,6 +903,16 @@ function buildPose(P, B) {
   };
 }
 /**
+ * The joints a figure is drawn on, and frames are painted from: the build's
+ * standing or armed pose, or the fallen agent's (which has no build).
+ * @param {"standing"|"armed"|"fallen"} pose
+ * @param {boolean} [fem] the feminine build
+ */
+export function framePose(pose, fem = false) {
+  if (pose === "fallen") return FALLEN;
+  return buildPose(pose === "armed" ? ARMED : STAND, fem ? BUILDS.fem : BUILDS.masc);
+}
+/**
  * Feminine face shape: a slightly narrower brow and temples, then a firm
  * taper from the cheekbones to a smaller, softer chin. Held almost level
  * through the eyes so the (unwarped) irises stay centred in their whites.
@@ -1616,7 +1626,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const scope = idScope();
   const armed = pose === "hero";
   const B = c.fem ? BUILDS.fem : BUILDS.masc;
-  const P = buildPose(armed ? ARMED : STAND, B);
+  const P = framePose(armed ? "armed" : "standing", c.fem);
   const map = bodyMap(c);
   const legs = P.legs.map((leg, i) => armoredLeg(leg, i === 0 ? -1 : 1, B.legW));
   const arms = P.arms.map((arm, i) => armoredArm(arm, i === 0 ? -1 : 1, !armed && i === 0, B.armW));
@@ -1915,7 +1925,7 @@ const visorCracks = (c) =>
  * walk P.arms with map, which skips it): the fallen agent draws each arm's
  * frame layer at that arm's own depth.
  */
-const withArm = (P, i) => ({ ...P, arms: Object.assign([], { [i]: P.arms[i] }) });
+export const withArm = (P, i) => ({ ...P, arms: Object.assign([], { [i]: P.arms[i] }) });
 
 /**
  * The customised agent down on the floor, in the rig coordinates of the stock
