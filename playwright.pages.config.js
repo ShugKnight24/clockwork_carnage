@@ -21,7 +21,8 @@ export default defineConfig({
   webServer: {
     command: `node tests/pages/server.mjs ${PORT}`,
     port: PORT,
-    reuseExistingServer: true,
+    // Opt-in, as in playwright.config.js: never test a server left over from another run.
+    reuseExistingServer: process.env.CC_REUSE_SERVER === "1",
     timeout: 10_000,
   },
 });

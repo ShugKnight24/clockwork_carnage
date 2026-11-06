@@ -61,12 +61,20 @@ On Linux, add `--with-deps` to the last command.
 | `npm run test:perf` | Frame budgets across device profiles, one worker |
 | `npm run bench` | The benchmark above, in a Playwright window |
 
-Playwright starts its own Vite server on port 3100. If something else holds that
-port, or `npm run dev` is already running, point the tests at it with
-`CC_TEST_PORT` (`$env:CC_TEST_PORT=5173` in PowerShell):
+Playwright starts its own Vite server on port 3100 and refuses to run if
+something else already holds the port, so it never tests a server left over
+from another run or another app. Pick a free port with `CC_TEST_PORT`
+(`$env:CC_TEST_PORT=5173` in PowerShell):
 
 ```bash
-CC_TEST_PORT=5173 npm test
+CC_TEST_PORT=5196 npm test
+```
+
+To test a server you started yourself (`npm run dev`), point at its port and
+opt in to reusing it with `CC_REUSE_SERVER=1`:
+
+```bash
+CC_REUSE_SERVER=1 CC_TEST_PORT=5173 npm test
 ```
 
 Failures leave a trace, screenshot and video in `test-results/`.
