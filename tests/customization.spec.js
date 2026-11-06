@@ -531,6 +531,46 @@ test.describe("legacy creator on a touch phone", () => {
   });
 });
 
+// A phone on its side keeps the tab strip to two rows, so the lists keep
+// their height, and a tap mid-strip lands on the tab under the finger. At
+// 844 wide the tabs keep 38px (character-creator.js getCreatorLayout); at
+// 667 the strip between the edge-cycle zones holds 14 tabs a row only at
+// the phone minimum (28px), 33px as laid out.
+for (const [w, h, minTab] of [[844, 390, 38], [667, 375, 28]]) {
+  test.describe(`legacy creator tab strip at ${w}x${h}`, () => {
+    test.use({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
+
+    test("two rows of tabs, wide enough, and a tap mid-strip picks that tab", async ({ page }) => {
+      await openLegacyCreator(page);
+      const strip = await page.evaluate(async () => {
+        const { getCreatorLayout, tabRect, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+        const g = window.ccDebug.game;
+        const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
+        const k = g.canvas.getBoundingClientRect().width / g.canvas.width;
+        const rects = CREATOR_CATEGORIES.map((c, i) => tabRect(L, i));
+        return { touch: !!g.isTouchDevice, rows: new Set(rects.map((r) => r.y)).size, minW: Math.min(...rects.map((r) => r.w)) * k, n: rects.length, perRow: L.perRow };
+      });
+      expect(strip.touch).toBe(true);
+      expect(strip.rows).toBe(2);
+      expect(strip.minW).toBeGreaterThanOrEqual(minTab);
+      // The middle tab of each row, tapped.
+      for (const target of [Math.floor(strip.perRow / 2), strip.perRow + Math.floor((strip.n - strip.perRow) / 2)]) {
+        const point = await page.evaluate(async (i) => {
+          const { getCreatorLayout, tabRect } = await import("/src/ui/character-creator.js");
+          const g = window.ccDebug.game;
+          const rect = g.canvas.getBoundingClientRect();
+          const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
+          const t = tabRect(L, i);
+          const k = rect.width / g.canvas.width;
+          return { x: rect.left + (t.x + t.w / 2) * k, y: rect.top + (t.y + t.h / 2) * k };
+        }, target);
+        await page.touchscreen.tap(point.x, point.y);
+        await expect.poll(() => page.evaluate(() => window.ccDebug.game.creatorCategory)).toBe(target);
+      }
+    });
+  });
+}
+
 // ── Full-look screenshot sweep across all three art styles ──
 
 for (const [style, name] of [[0, "legacy"], [1, "comic"], [2, "modern"]]) {
