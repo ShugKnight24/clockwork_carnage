@@ -166,7 +166,7 @@ import {
   itemOf,
 } from "../src/systems/unlocks.js";
 import { GEAR_SLOTS } from "../src/data/cosmetics.js";
-import { syncGearStats } from "../src/systems/gear-sync.js";
+import { resumeGearStats, syncGearStats } from "../src/systems/gear-sync.js";
 import { getAct, levelsBefore } from "../src/data/campaign/acts.js";
 import {
   parSeconds,
@@ -1376,7 +1376,12 @@ export class Game {
     this.mode = "arena";
     this.arenaRound = data.round;
     this.player.reset();
+    // As a campaign continue: stats the save does not carry come from the
+    // class and gear; what it does carry is overwritten, then the gear the
+    // save was built with is moved to the gear worn now.
+    this.applyLoadoutBonuses();
     this.player.deserialize(data);
+    this.resumeSavedGear(data);
     this.upgradeLevels = data.upgradeLevels || {};
     this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
     this.startArenaRound();
@@ -1837,6 +1842,16 @@ export class Game {
    */
   syncGearBonuses() {
     syncGearStats(this.player, gearBonuses(this.character));
+  }
+
+  /**
+   * After a saved run's stats are loaded: they already hold the gear the
+   * save was made in, so record that and bring them to the gear worn now
+   * (gear-sync.js resumeGearStats), never adding it a second time.
+   * @param {object} data the save
+   */
+  resumeSavedGear(data) {
+    resumeGearStats(this.player, data, this.character, gearBonuses(this.character));
   }
 
   /**

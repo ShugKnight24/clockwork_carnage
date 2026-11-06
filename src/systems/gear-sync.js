@@ -1,3 +1,6 @@
+import { GEAR_STATS } from "../data/gear-stats.js";
+import { legacyGearBonuses } from "../data/legacy-gear.js";
+
 /**
  * Gear bonuses applied to a live player as a difference, so gear put on in
  * the middle of a run (a battlefield drop, a change saved in the creator from
@@ -69,4 +72,47 @@ function clampRounds(p) {
     reserves[id] = Math.min(reserves[id], p.ammoCapOf(id));
     if (p.mags?.[id] > reserves[id]) p.mags[id] = reserves[id];
   }
+}
+
+/** A stored gear record: an object of finite numbers, each a GEAR_STATS key. */
+function isGearRecord(v) {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  return Object.entries(v).every(([k, n]) => k in GEAR_STATS && Number.isFinite(n));
+}
+
+/**
+ * The gear bonuses a saved run's stats were built with: the save's own
+ * `gearApplied`, or for a save from before it was kept, what that release's
+ * gear gave for the gear worn now (legacyGearBonuses; see there for the
+ * assumption). An old save does not carry maxStamina either: that comes from
+ * the loadout and the gear worn now (`now`) before the save is applied, so
+ * its share is today's.
+ * @param {object} data the save, already applied to the player
+ * @param {object} character
+ * @param {Record<string, number>} now gearBonuses(character)
+ * @returns {Record<string, number>}
+ */
+export function savedGearApplied(data, character, now) {
+  if (isGearRecord(data?.gearApplied)) return { ...data.gearApplied };
+  const baked = legacyGearBonuses(character);
+  if (!(data && "maxStamina" in data)) {
+    delete baked.maxStaminaAdd;
+    if (now.maxStaminaAdd) baked.maxStaminaAdd = now.maxStaminaAdd;
+  }
+  return baked;
+}
+
+/**
+ * Continue a saved run: the save's stats (already deserialized onto
+ * `player`) hold the gear they were built with; record it, then move them to
+ * the gear worn now, once. Without this a continue counted the gear twice,
+ * or kept the stats of gear taken off since.
+ * @param {object} player
+ * @param {object} data the save
+ * @param {object} character
+ * @param {Record<string, number>} now gearBonuses(character)
+ */
+export function resumeGearStats(player, data, character, now) {
+  player._gearApplied = savedGearApplied(data, character, now);
+  syncGearStats(player, now);
 }

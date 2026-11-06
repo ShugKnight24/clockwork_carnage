@@ -112,6 +112,7 @@ export class CampaignManager {
       g.applyLoadoutBonuses?.();
       this.loadLevel(this.level);
       g.player.deserialize(data);
+      g.resumeSavedGear?.(data);
       if (data.playerX !== undefined) {
         g.player.x = data.playerX;
         g.player.y = data.playerY;

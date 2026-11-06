@@ -316,6 +316,9 @@ export function saveArena(round, player, upgradeLevels, difficulty) {
       version: SAVE_VERSION,
       round,
       ...player.serialize(),
+      // The gear bonuses in those stats, so a continue moves them to the
+      // gear worn then exactly once (resumeGearStats).
+      gearApplied: player._gearApplied ?? {},
       upgradeLevels,
       difficulty,
     };
@@ -483,6 +486,7 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
       aimOffsetX: player.aimOffsetX || 0,
       aimOffsetY: player.aimOffsetY || 0,
       ...player.serialize(),
+      gearApplied: player._gearApplied ?? {},
       difficulty,
       contentHash,
       mapGrid,

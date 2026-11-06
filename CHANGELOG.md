@@ -31,6 +31,7 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
   - helmet gear on a helmet with no place for it (nothing on the Bubble's glass);
   - eyewear and face items under a closed helmet, or where an open helmet has no room for them (a bandana up over the face).
   - A frame that covers the chest kit, the collar or the cape keeps every stat: it changes the look, not the gear.
+- **Gear on a continued run.** Continuing a campaign or arena run counts your gear once: gear changed since the save swaps its stats cleanly, and a piece picked up later no longer adds your whole kit's stats again. Saves from earlier builds move to the new gear stats on their first continue. An arena continue also keeps your class's and gear's stamina.
 - **Gear stats that fit the piece.** Plate gives armour, a gun belt carries rounds, a heavy suit slows you down, chrono hardware feeds chrono energy. A piece nothing fits is cosmetic, and its tile says "Looks only". Gear can now also raise ammo capacity, fire rate, stamina regen and health regen; dropping ammo capacity mid-run trims your rounds to the new cap, and putting the gear back on adds room, not rounds. Every tile states the real effect (move speed as a percent of your base speed). Old gear that changed:
   - Engineer armour: +25 chrono energy, +10 max health → +25 chrono energy, +0.2 health per second.
   - Bucket helmet: +18 max health → +6 armour.

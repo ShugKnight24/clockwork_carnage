@@ -39,6 +39,9 @@ export class Player {
     this.health = PLAYER_MAX_HP;
     this.maxHealth = PLAYER_MAX_HP;
     this.armor = 0;
+    // The gear bonuses these stats were built with (src/systems/gear-sync.js);
+    // a fresh player has none on.
+    this._gearApplied = null;
     // Rounds carried per weapon id, each up to its maxAmmo × ammoCap. A gun
     // is stocked with its startAmmo the first time it is held (reserveOf).
     this.reserves = {};
@@ -293,6 +296,9 @@ export class Player {
     "maxChronoEnergy",
     "aimOffsetX",
     "aimOffsetY",
+    // Levels, loadouts and gear write it; saved so a continued run's stats
+    // all stand on the same gear (gearApplied in the saves).
+    "maxStamina",
   ];
 
   /**
