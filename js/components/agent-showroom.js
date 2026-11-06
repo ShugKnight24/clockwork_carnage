@@ -59,6 +59,15 @@ const MAX_LOOKS = 5;
 const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voice", "backstory", "loadout", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
+/** The head-and-shoulders crop of preset and saved-look thumbnails. */
+const THUMB_VIEW = [-22, -106, 44, 44];
+/**
+ * Fields a preset or look thumbnail draws at their defaults: the class kit,
+ * origin insignia and rifle sit on the body below its crop. Thumbnails are
+ * keyed on what they draw (thumbFigure), so picking a class or a finish
+ * redraws none of them.
+ */
+const THUMB_DEFAULTS = ["loadout", "backstory", "weaponSkin"];
 /** Camera toggle order (the C key cycles through them). */
 const CAMERAS = ["full", "bust", "face"];
 /**
@@ -2361,17 +2370,28 @@ class AgentShowroom extends HTMLElement {
     this.applyYaw();
   }
 
+  /** What a preset or look thumbnail draws: `ch` with THUMB_DEFAULTS at their defaults. */
+  thumbFigure(ch) {
+    const out = { ...ch };
+    for (const k of THUMB_DEFAULTS) out[k] = DEFAULT_CHARACTER[k];
+    return out;
+  }
+
+  /** Redraw thumbnail `el` with figure `ch` only when what it shows changed; true when it redrew. */
+  paintThumb(el, ch, idPrefix) {
+    const sig = lookKey(ch) + (this._real ? "|r" : "");
+    if (el.dataset.sig === sig) return false;
+    el.dataset.sig = sig;
+    el.querySelector(":scope > svg")?.remove();
+    el.insertAdjacentHTML("afterbegin", buildAgentSvg(ch, { view: THUMB_VIEW, idPrefix, lighting: "flat", realistic: this._real }));
+    return true;
+  }
+
   renderPresets() {
     this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
       // The preset as it would be worn now: it keeps the player's own hair
       // colour, body, eyewear and face, so the thumbnail redraws with them.
-      const ch = this.wornWith(this.presetChanges(i));
-      const pthumb = btn.querySelector(".pthumb");
-      const sig = lookKey(ch) + (this._real ? "|r" : "");
-      if (pthumb.dataset.sig !== sig) {
-        pthumb.dataset.sig = sig;
-        pthumb.innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
-      }
+      this.paintThumb(btn.querySelector(".pthumb"), this.thumbFigure(this.wornWith(this.presetChanges(i))), `ps${i}-`);
       const lock = this.presetLock(i);
       btn.classList.toggle("locked", !!lock);
       btn.hidden = !!lock && !this.showLockedPresets;
@@ -2421,20 +2441,23 @@ class AgentShowroom extends HTMLElement {
   renderLooks() {
     const box = this.el.presets.querySelector(".looks");
     const list = this.looks;
+    // The buttons are rebuilt only when the list itself changes, so focus on
+    // one survives every other edit.
+    const sig = JSON.stringify(list);
+    if (box.dataset.sig !== sig) {
+      box.dataset.sig = sig;
+      box.innerHTML =
+        list
+          .map(
+            (l, i) =>
+              `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb"></span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
+          )
+          .join("") +
+        (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
+    }
     // Each look as it would be worn now (wearLook): fields it was not saved
     // with show as worn, so the thumbnails follow the current look too.
-    const shown = list.map((l) => this.wornWith(this.lookChanges(l)));
-    const sig = JSON.stringify(list) + shown.map(lookKey).join(";") + (this._real ? "r" : "");
-    if (box.dataset.sig === sig) return;
-    box.dataset.sig = sig;
-    box.innerHTML =
-      list
-        .map(
-          (l, i) =>
-            `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb">${buildAgentSvg(shown[i], { view: [-22, -106, 44, 44], idPrefix: `lk${i}-`, lighting: "flat", realistic: this._real })}</span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
-        )
-        .join("") +
-      (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
+    box.querySelectorAll(".look .pthumb").forEach((el, i) => this.paintThumb(el, this.thumbFigure(this.wornWith(this.lookChanges(list[i]))), `lk${i}-`));
   }
 
   saveLook() {

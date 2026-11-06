@@ -283,6 +283,48 @@ test("preset and look thumbnails show the hair colour and face item worn, as wea
   expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ hair: "afro", hairColor: "pink", helmet: "wide", accessories: { face: "warpaint" } });
 });
 
+test("look thumbnails redraw only when what they show changes; focus on a look survives a class change", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  await room(page).locator(".save-look").click();
+  const look = room(page).locator('.look .preset[data-look="0"]');
+  await look.evaluate((el) => {
+    el.focus({ preventScroll: true });
+    el.__kept = true;
+    el.querySelector(".pthumb > svg").__kept = true;
+  });
+  await page.evaluate(() => {
+    const r = document.querySelector("agent-showroom");
+    for (const t of r.shadowRoot.querySelectorAll(".preset[data-preset] .pthumb > svg")) t.__kept = true;
+    r.commit({ loadout: r.character.loadout === "enforcer" ? "gunslinger" : "enforcer" });
+  });
+  const after = await page.evaluate(() => {
+    const r = document.querySelector("agent-showroom").shadowRoot;
+    const el = r.querySelector('.look .preset[data-look="0"]');
+    return {
+      focused: r.activeElement === el && !!el.__kept,
+      lookThumb: !!el.querySelector(".pthumb > svg").__kept,
+      presetThumbs: [...r.querySelectorAll(".preset[data-preset] .pthumb > svg")].every((t) => t.__kept),
+    };
+  });
+  expect(after).toEqual({ focused: true, lookThumb: true, presetThumbs: true });
+  // A change a thumbnail does show redraws it in place (a preset keeps the
+  // player's hair colour; the saved look holds its own), focus still where it was.
+  await page.evaluate(() => {
+    const r = document.querySelector("agent-showroom");
+    r.commit({ hairColor: "pink" });
+  });
+  expect(await page.evaluate(() => {
+    const r = document.querySelector("agent-showroom").shadowRoot;
+    const el = r.querySelector('.look .preset[data-look="0"]');
+    return {
+      focused: r.activeElement === el && !!el.__kept,
+      lookKept: !!el.querySelector(".pthumb > svg").__kept,
+      presetRedrawn: !r.querySelector('.preset[data-preset="0"] .pthumb > svg').__kept,
+    };
+  })).toEqual({ focused: true, lookKept: true, presetRedrawn: true });
+});
+
 test("the shoulder note reads the frame's own right shoulder", async ({ page }) => {
   await openCreator(page);
   await tab(page, "suit").click();
