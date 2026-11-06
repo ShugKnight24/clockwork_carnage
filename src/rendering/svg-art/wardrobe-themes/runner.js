@@ -263,24 +263,27 @@ function ledmask(c, K) {
 
 function spikepad(c, s, K) {
   const { M, rot, lit, mix } = K;
-  // A padded jacket shoulder: a squared cap quilted across, studs along its
-  // top edge. The right pad grows short spikes and a tape X; the left takes
+  // A padded jacket shoulder: a rounded cap that rolls over the joint and
+  // swells at its hem, quilted in bands that follow the curve, studs along
+  // its crown. The right pad grows short spikes and a tape X; the left takes
   // a reflective stripe. The pair never quite match.
-  const pad = "M11,-67.8 L25,-70.6 C27.6,-70.4 29.8,-68.6 30.6,-65.6 L30.4,-55.6 L17.2,-54.2 C17.6,-59.4 15.6,-64 11,-65.8 Z";
-  const studs = [[15.2, -68.4], [19.2, -69.2], [23.2, -70], [27.4, -69.2], [30, -66]]
+  const pad =
+    "M11,-67.6 C15.4,-70.2 20.6,-71.4 25,-70.6 C28.6,-69.8 31,-66.8 31.4,-62.6 C31.6,-59.8 31.2,-57.4 30.2,-55.2 " +
+    "C26,-53.4 21,-53.4 17.2,-54.4 C17.4,-59.4 15.4,-63.8 11,-65.6 Z";
+  const studs = [[14.8, -69], [19, -70.4], [23.4, -70.7], [27.6, -69.2], [30.4, -65.8]]
     .map(([x, y]) => `<circle cx="${f(s * x)}" cy="${f(y)}" r=".9" fill="${STEEL}" stroke="${INK}" stroke-width=".45"/><circle cx="${f(s * x - 0.3)}" cy="${f(y - 0.3)}" r=".28" fill="#ffffff" opacity=".85"/>`)
     .join("");
   const spikes =
     s > 0
-      ? ["M17.2,-68.8 L18.4,-75.4 L21,-69.4 Z", "M21.8,-69.6 L24,-77 L25.6,-70 Z", "M26.6,-69.8 L31,-75.2 L29.6,-67.6 Z", "M30.2,-66 L35.6,-68.4 L30.6,-62.4 Z"]
+      ? ["M16.6,-69.4 L17.2,-75.8 L19.8,-70.6 Z", "M21.4,-70.8 L23.2,-77.4 L24.8,-70.6 Z", "M26.2,-69.8 L30.2,-74.8 L29.2,-67.8 Z", "M30.6,-66.4 L35.8,-66.8 L31.4,-62.2 Z"]
           .map((d) => shape(M(d), STEEL, 0.7) + line(M(d.split(" L").slice(0, 2).join(" L")), "#ffffff", 0.35, 0.6))
           .join("")
       : "";
   const mark =
     s < 0
-      ? shape(M("M14.8,-62.2 L30.6,-64.6 L30.6,-60.4 L16.4,-58 Z"), "#dfe6ea", 0.7) +
-        line(M("M18.4,-62.6 L19.4,-58.6 M22.2,-63.2 L23.2,-59.2 M26,-63.8 L27,-59.8"), "#97a3ab", 0.55, 0.9) +
-        line(M("M15.4,-61.6 L30.2,-63.8"), "#ffffff", 0.45, 0.95)
+      ? shape(M("M15.4,-62.6 C20.4,-64.8 26.4,-65.2 31.2,-63.4 L31.4,-59.4 C26.4,-61.2 20.8,-60.8 16.6,-58.6 Z"), "#dfe6ea", 0.7) +
+        line(M("M19,-63.6 L19.8,-59.6 M22.8,-64.4 L23.4,-60.4 M26.8,-64.6 L27.2,-60.6"), "#97a3ab", 0.55, 0.9) +
+        line(M("M16,-62 C20.6,-64 26.2,-64.4 30.8,-62.8"), "#ffffff", 0.45, 0.95)
       : shape(M("M20.6,-63.6 L27.8,-58.2 L26.8,-56.8 L19.6,-62.2 Z"), TAPE, 0.5) +
         shape(M("M27.4,-63.8 L20.2,-58 L19.2,-59.4 L26.4,-65 Z"), TAPE, 0.5);
   return rot(
@@ -288,12 +291,12 @@ function spikepad(c, s, K) {
       shape(M(pad), PAINT, 1.1) +
       `<path d="${M(pad)}" fill="url(#weave)" opacity=".5"/>` +
       // Quilting seams.
-      line(M("M16.8,-60.2 L30.4,-61.6 M16.6,-64.8 L30.4,-66.4"), "#000000", 0.5, 0.35) +
-      line(M("M17.4,-55.8 L30.2,-57"), mix(c.pal.dark, "#000000", 0.3), 1.6, 0.8) +
+      line(M("M17,-59.8 C21.6,-61.8 26.8,-62 31.2,-60.2 M15.4,-65 C20,-67.2 25.6,-67.6 30.4,-65.8"), "#000000", 0.5, 0.35) +
+      line(M("M17.6,-55.6 C21.6,-54.8 26,-55 29.8,-56.4"), mix(c.pal.dark, "#000000", 0.3), 1.6, 0.8) +
       mark +
       studs +
-      line(M("M13.2,-66.4 L24.8,-68.8"), "#ffffff", 0.6, lit ? 0.6 : 0.3) +
-      (lit ? "" : line("M31,-65 L30.8,-56", c.rim, 0.8, 0.85)),
+      line(M("M13.2,-67.2 C17.4,-69.4 21.8,-70.2 25,-69.8"), "#ffffff", 0.6, lit ? 0.6 : 0.3) +
+      (lit ? "" : line("M31.4,-63.4 C31.6,-60.2 31.2,-57.8 30.4,-55.8", c.rim, 0.8, 0.85)),
   );
 }
 
