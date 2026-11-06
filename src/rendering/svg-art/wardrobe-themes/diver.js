@@ -137,7 +137,16 @@ function diving(P, c, K) {
   const wing = (x) =>
     `<circle cx="${x}" cy="-64.6" r="1.5" fill="${BRASS}" stroke="${INK}" stroke-width=".5"/>` +
     shape(`M${f(x - 2.8)},-65.4 L${f(x + 2.8)},-65.4 L${f(x + 2.6)},-63.8 L${f(x - 2.6)},-63.8 Z`, BRASS_DK, 0.45);
+  // The canvas carries on over the seat, where the plate's hip guards came
+  // off (the frame hides them), with a brass valve at the belt for the
+  // suit's light.
+  const seat = "M-14.4,-27.8 L14.4,-27.8 C14.8,-22.4 15,-17.4 14.6,-12.8 C9,-11.8 4,-9.8 0,-8.6 C-4,-9.8 -9,-11.8 -14.6,-12.8 C-15,-17.4 -14.8,-22.4 -14.4,-27.8 Z";
   const torso =
+    shape(seat, CANVAS, 1) +
+    `<path d="${seat}" fill="url(#weave)"/>` +
+    line("M0,-27 L0,-9.4 M-13.8,-14 C-8.6,-13 -3.6,-11 0,-9.8 C3.6,-11 8.6,-13 13.8,-14", "#000000", 0.5, 0.4) +
+    `<circle cx="0" cy="-24.9" r="2.9" fill="${BRASS}" stroke="${INK}" stroke-width=".7"/>` +
+    `<circle cx="0" cy="-24.9" r="1.9" fill="#0b1014" stroke="${INK}" stroke-width=".4"/>` +
     shape(body, CANVAS, 1) +
     `<path d="${body}" fill="url(#weave)"/>` +
     line("M-15,-46 C-12,-44 -10,-42 -9,-38 M15,-46 C12,-44 10,-42 9,-38", "#000000", 0.5, 0.45) +

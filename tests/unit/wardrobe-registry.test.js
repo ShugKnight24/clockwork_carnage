@@ -259,8 +259,8 @@ describe("the spike themes", () => {
     }
   });
 
-  it("the Marshal's duster covers the kit, the cape and the limb light; the brim is an open hat with no brow seat", () => {
-    expect(hidesOf("duster")).toEqual(["kit", "cape", "limbGlow"]);
+  it("the Marshal's duster covers the kit, the hip plates, the cape and the limb light; the brim is an open hat with no brow seat", () => {
+    expect(hidesOf("duster")).toEqual(["kit", "hips", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "brim")).toMatchObject({ face: true, visor: false });
     expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true });
     expect(HELMET_ART.brim.anchors.badge).toBe(false);
@@ -299,8 +299,8 @@ describe("the Neon Runner theme", () => {
 });
 
 describe("the Abyssal Diver theme", () => {
-  it("the canvas suit covers the kit, collar, cape and limb light; the porthole is sealed, its crown and brow taken", () => {
-    expect(hidesOf("diving")).toEqual(["kit", "collar", "cape", "limbGlow"]);
+  it("the canvas suit covers the kit, collar, hip plates, cape and limb light; the porthole is sealed, its crown and brow taken", () => {
+    expect(hidesOf("diving")).toEqual(["kit", "collar", "hips", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "porthole").visor).toBe(false);
     expect(FACE_HELMETS.has("porthole")).toBe(false);
     expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true });
@@ -309,8 +309,8 @@ describe("the Abyssal Diver theme", () => {
 });
 
 describe("the Void Ranger theme", () => {
-  it("the pressure suit covers the kit, collar and limb light; the bubble is open glass that takes no gear", () => {
-    expect(hidesOf("spacesuit")).toEqual(["kit", "collar", "limbGlow"]);
+  it("the pressure suit covers the kit, collar, hip plates and limb light; the bubble is open glass that takes no gear", () => {
+    expect(hidesOf("spacesuit")).toEqual(["kit", "collar", "hips", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "bubble")).toMatchObject({ face: true, visor: false });
     expect(helmetSeats("bubble")).toEqual({ crown: false, brow: false, side: false });
     expect(HELMET_ART.bubble.anchors.badge).toBe(false);
@@ -318,8 +318,8 @@ describe("the Void Ranger theme", () => {
 });
 
 describe("the Chronomancer theme", () => {
-  it("the robe covers the kit, cape and limb light; the hood's halo and hollow take the crown and brow, the badge rides the clasp", () => {
-    expect(hidesOf("vestment")).toEqual(["kit", "cape", "limbGlow"]);
+  it("the robe covers the kit, hip plates, cape and limb light; the hood's halo and hollow take the crown and brow, the badge rides the clasp", () => {
+    expect(hidesOf("vestment")).toEqual(["kit", "hips", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "hood").visor).toBe(false);
     expect(FACE_HELMETS.has("hood")).toBe(false);
     expect(helmetSeats("hood")).toEqual({ crown: false, brow: false, side: true });

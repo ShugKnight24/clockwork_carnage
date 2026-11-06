@@ -7,7 +7,7 @@ export default {
   id: "marshal",
   name: "Frontier Marshal",
   short: "Marshal",
-  frames: [{ id: "duster", name: "Frontier Duster", desc: "Long duster over the suit: twin thigh holsters, a marshal's star, spurred boots", tier: 2, hides: ["kit", "cape", "limbGlow"],
+  frames: [{ id: "duster", name: "Frontier Duster", desc: "Long duster over the suit: twin thigh holsters, a marshal's star, spurred boots", tier: 2, hides: ["kit", "hips", "cape", "limbGlow"],
       // Heavy oilcloth, and twin holsters with rounds on the belt.
       bonuses: { armorAdd: 1, ammoCapAdd: 0.1 } }],
   // An open hat with a bandana over the mouth: the face shows, no visor.

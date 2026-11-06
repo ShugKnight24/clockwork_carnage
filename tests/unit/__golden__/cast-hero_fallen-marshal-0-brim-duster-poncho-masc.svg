@@ -449,14 +449,6 @@
 <path d="M-12.6,-25.2 L-8.1,-24.9 M12.6,-25.2 L8.1,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#steel)" stroke="#04060b" stroke-width="0.6"/>
 <rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#1e1b18"/>
-<path d="M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z" fill="url(#steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
-<path d="M-4.8,-22.4 L-14.6,-23 C-15.8,-19 -16.2,-15 -15.8,-10.8 L-7.4,-9.2 C-6.1,-12.8 -5.3,-18 -4.8,-22.4 Z" fill="url(#steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-4.8,-22.4 L-14.6,-23 C-15.8,-19 -16.2,-15 -15.8,-10.8 L-7.4,-9.2 C-6.1,-12.8 -5.3,-18 -4.8,-22.4 Z" fill="url(#cyl)"/>
-<path d="M4.8,-22.4 L14.6,-23 C15.8,-19 16.2,-15 15.8,-10.8 L7.4,-9.2 C6.1,-12.8 5.3,-18 4.8,-22.4 Z" fill="url(#steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-14.4,-17 L-6.2,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.4,-17 L6.2,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M15.4,-20.6 C15.8,-17 15.9,-14 15.6,-11.4" fill="none" stroke="#bdd280" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-12.6,-64.6 C-13.6,-68.6 -13.4,-72.6 -12,-75.4 C-6,-73.2 6,-73.2 12,-75.4 C13.4,-72.6 13.6,-68.6 12.6,-64.6 C7,-67 -7,-67 -12.6,-64.6 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-11.6,-74 C-6,-72 6,-72 11.6,-74" fill="none" stroke="#6d5a47" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-6,-67.2 C-10,-68.2 -14.6,-67.8 -18,-66.2 C-20.2,-56 -20.4,-40 -19.8,-28 L4.4,31 Q6.4,33.4 8.9,33.6 Q11.8,33.6 13.4,33 L-9.4,-28 C-8.4,-40 -7.2,-54 -6,-67.2 Z" fill="#000" opacity="0.45" filter="url(#ao)" transform="translate(0.9,1.3)"/>

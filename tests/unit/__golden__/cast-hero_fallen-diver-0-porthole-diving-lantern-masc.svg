@@ -644,14 +644,11 @@
 <path d="M-12.6,-25.2 L-8.1,-24.9 M12.6,-25.2 L8.1,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#steel)" stroke="#04060b" stroke-width="0.6"/>
 <rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#162c6f"/>
-<path d="M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z" fill="url(#steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
-<path d="M-4.8,-22.4 L-14.6,-23 C-15.8,-19 -16.2,-15 -15.8,-10.8 L-7.4,-9.2 C-6.1,-12.8 -5.3,-18 -4.8,-22.4 Z" fill="url(#steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-4.8,-22.4 L-14.6,-23 C-15.8,-19 -16.2,-15 -15.8,-10.8 L-7.4,-9.2 C-6.1,-12.8 -5.3,-18 -4.8,-22.4 Z" fill="url(#cyl)"/>
-<path d="M4.8,-22.4 L14.6,-23 C15.8,-19 16.2,-15 15.8,-10.8 L7.4,-9.2 C6.1,-12.8 5.3,-18 4.8,-22.4 Z" fill="url(#steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-14.4,-17 L-6.2,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.4,-17 L6.2,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M15.4,-20.6 C15.8,-17 15.9,-14 15.6,-11.4" fill="none" stroke="#3aa4ff" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-14.4,-27.8 L14.4,-27.8 C14.8,-22.4 15,-17.4 14.6,-12.8 C9,-11.8 4,-9.8 0,-8.6 C-4,-9.8 -9,-11.8 -14.6,-12.8 C-15,-17.4 -14.8,-22.4 -14.4,-27.8 Z" fill="url(#frame-diving-canvas)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-14.4,-27.8 L14.4,-27.8 C14.8,-22.4 15,-17.4 14.6,-12.8 C9,-11.8 4,-9.8 0,-8.6 C-4,-9.8 -9,-11.8 -14.6,-12.8 C-15,-17.4 -14.8,-22.4 -14.4,-27.8 Z" fill="url(#weave)"/>
+<path d="M0,-27 L0,-9.4 M-13.8,-14 C-8.6,-13 -3.6,-11 0,-9.8 C3.6,-11 8.6,-13 13.8,-14" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="-24.9" r="2.9" fill="url(#frame-diving-brass)" stroke="#04060b" stroke-width="0.7"/>
+<circle cx="0" cy="-24.9" r="1.9" fill="#0b1014" stroke="#04060b" stroke-width="0.4"/>
 <path d="M-16,-64.8 C-18,-56 -17.6,-46 -15.6,-38 C-14.6,-34 -14.2,-30 -14.4,-27.4 L14.4,-27.4 C14.2,-30 14.6,-34 15.6,-38 C17.6,-46 18,-56 16,-64.8 C8,-66.6 -8,-66.6 -16,-64.8 Z" fill="url(#frame-diving-canvas)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-16,-64.8 C-18,-56 -17.6,-46 -15.6,-38 C-14.6,-34 -14.2,-30 -14.4,-27.4 L14.4,-27.4 C14.2,-30 14.6,-34 15.6,-38 C17.6,-46 18,-56 16,-64.8 C8,-66.6 -8,-66.6 -16,-64.8 Z" fill="url(#weave)"/>
 <path d="M-15,-46 C-12,-44 -10,-42 -9,-38 M15,-46 C12,-44 10,-42 9,-38" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>

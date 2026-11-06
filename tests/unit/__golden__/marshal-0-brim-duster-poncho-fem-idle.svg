@@ -364,14 +364,6 @@
 <path d="M-12.5,-25.2 L-8.1,-24.9 M12.5,-25.2 L8.1,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.6"/>
 <rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#1e1b18"/>
-<path d="M-4.9,-22 L4.9,-22 L4.1,-14 L0,-11.6 L-4.1,-14 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
-<path d="M-5.1,-22.4 L-15.3,-23 C-17.8,-19 -18.5,-15 -18.3,-10.8 L-8.6,-9.2 C-7,-12.8 -6,-18 -5.1,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-5.1,-22.4 L-15.3,-23 C-17.8,-19 -18.5,-15 -18.3,-10.8 L-8.6,-9.2 C-7,-12.8 -6,-18 -5.1,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
-<path d="M5.1,-22.4 L15.3,-23 C17.8,-19 18.5,-15 18.3,-10.8 L8.6,-9.2 C7,-12.8 6,-18 5.1,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-15,-21.4 C-12,-21.2 -8.8,-21 -6.2,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-16.3,-17 L-7.1,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.3,-17 L7.1,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M17,-20.6 C17.9,-17 18.2,-14 18,-11.4" fill="none" stroke="#bdd280" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 <ellipse cx="-7" cy="-53" rx="6.4" ry="5" fill="url(#marshal-0-brim-duster-poncho-fem-idle-sheen)" opacity="0.5"/>
 <ellipse cx="7" cy="-53" rx="6.4" ry="5" fill="#000" opacity="0.12"/>
 <path d="M-13.5,-51 C-11.3,-44.8 -4.5,-44 -0.9,-47.6 M13.5,-51 C11.3,-44.8 4.5,-44 0.9,-47.6" fill="none" stroke="#04060b" stroke-width="0.6" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>

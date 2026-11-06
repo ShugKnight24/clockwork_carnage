@@ -7,7 +7,7 @@ export default {
   id: "diver",
   name: "Abyssal Diver",
   short: "Diver",
-  frames: [{ id: "diving", name: "Abyssal Diver", desc: "Canvas pressure suit, brass corselet, back tank and lead boots", tier: 2, hides: ["kit", "collar", "cape", "limbGlow"],
+  frames: [{ id: "diving", name: "Abyssal Diver", desc: "Canvas pressure suit, brass corselet, back tank and lead boots", tier: 2, hides: ["kit", "collar", "hips", "cape", "limbGlow"],
       // A pressure suit takes punishment; the lead boots slow you.
       bonuses: { maxHealthAdd: 12, moveSpeedAdd: -0.08 } }],
   // A sealed helmet whose port glass is its own: no visor to fit.

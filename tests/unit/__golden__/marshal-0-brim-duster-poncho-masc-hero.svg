@@ -372,14 +372,6 @@
 <path d="M-12.1,-25.2 L-7.8,-24.9 M12.1,-25.2 L7.8,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#marshal-0-brim-duster-poncho-masc-hero-steel)" stroke="#04060b" stroke-width="0.6"/>
 <rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#1e1b18"/>
-<path d="M-4.4,-22 L4.4,-22 L3.5,-14 L0,-11.6 L-3.5,-14 Z" fill="url(#marshal-0-brim-duster-poncho-masc-hero-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
-<path d="M-4.6,-22.4 L-14,-23 C-15.2,-19 -15.6,-15 -15.3,-10.8 L-7.2,-9.2 C-5.9,-12.8 -5.1,-18 -4.6,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-masc-hero-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-4.6,-22.4 L-14,-23 C-15.2,-19 -15.6,-15 -15.3,-10.8 L-7.2,-9.2 C-5.9,-12.8 -5.1,-18 -4.6,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-masc-hero-cyl)"/>
-<path d="M4.6,-22.4 L14,-23 C15.2,-19 15.6,-15 15.3,-10.8 L7.2,-9.2 C5.9,-12.8 5.1,-18 4.6,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-masc-hero-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-13.3,-21.4 C-10.6,-21.2 -7.7,-21 -5.4,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-13.9,-17 L-6,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M13.9,-17 L6,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.8,-20.6 C15.2,-17 15.4,-14 15.1,-11.4" fill="none" stroke="#bdd280" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-15.1,-64.6 C-16.2,-68.6 -15.8,-72.6 -14.1,-75.4 C-7.1,-73.2 7.1,-73.2 14.1,-75.4 C15.8,-72.6 16.2,-68.6 15.1,-64.6 C8.4,-67 -8.4,-67 -15.1,-64.6 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-13.7,-74 C-7.1,-72 7.1,-72 13.7,-74" fill="none" stroke="#6d5a47" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-7.2,-67.2 C-11.9,-68.2 -17.4,-67.8 -21.6,-66.2 C-23.8,-56 -20.3,-40 -19,-28 L-24.7,31 Q-22.7,33.4 -20.3,33.6 Q-17.4,33.6 -15.8,33 L-9,-28 C-8.4,-40 -8.4,-54 -7.2,-67.2 Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-masc-hero-ao)" transform="translate(0.9,1.3)"/>

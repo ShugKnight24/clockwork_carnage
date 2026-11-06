@@ -473,14 +473,6 @@
 <path d="M-12.1,-25.2 L-7.8,-24.9 M12.1,-25.2 L7.8,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#ranger-0-bubble-spacesuit-patches-masc-idle-steel)" stroke="#04060b" stroke-width="0.6"/>
 <rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#6f1621"/>
-<path d="M-4.4,-22 L4.4,-22 L3.5,-14 L0,-11.6 L-3.5,-14 Z" fill="url(#ranger-0-bubble-spacesuit-patches-masc-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
-<path d="M-4.6,-22.4 L-14,-23 C-15.2,-19 -15.6,-15 -15.3,-10.8 L-7.2,-9.2 C-5.9,-12.8 -5.1,-18 -4.6,-22.4 Z" fill="url(#ranger-0-bubble-spacesuit-patches-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-4.6,-22.4 L-14,-23 C-15.2,-19 -15.6,-15 -15.3,-10.8 L-7.2,-9.2 C-5.9,-12.8 -5.1,-18 -4.6,-22.4 Z" fill="url(#ranger-0-bubble-spacesuit-patches-masc-idle-cyl)"/>
-<path d="M4.6,-22.4 L14,-23 C15.2,-19 15.6,-15 15.3,-10.8 L7.2,-9.2 C5.9,-12.8 5.1,-18 4.6,-22.4 Z" fill="url(#ranger-0-bubble-spacesuit-patches-masc-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
-<path d="M-13.3,-21.4 C-10.6,-21.2 -7.7,-21 -5.4,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-13.9,-17 L-6,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M13.9,-17 L6,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.8,-20.6 C15.2,-17 15.4,-14 15.1,-11.4" fill="none" stroke="#bd7588" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-19.9,-65.4 C-21.9,-56 -19.7,-46 -15.7,-38 C-14.4,-34 -14.1,-30 -14.8,-26 C-15.2,-21 -15.5,-14 -14.9,-9.6 C-9.7,-7.6 -3.9,-8.4 0,-11.4 C3.9,-8.4 9.7,-7.6 14.9,-9.6 C15.5,-14 15.2,-21 14.8,-26 C14.1,-30 14.4,-34 15.7,-38 C19.7,-46 21.9,-56 19.9,-65.4 C9.6,-67.6 -9.6,-67.6 -19.9,-65.4 Z" fill="#e2e5e4" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-19.9,-65.4 C-21.9,-56 -19.7,-46 -15.7,-38 C-14.4,-34 -14.1,-30 -14.8,-26 C-15.2,-21 -15.5,-14 -14.9,-9.6 C-9.7,-7.6 -3.9,-8.4 0,-11.4 C3.9,-8.4 9.7,-7.6 14.9,-9.6 C15.5,-14 15.2,-21 14.8,-26 C14.1,-30 14.4,-34 15.7,-38 C19.7,-46 21.9,-56 19.9,-65.4 C9.6,-67.6 -9.6,-67.6 -19.9,-65.4 Z" fill="url(#ranger-0-bubble-spacesuit-patches-masc-idle-cyl)"/>
 <path d="M-18.5,-48 C-11.9,-46.6 -11.9,-46.6 -11.9,-46.6 M11.9,-46.6 C14.2,-47 16.4,-47.4 18.5,-48" fill="none" stroke="#8e979e" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
