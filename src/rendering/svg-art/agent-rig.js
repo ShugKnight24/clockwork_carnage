@@ -57,7 +57,7 @@ import { CANDY, CANDY_HI, AMBER } from "./frame-kit.js";
 import { frameHides, helmetArt, helmetFaceSlots, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
 import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
 import { idScope } from "./id-scope.js";
-import { FACE_SLOTS } from "../../data/accessories.js";
+import { ACCESSORY_SLOTS, FACE_SLOTS, tintFor } from "../../data/accessories.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 import { clamp } from "../../utils/math.js";
 import { hexRgb, rgbHex, mixHexClamped } from "../../utils/color.js";
@@ -161,6 +161,8 @@ function resolve(ch) {
     badge: normalizeBadge(ch.badge),
     treatment: resolveTreatment(ch),
     accessories: normalizeAccessories(ch.accessories),
+    // Each tintable accessory worn, by slot: its colour as picked (tintFor).
+    tints: Object.fromEntries(ACCESSORY_SLOTS.map(({ id }) => [id, tintFor(ch, id)]).filter(([, hex]) => hex)),
     weapon,
     finish,
     loadout: pieceOf(ch, "loadout").id,

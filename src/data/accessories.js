@@ -4,6 +4,11 @@
  * summed by gearBonuses() (src/data/cosmetics.js). Painted by
  * src/rendering/svg-art/accessories/. Tier 2 and 3 items unlock by the
  * armour's TIER_UNLOCKS (src/data/cosmetics.js), looked up from `tier`.
+ *
+ * An item may declare `tint: { default: "#rrggbb", label }`: a colour of its
+ * own the player picks (War Paint's paint), never the suit's. The character
+ * keeps the pick per slot in `accessoryTints` ({ face: "#2f4f8f" }); the
+ * painter reads the resolved colour as c.tints[slot] (tintFor).
  */
 const NONE = { id: "none", name: "None", desc: "Nothing fitted" };
 
@@ -84,7 +89,7 @@ export const ACCESSORIES = {
   face: [
     NONE,
     { id: "scar", name: "Brow Scar", desc: "An old cut across the right eye", tier: 1 },
-    { id: "warpaint", name: "War Paint", desc: "Two stripes under the eyes", tier: 1 },
+    { id: "warpaint", name: "War Paint", desc: "Two stripes under the eyes, in a paint you pick", tier: 1, tint: { default: "#b0302a", label: "Paint" } },
     { id: "cigar", name: "Cigar", desc: "Lit, in the corner of the mouth", tier: 2 },
     { id: "nosestrip", name: "Field Dressing", desc: "A strip across the nose", tier: 1 },
     { id: "piercings", name: "Piercings", desc: "Brow bar and a lip ring", tier: 1 },
@@ -100,4 +105,37 @@ export function accessoryItem(slot, id) {
   const items = ACCESSORIES[slot];
   if (!items) return null;
   return items.find((i) => i.id === id) || items[0];
+}
+
+/** A tint colour: `#rrggbb`. */
+export const TINT_HEX = /^#[0-9a-f]{6}$/i;
+
+/**
+ * The paint colours the creator offers for a tintable item, before its
+ * custom colour input: ochre red (War Paint's own default), black, white,
+ * woad blue, ash grey, green and yellow.
+ */
+export const PAINT_SWATCHES = Object.freeze([
+  { hex: "#b0302a", name: "Ochre Red" },
+  { hex: "#121212", name: "Black" },
+  { hex: "#f2efe8", name: "White" },
+  { hex: "#2f4f8f", name: "Woad Blue" },
+  { hex: "#7d8288", name: "Ash Grey" },
+  { hex: "#3f7a3a", name: "Green" },
+  { hex: "#d9b02c", name: "Yellow" },
+].map(Object.freeze));
+
+/**
+ * The colour a slot's worn item is painted in: the character's pick for
+ * that slot when it is a valid colour, else the item's default; null when
+ * the item worn there takes no tint.
+ * @param {{ accessories?: object, accessoryTints?: object }} ch
+ * @param {string} slot
+ * @returns {string|null} lower-case `#rrggbb`
+ */
+export function tintFor(ch, slot) {
+  const tint = accessoryItem(slot, ch?.accessories?.[slot])?.tint;
+  if (!tint) return null;
+  const pick = ch?.accessoryTints?.[slot];
+  return (typeof pick === "string" && TINT_HEX.test(pick) ? pick : tint.default).toLowerCase();
 }

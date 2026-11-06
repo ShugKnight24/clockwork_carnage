@@ -15,7 +15,7 @@ import {
 } from "../data/index.js";
 import { takesVisor } from "../data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS } from "../data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor } from "../data/accessories.js";
 import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.js";
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
@@ -240,34 +240,83 @@ function wrapChars(text, max) {
 const NOTE_LINE = 13;
 const NOTE_CHAR = 6.1;
 
+/** The smallest paint swatch on touch, in canvas px: a fingertip, as the hair colours. */
+export const PAINT_SWATCH_MIN_TOUCH = HAIR_SWATCH_MIN_TOUCH;
+
 /**
- * The foot of the list panel on the eyes and face tabs: a note when the
- * helmet worn hides the slot ("Hidden under the …") or leaves it no room
- * ("No room under the …"), the way the visor tab notes a helmet with no
- * visor. Null when there is nothing to say. Shared by the renderer and the
- * click handler, like hairColorSwatches.
- * `head` lines are the note's heading, `sub` the line under it; the first
- * baseline is at `noteY`, one NOTE_LINE apart.
- * @returns {{ top: number, h: number, head: string[], sub: string[], noteY: number } | null}
+ * The foot of the list panel on the eyes and face tabs, bottom up: the
+ * paint swatches when the item worn takes a colour of its own (War Paint),
+ * and above them a note when the helmet worn hides the slot ("Hidden under
+ * the …") or leaves it no room ("No room under the …"), the way the visor
+ * tab notes a helmet with no visor. Null when there is neither. Shared by
+ * the renderer and the click handler, like hairColorSwatches.
+ * `head` lines are the note's heading and `sub` the line under it (both
+ * empty without a note), baselines from `noteY`, one NOTE_LINE apart.
+ * `tint` is the colour row: the slot, the item's label, the label's
+ * baseline and one box per PAINT_SWATCHES entry. The canvas offers the
+ * swatches only; a colour of the player's own is mixed in the showroom.
+ * @returns {{ top: number, h: number, head: string[], sub: string[], noteY: number,
+ *   tint: { slot: string, label: string, labelY: number, rects: { x: number, y: number, w: number, h: number }[] } | null } | null}
  */
 export function faceSlotFoot(L, curCat, ch) {
-  if (!FACE_SLOTS.includes(curCat.slot)) return null;
+  const slot = curCat.slot;
+  if (!FACE_SLOTS.includes(slot)) return null;
   const helmet = pieceOf(ch, "helmet");
-  const block = faceSlotBlock(helmet.id, curCat.slot);
-  if (!block) return null;
-  const pad = 10;
-  const max = Math.max(8, Math.floor((L.listW - 2 * pad) / NOTE_CHAR));
-  const head = wrapChars(`${block === "hidden" ? "Hidden" : "No room"} under the ${helmet.name}`.toUpperCase(), max);
-  const sub = wrapChars(block === "hidden" ? "Shows with an open helmet" : "Shows with another helmet", max);
-  const h = pad + (head.length + sub.length) * NOTE_LINE + pad;
+  const block = faceSlotBlock(helmet.id, slot);
+  const tintable = accessoryItem(slot, ch.accessories?.[slot])?.tint;
+  if (!block && !tintable) return null;
+  const pad = L.touch ? 6 : 10;
+  const max = Math.max(8, Math.floor((L.listW - 20) / NOTE_CHAR));
+  let head = block ? wrapChars(`${block === "hidden" ? "Hidden" : "No room"} under the ${helmet.name}`.toUpperCase(), max) : [];
+  let sub = block ? wrapChars(block === "hidden" ? "Shows with an open helmet" : "Shows with another helmet", max) : [];
+  let tintH = 0;
+  let row = null;
+  if (tintable) {
+    // Swatches as the hair colours lay theirs out: out of the touch edge
+    // zones, fingertip-sized on touch, one row of seven with a mouse.
+    const gap = L.touch ? 3 : 4;
+    const labelH = 20;
+    const left = Math.max(L.contentX + pad, L.inset || 0);
+    const right = Math.min(L.contentX + L.listW - pad, L.width - (L.inset || 0));
+    const avail = right - left;
+    const n = PAINT_SWATCHES.length;
+    const cols = L.touch ? Math.max(1, Math.min(n, Math.floor((avail + gap) / (PAINT_SWATCH_MIN_TOUCH + gap)))) : n;
+    const size = Math.min(L.touch ? Infinity : 24, Math.floor((avail - (cols - 1) * gap) / cols));
+    const rows = Math.ceil(n / cols);
+    tintH = labelH + rows * size + (rows - 1) * gap + pad;
+    row = { left, gap, cols, size, labelH, label: tintable.label };
+  }
+  // Two rows of picks stay above the foot: on a short screen the note gives
+  // up its second line, then names no helmet.
+  const room = L.panelH - 16 - 2 * L.itemH - pad - tintH;
+  const noteOf = () => (block ? (head.length + sub.length) * NOTE_LINE + pad : 0);
+  if (noteOf() > room) sub = [];
+  if (noteOf() > room) head = [block === "hidden" ? "HIDDEN UNDER THIS HELMET" : "NO ROOM UNDER THIS HELMET"];
+  const noteH = noteOf();
+  const h = pad + noteH + tintH;
   const top = L.contentY + L.panelH - h;
-  return { top, h, head, sub, noteY: top + pad + NOTE_LINE - 3 };
+  let tint = null;
+  if (row) {
+    const rowTop = top + pad + noteH;
+    tint = {
+      slot,
+      label: row.label,
+      labelY: rowTop + row.labelH - 6,
+      rects: PAINT_SWATCHES.map((_, i) => ({
+        x: row.left + (i % row.cols) * (row.size + row.gap),
+        y: rowTop + row.labelH + Math.floor(i / row.cols) * (row.size + row.gap),
+        w: row.size,
+        h: row.size,
+      })),
+    };
+  }
+  return { top, h, head, sub, noteY: top + pad + NOTE_LINE - 3, tint };
 }
 
 /**
  * How many option rows a tab's list shows: the HAIR tab gives the foot of
- * the panel to its colours, the eyes and face tabs to their note (ch: the
- * character, for the helmet worn).
+ * the panel to its colours, the eyes and face tabs to their note and paint
+ * (ch: the character, for the helmet and item worn).
  */
 export function listRows(L, curCat, ch) {
   const foot = curCat.key === "hair" ? hairColorSwatches(L).h : faceSlotFoot(L, curCat, ch)?.h || 0;
@@ -1265,7 +1314,7 @@ export function renderCharacterCreator(
     });
   }
 
-  // ─── Eyes / face: the helmet worn hides the slot ───
+  // ─── Eyes / face: the helmet worn hides the slot; the paint colours ───
   const foot = faceSlotFoot(L, curCat, char);
   if (foot) {
     ctx.textAlign = "left";
@@ -1275,6 +1324,32 @@ export function renderCharacterCreator(
     ctx.font = "10px monospace";
     ctx.fillStyle = "rgba(180,200,220,0.55)";
     foot.sub.forEach((line, i) => ctx.fillText(line, listX + 10, foot.noteY + (foot.head.length + i) * NOTE_LINE));
+    if (foot.tint) {
+      const hex = tintFor(char, foot.tint.slot);
+      const picked = PAINT_SWATCHES.find((p) => p.hex === hex);
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "bold 11px monospace";
+      ctx.fillText(`${foot.tint.label} \u00B7 ${picked ? picked.name : "Custom"}`.toUpperCase(), listX + 10, foot.tint.labelY);
+      // The same keys step the paint as the hair colours: Q / E, LB / RB.
+      drawHairColorHint(ctx, listX + L.listW - 10, foot.tint.labelY - 4, input);
+      PAINT_SWATCHES.forEach((p, i) => {
+        const r = foot.tint.rects[i];
+        ctx.fillStyle = p.hex;
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(r.x, r.y, r.w, r.h, 3);
+        ctx.fill();
+        ctx.stroke();
+        if (p.hex === hex) {
+          ctx.strokeStyle = palette.accent;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 4);
+          ctx.stroke();
+        }
+      });
+    }
   }
 
   // ─── Character preview (center panel) ───

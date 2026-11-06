@@ -193,6 +193,12 @@ function buildMatrix() {
   }
   face.push({ name: "cast-hero_fallen-face-cybereye-beard-wide-masc", ids: { helmet: "wide", body: "masc", accessories: wearing("cybereye", "beard") }, opts: { key: "hero_fallen" }, kind: "cast" });
   face.push({ name: "bust-peek-face-monocle-scar-standard-fem", ids: { helmet: "standard", body: "fem", accessories: wearing("monocle", "scar") }, opts: { pose: "bust", peek: true }, kind: "svg" });
+  // War paint in two paints on two palettes (the same paint on either), on
+  // light and deep skin, both builds.
+  for (const [paint, hex, color, skinTone, body] of PAINT_LOOKS) {
+    const name = `paint-${paint}-${color}-${skinTone}-${body}-idle`;
+    face.push({ name, ids: { helmet: "wide", hair: "buzz", color, skinTone, body, accessories: wearing("none", "warpaint"), accessoryTints: { face: hex } }, opts: { pose: "idle" }, kind: "svg" });
+  }
   return [...issue, ...[...themed, ...hair, ...face].map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
 }
 
@@ -205,6 +211,14 @@ const FACE_LOOKS = [
   ["monocle", "piercings", "wide", "curtain"],
   ["aviators", "nosestrip", "bubble", "hawk"],
   ["shades", "warpaint", "mohawk", "short"],
+];
+
+/** Paint name and colour, palette, skin tone and build of the appended war paint looks. */
+const PAINT_LOOKS = [
+  ["woad", "#2f4f8f", "chrono_teal", "cool_fair", "masc"],
+  ["woad", "#2f4f8f", "midnight_blue", "deep_brown", "fem"],
+  ["white", "#f2efe8", "chrono_teal", "deep_brown", "masc"],
+  ["white", "#f2efe8", "midnight_blue", "cool_fair", "fem"],
 ];
 
 /** @type {{ name: string, ids: object, opts: object, kind: "svg"|"cast" }[]} */

@@ -9,7 +9,7 @@
  * badge.enamel, badge.metal, badge.finish, acc.<slot>.
  */
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, BADGE_PRESETS, indexOfId } from "../data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, TINT_HEX, accessoryItem, tintFor } from "../data/accessories.js";
 import {
   CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, HAIR_COLORS, EYE_COLORS, ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
   WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
@@ -141,6 +141,17 @@ export function withIndex(ch, key, idx) {
   return withId(ch, key, table[idx].id);
 }
 
+/**
+ * The change that paints the item worn in `slot` in `hex` (accessoryTints).
+ * Throws a RangeError for a colour that is not `#rrggbb` or a slot whose
+ * worn item takes no tint: the creator only offers a colour for one that does.
+ */
+export function withTint(ch, slot, hex) {
+  if (typeof hex !== "string" || !TINT_HEX.test(hex)) throw new RangeError(`withTint: "${hex}" is not a #rrggbb colour`);
+  if (!accessoryItem(slot, ch.accessories?.[slot])?.tint) throw new RangeError(`withTint: nothing worn in "${slot}" takes a tint`);
+  return { accessoryTints: { ...ch.accessoryTints, [slot]: hex.toLowerCase() } };
+}
+
 export function togglePlacement(ch, placementId) {
   const has = ch.badge.placements.includes(placementId);
   const placements = has ? ch.badge.placements.filter((p) => p !== placementId) : [...ch.badge.placements, placementId];
@@ -151,6 +162,7 @@ export function cloneLook(ch) {
   const out = { ...ch };
   if (ch.badge) out.badge = structuredClone(ch.badge);
   if (ch.accessories) out.accessories = { ...ch.accessories };
+  if (ch.accessoryTints) out.accessoryTints = { ...ch.accessoryTints };
   if (ch.weaponFinishes) out.weaponFinishes = { ...ch.weaponFinishes };
   if (ch.customSkins) out.customSkins = ch.customSkins.map((s) => ({ ...s }));
   return out;
@@ -170,6 +182,8 @@ export function lookKey(ch) {
   const badge = b
     ? `${b.finish}|${(b.placements || []).join(",")}|${(b.layers || []).map((l) => `${l.frame}:${l.symbol}:${l.enamel}:${l.metal}:${l.x}:${l.y}:${l.scale}:${l.rot}`).join(";")}`
     : "-";
-  const acc = c.accessories ? ACCESSORY_SLOTS.map(({ id }) => c.accessories[id] || "none").join(",") : "-";
+  // Each worn item's colour as drawn (tintFor), so a colour kept for an item
+  // not worn changes nothing.
+  const acc = c.accessories ? ACCESSORY_SLOTS.map(({ id }) => (c.accessories[id] || "none") + (tintFor(c, id) ? `:${tintFor(c, id)}` : "")).join(",") : "-";
   return `${flat}#${badge}#${acc}`;
 }

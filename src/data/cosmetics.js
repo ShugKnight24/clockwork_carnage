@@ -592,6 +592,8 @@ export const DEFAULT_CHARACTER = {
   voice: DEFAULT_LOOK_IDS.voice,
   badge: DEFAULT_BADGE,
   accessories: DEFAULT_ACCESSORIES,
+  // Colours picked for tintable accessories, by slot (src/data/accessories.js).
+  accessoryTints: {},
   armorVariant: 0,
 };
 

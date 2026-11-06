@@ -8,7 +8,8 @@
  * Like every painter, an id comes from K.uid and its markup goes to K.defs.
  */
 
-import { mixHex as mix } from "../../../utils/color.js";
+import { hexRgb, mixHex as mix } from "../../../utils/color.js";
+import { accessoryItem } from "../../../data/accessories.js";
 
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
@@ -17,6 +18,12 @@ const stroke = (d, color, w, op = 1) =>
   `<path d="${d}" fill="none" stroke="${color}" stroke-width="${f(w)}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
 const fill = (d, color, sw = 0.5, extra = "") => `<path d="${d}" fill="${color}" stroke="${INK}" stroke-width="${f(sw)}" stroke-linejoin="round"${extra}/>`;
 const dot = (x, y, r, color, sw = 0) => `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${color}"${sw ? ` stroke="${INK}" stroke-width="${f(sw)}"` : ""}/>`;
+
+/** Relative brightness of a hex colour, 0 (black) to 1 (white). */
+const lum = (hex) => {
+  const [r, g, b] = hexRgb(hex);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+};
 
 /** A teardrop lens round an eye, on side s (-1 left, 1 right). */
 const tear = (s) =>
@@ -81,12 +88,17 @@ export const FACE = {
     const d = "M2.2,-86.4 L3.4,-83.8 L3.2,-82.6 M3.6,-80.4 L4.6,-77.6 L5.4,-76.4";
     return { face: stroke(d, mix(c.skin.shadow, "#7a2a28", 0.35), 0.75, 0.9) + stroke(d, mix(c.skin.color, "#ffffff", 0.35), 0.25, 0.7) };
   },
-  // Two stripes under each eye, in an ochre red of their own, never the suit's.
-  warpaint: () => {
-    const paint = "#b0302a";
-    const stripe = (s, y) => `M${f(s * 1.8)},${f(y)} L${f(s * 6.6)},${f(y - 0.8)} L${f(s * 6.4)},${f(y + 0.6)} L${f(s * 2)},${f(y + 1.1)} Z`;
+  // Two stripes under each eye in the player's paint (c.tints.face; its
+  // default for a look resolved without one), never the suit's colours. Each stripe is edged against the skin under it, dark
+  // on light skin and light on deep skin, so any paint reads on any face; the
+  // lower stripe is thinner, as if dragged by two fingers.
+  warpaint: (A, c) => {
+    const paint = c.tints?.face ?? accessoryItem("face", "warpaint").tint.default;
+    const edge = lum(c.skin.color) > 0.42 ? mix(paint, "#000000", 0.55) : mix(paint, "#ffffff", 0.5);
+    const stripe = (s, y, t) => `M${f(s * 1.8)},${f(y)} L${f(s * 6.6)},${f(y - 0.8)} L${f(s * 6.5)},${f(y - 0.8 + t)} L${f(s * 2)},${f(y + t * 0.9)} Z`;
+    const band = (d, op) => `<path d="${d}" fill="${paint}" stroke="${edge}" stroke-width=".3" stroke-linejoin="round" opacity="${op}"/>`;
     return {
-      face: [-1, 1].map((s) => `<path d="${stripe(s, -79.6)}" fill="${paint}" opacity=".85"/><path d="${stripe(s, -77.6)}" fill="${paint}" opacity=".7"/>`).join(""),
+      face: [-1, 1].map((s) => band(stripe(s, -79.8, 1.5), ".92") + band(stripe(s, -77.7, 1.1), ".85")).join(""),
     };
   },
   cigar: () => ({

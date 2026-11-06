@@ -3,11 +3,11 @@ import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
-import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withId, withIndex } from "../../src/core/character-fields.js";
+import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withId, withIndex, withTint } from "../../src/core/character-fields.js";
 import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
-import { normalizeAccessories } from "../../src/core/character-normalize.js";
+import { normalizeAccessories, normalizeAccessoryTints } from "../../src/core/character-normalize.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS } from "../../src/data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor } from "../../src/data/accessories.js";
 import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
@@ -667,6 +667,16 @@ svg { display: block; }
 .section h3 .cur.locked { color: var(--cc-amber); }
 .snote { margin: 8px 0 0; font: 500 var(--cc-type-label)/1.35 var(--cc-font); color: var(--cc-text-dim); }
 .snote[hidden] { display: none; }
+/* Paint colour row under a worn tintable item (War Paint): swatches, then a custom colour. */
+.tintrow { margin-top: 10px; }
+.tintrow[hidden] { display: none; }
+.tintrow h4 { display: flex; justify-content: space-between; margin: 0 0 6px; font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.2px; text-transform: uppercase; color: var(--cc-text-dim); }
+.tintrow .tname { color: var(--cc-text); }
+.tints { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.tints .tsw { min-height: 0; width: 36px; height: 36px; padding: 0; background: var(--c); --cc-chamfer: 6px; }
+.tints .tsw[aria-checked="true"] { box-shadow: 0 0 0 2px var(--cc-ink), 0 0 0 4px var(--accent); }
+.tints .tcustom input { width: 44px; height: 36px; }
+.tints .tcustom.on input { box-shadow: 0 0 0 2px var(--accent); }
 .section.muted .grid .opt:not(:hover):not(:focus) { opacity: 0.55; }
 .section.off .grid, .section.off .lockfold, .section.off h3 .cur { display: none; }
 .grid.rifle .thumb { aspect-ratio: 2.4; }
@@ -1380,6 +1390,11 @@ class AgentShowroom extends HTMLElement {
     root.addEventListener("input", (e) => {
       if (e.target?.name === "callsign") this.onName(e.target);
       else if (e.target?.dataset?.skinColor || e.target?.name === "skinName") this.onSkinInput(e.target);
+      else if (e.target?.dataset?.tintInput) this.chooseTint(e.target.dataset.tintInput, e.target.value, true);
+    });
+    // The colour input's change event ends a drag: the next colour is a new edit.
+    root.addEventListener("change", (e) => {
+      if (e.target?.dataset?.tintInput) this._tintLive = null;
     });
 
     // Stage drag to turn.
@@ -1438,6 +1453,7 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.armWeapon != null) return this.setArmoryWeapon(Number(t.dataset.armWeapon));
     if (t.dataset.finish) return this.chooseFinish(t.dataset.finish);
     if (t.dataset.skinPattern) return this.setSkinPattern(t.dataset.skinPattern);
+    if (t.dataset.tint) return this.chooseTint(t.dataset.tint, t.dataset.hex);
     if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
     if (t.dataset.look != null) return this.wearLook(Number(t.dataset.look));
@@ -2340,8 +2356,10 @@ class AgentShowroom extends HTMLElement {
     const l = this.looks[i];
     if (!l) return;
     const next = cloneLook(l.look);
-    // Slots the look was not saved with keep what is worn (readLook).
+    // Slots the look was not saved with keep what is worn (readLook); its
+    // paint colours count only for the items it puts on.
     if (next.accessories) next.accessories = { ...this.character.accessories, ...next.accessories };
+    if (next.accessoryTints) next.accessoryTints = normalizeAccessoryTints(next.accessoryTints, next.accessories || this.character.accessories);
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
     this.sfx("menuConfirm");
@@ -2430,10 +2448,47 @@ class AgentShowroom extends HTMLElement {
       body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);
     }
     const variant = s.key === "armor" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
-    const note = SECTION_NOTES[s.key] || "";
+    const note = (SECTION_NOTES[s.key] || "") + (s.kind === "gear" ? this.tintRowHtml(s.key.slice(4)) : "");
     // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
     const locks = s.groupBy ? "" : this.lockInfoHtml(s);
     return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
+  }
+
+  /**
+   * The colour row under a slot's picks, for an item that takes a colour of
+   * its own (War Paint): the paint swatches and a custom colour input, the
+   * finish maker's control. Shown by refreshContent while such an item is
+   * worn; empty for a slot with none.
+   */
+  tintRowHtml(slot) {
+    if (!ACCESSORIES[slot]?.some((i) => i.tint)) return "";
+    const swatches = PAINT_SWATCHES.map(
+      (p) => `<button class="chip tsw" role="radio" aria-checked="false" data-tint="${slot}" data-hex="${p.hex}" aria-label="${esc(p.name)}" title="${esc(p.name)}" tabindex="-1" style="--c:${p.hex}"></button>`,
+    ).join("");
+    return `<div class="tintrow" data-tint-slot="${slot}" hidden>
+      <h4><span class="tlabel"></span><span class="tname"></span></h4>
+      <div class="tints" role="radiogroup">${swatches}<label class="arm-color tcustom"><input type="color" data-tint-input="${slot}" value="#000000"><span>Custom</span></label></div>
+    </div>`;
+  }
+
+  /**
+   * Paint the item worn in `slot` in `hex`. Dragging in the colour input
+   * (`live`) is one edit: the first change goes on the undo stack, the rest
+   * of the drag repaints in place until the input's change event ends it.
+   */
+  chooseTint(slot, hex, live = false) {
+    const changes = withTint(this.character, slot, hex);
+    if (live && this._tintLive === slot) {
+      Object.assign(this.character, changes);
+      this.renderAll(false);
+      return;
+    }
+    this._tintLive = live ? slot : null;
+    if (!this.commit(changes)) return;
+    this.sfx("menuSelect");
+    const item = accessoryItem(slot, this.character.accessories[slot]);
+    const named = PAINT_SWATCHES.find((p) => p.hex === tintFor(this.character, slot));
+    this.announce(`${item.name} ${item.tint.label.toLowerCase()}: ${named ? named.name : "custom colour"}`);
   }
 
   // ── Weapon finishes (src/data/weapon-skins.js) ─────────────────────────────
@@ -2819,6 +2874,22 @@ class AgentShowroom extends HTMLElement {
       noVisor.textContent = off ? `The ${pieceOf(ch, "helmet").name} has no visor, so this pick and its perk don't apply.` : "";
       noVisor.closest(".section").classList.toggle("off", off);
     }
+    // The colour row under a worn item that takes one (War Paint).
+    this.shadowRoot.querySelectorAll(".content .tintrow").forEach((row) => {
+      const slot = row.dataset.tintSlot;
+      const tint = accessoryItem(slot, ch.accessories?.[slot])?.tint;
+      row.hidden = !tint;
+      if (!tint) return;
+      const hex = tintFor(ch, slot);
+      const named = PAINT_SWATCHES.find((p) => p.hex === hex);
+      row.querySelector(".tlabel").textContent = `${tint.label} colour`;
+      row.querySelector(".tname").textContent = named ? named.name : "Custom";
+      row.querySelector(".tints").setAttribute("aria-label", `${tint.label} colour`);
+      row.querySelectorAll(".tsw").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.hex === hex)));
+      const input = row.querySelector("input[type=color]");
+      input.closest(".tcustom").classList.toggle("on", !named);
+      if (this.shadowRoot.activeElement !== input) input.value = hex;
+    });
     // Eyes and face picks under a helmet that hides them: kept, not drawn.
     this.shadowRoot.querySelectorAll('.content [data-note="face-slot"]').forEach((note) => {
       note.textContent = faceSlotNote(ch, note.dataset.slot);

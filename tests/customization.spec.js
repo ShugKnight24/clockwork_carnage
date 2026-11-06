@@ -110,6 +110,47 @@ test("eyewear and a face item show under an open helmet; a closed helmet says th
   await expect(note("face")).toHaveText(/^No room under the Marshal's Brim/);
 });
 
+test("war paint takes a colour of its own, a swatch or a custom one, and keeps it over a reload", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  const figure = () => room(page).locator(".figure").innerHTML();
+  const tints = () => page.evaluate(() => window.ccDebug.game.character.accessoryTints);
+  await tab(page, "helmet").click();
+  await opt(page, "helmet", await posOf(page, "helmet", "wide")).click();
+  await tab(page, "gear").click();
+  const row = room(page).locator('.tintrow[data-tint-slot="face"]');
+  await expect(row).toBeHidden();
+  await opt(page, "acc.face", await posOf(page, "acc.face", "warpaint")).click();
+  await expect(row).toBeVisible();
+  // Its own ochre red to start, whatever the suit.
+  await expect(row.locator('.tsw[data-hex="#b0302a"]')).toHaveAttribute("aria-checked", "true");
+  await expect.poll(figure).toContain('fill="#b0302a"');
+  await row.locator('.tsw[data-hex="#2f4f8f"]').click();
+  expect(await tints()).toEqual({ face: "#2f4f8f" });
+  await expect.poll(figure).toContain('fill="#2f4f8f"');
+  await expect(row.locator(".tname")).toHaveText("Woad Blue");
+  // A colour of the player's own, from the colour input; one undo step back.
+  await row.locator('input[type="color"]').fill("#8a2be2");
+  expect(await tints()).toEqual({ face: "#8a2be2" });
+  await expect(row.locator(".tname")).toHaveText("Custom");
+  await expect.poll(figure).toContain('fill="#8a2be2"');
+  await room(page).getByRole("button", { name: "Undo last change" }).click();
+  expect(await tints()).toEqual({ face: "#2f4f8f" });
+  await row.locator('input[type="color"]').fill("#8a2be2");
+  // A saved look keeps its paint.
+  await room(page).locator(".save-look").click();
+  await row.locator('.tsw[data-hex="#3f7a3a"]').click();
+  expect(await tints()).toEqual({ face: "#3f7a3a" });
+  await room(page).locator(".look .preset").nth(0).click();
+  expect(await tints()).toEqual({ face: "#8a2be2" });
+  await room(page).locator(".save").click();
+  await page.reload();
+  await page.waitForFunction(() => window.ccDebug?.game);
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories.face)).toBe("warpaint");
+  expect(await tints()).toEqual({ face: "#8a2be2" });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).accessoryTints)).toEqual({ face: "#8a2be2" });
+});
+
 test("presets and looks saved before the eyes and face slots keep the eyewear and face item worn", async ({ page }) => {
   await openCreator(page);
   await page.evaluate(() => {
@@ -333,6 +374,35 @@ test("legacy HAIR tab picks a hair colour by key and by swatch", async ({ page }
   await page.mouse.click(point.x, point.y);
   expect(await hairColor()).toBe("platinum");
   expect(await page.evaluate(() => window.ccDebug.game.character.hair)).toBe("buzz");
+});
+
+test("legacy GEAR FACE tab picks a war paint colour by key and by swatch", async ({ page }) => {
+  await openLegacyCreator(page);
+  await page.evaluate(() => {
+    const g = window.ccDebug.game;
+    g.character.accessories = { ...g.character.accessories, face: "warpaint" };
+  });
+  await legacyTab(page, "acc.face");
+  const tint = () => page.evaluate(async () => (await import("/src/data/accessories.js")).tintFor(window.ccDebug.game.character, "face"));
+  expect(await tint()).toBe("#b0302a");
+  await page.keyboard.press("KeyE");
+  expect(await tint()).toBe("#121212");
+  await page.keyboard.press("KeyQ");
+  await page.keyboard.press("KeyQ");
+  expect(await tint()).toBe("#d9b02c");
+  const point = await page.evaluate(async () => {
+    const { getCreatorLayout, faceSlotFoot, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+    const g = window.ccDebug.game;
+    const rect = g.canvas.getBoundingClientRect();
+    const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
+    const r = faceSlotFoot(L, CREATOR_CATEGORIES[g.creatorCategory], g.character).tint.rects[3];
+    const k = rect.width / g.canvas.width;
+    return { x: rect.left + (r.x + r.w / 2) * k, y: rect.top + (r.y + r.h / 2) * k };
+  });
+  await page.mouse.click(point.x, point.y);
+  expect(await tint()).toBe("#2f4f8f");
+  // The item is untouched by the colour row.
+  expect(await page.evaluate(() => window.ccDebug.game.character.accessories.face)).toBe("warpaint");
 });
 
 test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) => {

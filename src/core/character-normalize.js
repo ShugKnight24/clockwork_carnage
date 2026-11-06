@@ -4,7 +4,7 @@
  * never share state with DEFAULT_CHARACTER.
  */
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, DEFAULT_BADGE, LEGACY_ICON_SYMBOL, byId } from "../data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, TINT_HEX, accessoryItem } from "../data/accessories.js";
 import { BADGES } from "../data/cosmetics.js";
 import { LOOK_TABLES, pieceOf } from "./character-fields.js";
 
@@ -46,6 +46,25 @@ export function normalizeAccessories(raw) {
   for (const { id } of ACCESSORY_SLOTS) {
     const v = src[id];
     out[id] = typeof v === "string" && ACCESSORIES[id].some((i) => i.id === v) ? v : "none";
+  }
+  return out;
+}
+
+/**
+ * The accessory colours a character keeps (accessoryTints): a valid
+ * `#rrggbb` (lower-cased), and only for a slot whose worn item declares a
+ * `tint`; everything else is dropped. A colour for an item no longer worn
+ * goes with it, so taking War Paint off and on again starts from its default.
+ * @param {unknown} raw stored tints
+ * @param {object} accessories the slots worn (normalizeAccessories)
+ * @returns {Record<string, string>}
+ */
+export function normalizeAccessoryTints(raw, accessories) {
+  const src = isObj(raw) ? raw : {};
+  const out = {};
+  for (const { id } of ACCESSORY_SLOTS) {
+    const v = src[id];
+    if (typeof v === "string" && TINT_HEX.test(v) && accessoryItem(id, accessories?.[id])?.tint) out[id] = v.toLowerCase();
   }
   return out;
 }

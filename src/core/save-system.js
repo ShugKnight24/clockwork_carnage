@@ -11,7 +11,7 @@ import {
 } from "../data/index.js";
 import { PLAYER_AIM_LIMIT_X, PLAYER_AIM_LIMIT_Y } from "../constants.js";
 import { SETTINGS_REGISTRY } from "../settings/registry.js";
-import { normalizeBadge, normalizeAccessories, normalizeLook, migrateLegacyBadge } from "./character-normalize.js";
+import { normalizeBadge, normalizeAccessories, normalizeAccessoryTints, normalizeLook, migrateLegacyBadge } from "./character-normalize.js";
 import { LEGACY_LOOK_INDICES, LEGACY_FIELD_NAMES } from "./legacy-look-indices.js";
 
 const SAVE_VERSION = 1;
@@ -197,7 +197,7 @@ export function loadCharacter(character) {
     const raw = localStorage.getItem("cc_character");
     if (!raw) return;
     const saved = normalizeLook(migrateCharacterSave(JSON.parse(raw)));
-    const OBJECT_FIELDS = new Set(["badge", "accessories", "weaponFinishes", "customSkins"]);
+    const OBJECT_FIELDS = new Set(["badge", "accessories", "accessoryTints", "weaponFinishes", "customSkins"]);
     for (const key of Object.keys(DEFAULT_CHARACTER)) {
       if (OBJECT_FIELDS.has(key)) continue;
       if (Object.prototype.hasOwnProperty.call(saved, key) && typeof saved[key] === typeof DEFAULT_CHARACTER[key]) {
@@ -206,6 +206,7 @@ export function loadCharacter(character) {
     }
     character.badge = normalizeBadge(saved.badge);
     character.accessories = normalizeAccessories(saved.accessories);
+    character.accessoryTints = normalizeAccessoryTints(saved.accessoryTints, character.accessories);
     character.customSkins = normalizeCustomSkins(saved.customSkins);
     character.weaponFinishes = normalizeWeaponFinishes(saved.weaponFinishes, character.customSkins);
   } catch (_) {}

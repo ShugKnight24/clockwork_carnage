@@ -104,7 +104,7 @@
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
 import { WARDROBE_THEMES, THEME_TABLES, FACE_HELMETS } from "../../../data/wardrobe-themes/index.js";
-import { FACE_SLOTS } from "../../../data/accessories.js";
+import { ACCESSORIES, FACE_SLOTS, TINT_HEX } from "../../../data/accessories.js";
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
 import exo from "./exo.js";
@@ -235,11 +235,20 @@ const HELMET_ANCHORS = ["top", "half", "rail"];
 const BADGE_POINT = ["x", "y", "rot", "size"];
 
 /**
- * Check the data and art registries against each other.
+ * Check the data and art registries against each other, and the accessory
+ * tables' tints (src/data/accessories.js): a `tint` needs a `#rrggbb`
+ * default and a label.
  * @returns {string[]} one message per problem; empty when consistent
  */
-export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEMES) {
+export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEMES, accessories = ACCESSORIES) {
   const errors = [];
+  for (const [slot, items] of Object.entries(accessories)) {
+    for (const { id, tint } of items) {
+      if (tint === undefined) continue;
+      if (typeof tint?.default !== "string" || !TINT_HEX.test(tint.default)) errors.push(`accessories: ${slot} "${id}" tint has no #rrggbb default`);
+      if (typeof tint?.label !== "string" || !tint.label) errors.push(`accessories: ${slot} "${id}" tint has no label`);
+    }
+  }
   for (const table of THEME_TABLES) {
     const seen = new Map();
     for (const t of themes) {

@@ -11,13 +11,15 @@ import { noteQuit } from "./playtest-log.js";
 import { shareSession } from "./playtest-export.js";
 import {
   CREATOR_CATEGORIES,
+  faceSlotFoot,
   getCreatorLayout,
   hairColorSwatches,
   listRows,
   setCreatorCategory,
   tabRect,
 } from "../ui/character-creator.js";
-import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
+import { getIndex, withIndex, withTint, togglePlacement } from "../core/character-fields.js";
+import { PAINT_SWATCHES } from "../data/accessories.js";
 import { isCompactPhone } from "../ui/layout.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 
@@ -60,6 +62,17 @@ export function handleCreatorClick(game, e) {
     const hit = hairColorSwatches(L).rects.findIndex((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
     if (hit >= 0) {
       Object.assign(game.character, withIndex(game.character, "hairColor", hit));
+      game.audio.menuSelect();
+      return;
+    }
+  }
+
+  // The paint swatches under a tintable eyes / face item: the renderer's boxes.
+  const paint = faceSlotFoot(L, curCat, game.character)?.tint;
+  if (paint) {
+    const hit = paint.rects.findIndex((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+    if (hit >= 0) {
+      Object.assign(game.character, withTint(game.character, paint.slot, PAINT_SWATCHES[hit].hex));
       game.audio.menuSelect();
       return;
     }
