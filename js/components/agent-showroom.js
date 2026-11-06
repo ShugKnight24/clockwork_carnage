@@ -274,7 +274,8 @@ function shoulderNote(ch) {
   const frame = pieceOf(ch, "frame");
   if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
   const right = frameShape(frame.id).rightShoulder;
-  if (right) return `${frame.name} keeps its own right shoulder (${pieceOf({ shoulder: right }, "shoulder").name}): this pick fits the left.`;
+  if (right === "none") return `${frame.name} leaves the right shoulder bare: this pick fits the left.`;
+  if (right) return `${frame.name} wears its own ${pieceOf({ shoulder: right }, "shoulder").name} on the right shoulder: this pick fits the left.`;
   return "";
 }
 
@@ -1302,7 +1303,6 @@ class AgentShowroom extends HTMLElement {
     }
     this.toggleAttribute("realistic", real);
     this._stageKey = null;
-    this._presetsBuilt = false;
     return true;
   }
 
@@ -1885,6 +1885,31 @@ class AgentShowroom extends HTMLElement {
     return null;
   }
 
+  /**
+   * The changes wearing preset `i` makes to the current look: the preset's
+   * fields, the face slots as worn. Shared by applyPreset and its thumbnail.
+   */
+  presetChanges(i) {
+    const p = PRESETS[i];
+    // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
+    const armorVariant = pieceOf(p.ch, "armor") === pieceOf(this.character, "armor") ? this.character.armorVariant : 0;
+    const next = { ...cloneLook(p.ch), armorVariant };
+    next.accessories = { ...this.character.accessories, ...next.accessories };
+    return next;
+  }
+
+  /**
+   * The agent a preset or look thumbnail shows: `changes` over the current
+   * look, paint colours kept as commit keeps them (wornTints). A field the
+   * changes do not hold (hair colour, body, eyewear, face) shows as worn,
+   * as wearing it leaves it.
+   */
+  wornWith(changes) {
+    const ch = { ...cloneLook(this.character), ...cloneLook(changes) };
+    ch.accessoryTints = wornTints(changes.accessoryTints ?? this.character.accessoryTints, ch.accessories);
+    return ch;
+  }
+
   applyPreset(i) {
     const p = PRESETS[i];
     if (!p) return;
@@ -1894,10 +1919,7 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
-    // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
-    const armorVariant = pieceOf(p.ch, "armor") === pieceOf(this.character, "armor") ? this.character.armorVariant : 0;
-    const next = { ...cloneLook(p.ch), armorVariant };
-    next.accessories = { ...this.character.accessories, ...next.accessories };
+    const next = this.presetChanges(i);
     // Belt and braces: anything the agent has not earned falls back instead of equipping.
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
@@ -2277,9 +2299,14 @@ class AgentShowroom extends HTMLElement {
 
   renderPresets() {
     this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
-      if (!this._presetsBuilt) {
-        const ch = { ...cloneLook(DEFAULT_CHARACTER), ...cloneLook(PRESETS[i].ch) };
-        btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
+      // The preset as it would be worn now: it keeps the player's own hair
+      // colour, body, eyewear and face, so the thumbnail redraws with them.
+      const ch = this.wornWith(this.presetChanges(i));
+      const pthumb = btn.querySelector(".pthumb");
+      const sig = lookKey(ch) + (this._real ? "|r" : "");
+      if (pthumb.dataset.sig !== sig) {
+        pthumb.dataset.sig = sig;
+        pthumb.innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
       }
       const lock = this.presetLock(i);
       btn.classList.toggle("locked", !!lock);
@@ -2294,7 +2321,6 @@ class AgentShowroom extends HTMLElement {
       req.hidden = !lock;
       if (lock) req.innerHTML = `<span>${esc(lock.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(lock.pct * 100)}%"></i></span>`;
     });
-    this._presetsBuilt = true;
     const lockedN = PRESETS.filter((_, i) => this.presetLock(i)).length;
     const more = this.el.presets.querySelector(".more-presets");
     more.textContent = lockedN ? (this.showLockedPresets ? "Hide locked presets" : `+ ${lockedN} more to earn`) : "";
@@ -2331,14 +2357,17 @@ class AgentShowroom extends HTMLElement {
   renderLooks() {
     const box = this.el.presets.querySelector(".looks");
     const list = this.looks;
-    const sig = JSON.stringify(list) + (this._real ? "r" : "");
+    // Each look as it would be worn now (wearLook): fields it was not saved
+    // with show as worn, so the thumbnails follow the current look too.
+    const shown = list.map((l) => this.wornWith(this.lookChanges(l)));
+    const sig = JSON.stringify(list) + shown.map(lookKey).join(";") + (this._real ? "r" : "");
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
     box.innerHTML =
       list
         .map(
           (l, i) =>
-            `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb">${buildAgentSvg({ ...cloneLook(DEFAULT_CHARACTER), ...l.look }, { view: [-22, -106, 44, 44], idPrefix: `lk${i}-`, lighting: "flat", realistic: this._real })}</span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
+            `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb">${buildAgentSvg(shown[i], { view: [-22, -106, 44, 44], idPrefix: `lk${i}-`, lighting: "flat", realistic: this._real })}</span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
         )
         .join("") +
       (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
@@ -2357,14 +2386,21 @@ class AgentShowroom extends HTMLElement {
     this.toast("Look saved");
   }
 
+  /**
+   * The changes wearing look `l` makes: slots the look was not saved with
+   * keep what is worn (readLook); its paint colours, or the ones worn now,
+   * count only for the items drawn (commit keeps the colours by wornTints).
+   */
+  lookChanges(l) {
+    const next = cloneLook(l.look);
+    if (next.accessories) next.accessories = { ...this.character.accessories, ...next.accessories };
+    return next;
+  }
+
   wearLook(i) {
     const l = this.looks[i];
     if (!l) return;
-    const next = cloneLook(l.look);
-    // Slots the look was not saved with keep what is worn (readLook); its
-    // paint colours, or the ones worn now, count only for the items drawn
-    // (commit keeps the colours by wornTints).
-    if (next.accessories) next.accessories = { ...this.character.accessories, ...next.accessories };
+    const next = this.lookChanges(l);
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
     this.sfx("menuConfirm");

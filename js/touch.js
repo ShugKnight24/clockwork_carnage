@@ -24,6 +24,7 @@ import { isPrimaryTouchDevice } from "../src/utils/device.js";
 import { setCentredAim } from "../src/systems/aim.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
+import { creatorTouchControls, drawCreatorTouchHints } from "../src/ui/character-creator.js";
 import { isReloading } from "../src/systems/reload.js";
 import { gyroLookDelta, gyroActive, webkitRotationOrder } from "../src/systems/gyro-aim.js";
 import { findAssistTarget, assistFriction, applyAssistPull } from "../src/systems/aim-assist.js";
@@ -1425,28 +1426,18 @@ export class TouchControls {
     ctx.fillText("\u25C0", 30, 72);
     ctx.fillText("\u25B6", w - 30, 72);
 
-    // Hint text
-    ctx.font = "11px monospace";
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.fillText(
-      "Tap tabs \u00B7 \u25C0 \u25B6 to switch \u00B7 Tap items to select",
-      w / 2,
-      btnY - 12,
-    );
+    // Hints in the lanes beside the buttons, clear of the panels and the
+    // edge zones; left out where a lane is too narrow.
+    drawCreatorTouchHints(ctx, bounds.controls, this.game);
 
     ctx.globalAlpha = 1;
   }
 
   /** Shared creator button bounds — used by both touch handler and renderer */
   _creatorButtonBounds(w, h) {
-    const sa = this.safeArea;
-    const btnH = 52;
-    const btnW = Math.min(140, Math.max(110, w * 0.18));
-    const gap = 16;
-    const btnY = h - btnH - 16 - sa.bottom;
-    const saveX = w / 2 + gap / 2;
-    const cancelX = w / 2 - gap / 2 - btnW;
-    return { btnH, btnW, gap, btnY, saveX, cancelX };
+    const controls = creatorTouchControls(w, h, this.safeArea);
+    const { back, save } = controls;
+    return { btnH: save.h, btnW: save.w, btnY: save.y, saveX: save.x, cancelX: back.x, controls };
   }
 
   renderPauseButtons(ctx) {

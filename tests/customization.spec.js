@@ -257,6 +257,42 @@ test("presets and looks saved before hair colour keep the hair colour picked", a
   expect((await ch()).hairColor).toBe("pink");
 });
 
+test("preset and look thumbnails show the hair colour and face item worn, as wearing them keeps them", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  const thumb = (sel) => room(page).locator(`${sel} .pthumb`).innerHTML();
+  // A look saved before hair colour and the face slots, under an open helmet.
+  await page.evaluate(() => {
+    localStorage.setItem("cc_saved_looks", JSON.stringify([{ name: "Open", look: { version: 2, color: "solar_gold", hair: "afro", helmet: "wide", visor: "standard" } }]));
+    document.querySelector("agent-showroom").renderLooks();
+  });
+  const pink = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).HAIR_COLORS.findIndex((e) => e.id === "pink"));
+  await tab(page, "face").click();
+  await opt(page, "hairColor", pink).click();
+  // Juggernaut wears the open mohawk helmet: its cut shows in the player's colour.
+  await expect.poll(() => thumb('.preset[data-preset="1"]')).toContain("#e8408c");
+  await expect.poll(() => thumb(".look .preset")).toContain("#e8408c");
+  // A face item worn now shows on the look's thumbnail, as wearing the look keeps it.
+  const before = await thumb(".look .preset");
+  await page.evaluate(() => {
+    const room = document.querySelector("agent-showroom");
+    room.commit({ accessories: { ...room.character.accessories, face: "warpaint" } });
+  });
+  await expect.poll(() => thumb(".look .preset")).not.toBe(before);
+  await room(page).locator(".look .preset").click();
+  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ hair: "afro", hairColor: "pink", helmet: "wide", accessories: { face: "warpaint" } });
+});
+
+test("the shoulder note reads the frame's own right shoulder", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "suit").click();
+  await page.evaluate(() => {
+    const room = document.querySelector("agent-showroom");
+    room.commit({ frame: "strider" });
+  });
+  await expect(room(page).locator('[data-note="frame-shoulders"]')).toHaveText("Strider leaves the right shoulder bare: this pick fits the left.");
+});
+
 test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));

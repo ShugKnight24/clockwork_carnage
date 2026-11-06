@@ -93,6 +93,9 @@ const KEYBOARD_FIXED = {
   undo: "Z",
   deploy: "⇧ ENTER",
   pick: "1/2/3",
+  toggle: "SPACE",
+  edgeTabs: "",
+  tap: "",
 };
 
 /** Touch verbs, for the few prompts that name an on-screen button. */
@@ -100,6 +103,8 @@ const TOUCH_LABELS = {
   interact: "USE", fire: "FIRE", aim: "AIM", sprint: "RUN", crouch: "CROUCH", dash: "DASH",
   chronoShift: "SLOW", chronoRewind: "REWIND", chronoLock: "LOCK", pause: "PAUSE", cover: "COVER",
   confirm: "TAP", advance: "TAP", start: "TAP", skipAll: "HOLD",
+  // The Legacy creator's touch hints: the ◀ / ▶ edge zones that step tabs, and a tap on a tab or row.
+  edgeTabs: "◀ ▶", tap: "TAP",
 };
 
 // ─── Active device ──────────────────────────────────────────────────────────

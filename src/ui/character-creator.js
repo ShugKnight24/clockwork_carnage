@@ -225,6 +225,82 @@ export function drawHairColorHint(ctx, x, y, input) {
   return drawPrompt(ctx, x, y, HAIR_COLOR_PROMPT, { input, look: "legacy", align: "right", size: 10, color: "rgba(255,255,255,0.45)" });
 }
 
+// ── Prompts: the keys along the foot, the touch hints beside BACK / SAVE ──
+
+/** The keys and pad buttons along the foot (src/ui/input-glyphs.js): the NAME tab types, so arrows step tabs. */
+export const CREATOR_NAME_PROMPT = [["arrowsH", "category"], ["confirm", "save"], ["back", "cancel"]];
+export const CREATOR_PROMPT = [["navigateH", "category"], ["navigateV", "select"], ["confirm", "save"], ["back", "cancel"]];
+/** PLACE toggles: up / down move a row cursor and SPACE wears the badge there. */
+export const CREATOR_PLACE_PROMPT = [["navigateH", "category"], ["navigateV", "row"], ["toggle", "wear here"], ["confirm", "save"], ["back", "cancel"]];
+
+/** The foot's prompt for a tab (null: the NAME tab). */
+export function creatorPrompt(curCat) {
+  if (!curCat?.key) return CREATOR_NAME_PROMPT;
+  return curCat.multi ? CREATOR_PLACE_PROMPT : CREATOR_PROMPT;
+}
+
+/**
+ * On touch the foot holds BACK and SAVE (js/touch.js), so the hints sit in
+ * the lanes beside them: left of BACK, the ◀ / ▶ edge zones step tabs;
+ * right of SAVE, a tap picks a tab or a row.
+ */
+export const CREATOR_TOUCH_HINTS = [[["edgeTabs", "switch tab"]], [["tap", "a tab or row"]]];
+
+/** CSS px down each side of a touch screen where a tap steps tabs and the ◀ / ▶ arrows sit (js/touch.js). */
+export const CREATOR_EDGE_ZONE = 64;
+
+/**
+ * The touch overlay's controls in CSS px: BACK and SAVE side by side at the
+ * foot, above the safe area, and the lane each side of them that a hint may
+ * use, clear of the edge zones. Shared by js/touch.js (drawing and taps) and
+ * the hint layout.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} [safeArea]
+ */
+export function creatorTouchControls(w, h, safeArea = {}) {
+  const btnH = 52;
+  const btnW = Math.min(140, Math.max(110, w * 0.18));
+  const gap = 16;
+  const btnY = h - btnH - 16 - (safeArea.bottom || 0);
+  const back = { x: w / 2 - gap / 2 - btnW, y: btnY, w: btnW, h: btnH };
+  const save = { x: w / 2 + gap / 2, y: btnY, w: btnW, h: btnH };
+  const pad = 8;
+  const leftEdge = Math.max(CREATOR_EDGE_ZONE, safeArea.left || 0) + pad;
+  const rightEdge = w - Math.max(CREATOR_EDGE_ZONE, safeArea.right || 0) - pad;
+  const lanes = [
+    { x: leftEdge, w: Math.max(0, back.x - pad - leftEdge) },
+    { x: save.x + save.w + pad, w: Math.max(0, rightEdge - (save.x + save.w + pad)) },
+  ];
+  return { back, save, lanes, midY: btnY + btnH / 2 };
+}
+
+/**
+ * Where each touch hint goes: centred in its lane on the buttons' middle,
+ * at the largest legend size that fits, or left out when none does (a
+ * phone upright has no lane beside the buttons). `ctx` measures the text.
+ * @returns {{ items: Array, x: number, y: number, w: number, h: number, size: number }[]}
+ */
+export function creatorTouchHints(ctx, controls, input) {
+  const out = [];
+  CREATOR_TOUCH_HINTS.forEach((items, i) => {
+    const lane = controls.lanes[i];
+    for (const size of [11, 10, 9]) {
+      const w = drawPrompt(ctx, 0, 0, items, { input, device: "touch", look: "legacy", size, measure: true });
+      if (!w || w > lane.w) continue;
+      const h = Math.round(size * 1.8);
+      out.push({ items, x: Math.round(lane.x + (lane.w - w) / 2), y: Math.round(controls.midY - h / 2), w, h, size });
+      break;
+    }
+  });
+  return out;
+}
+
+/** Draw the touch hints (creatorTouchHints) in the overlay's dim ink. */
+export function drawCreatorTouchHints(ctx, controls, input) {
+  for (const hint of creatorTouchHints(ctx, controls, input)) {
+    drawPrompt(ctx, hint.x, hint.y + hint.h / 2, hint.items, { input, device: "touch", look: "legacy", size: hint.size, color: "rgba(255,255,255,0.45)" });
+  }
+}
+
 /** Words of `text` in lines of at most `max` characters (the list's monospace font). */
 function wrapChars(text, max) {
   const lines = [];
@@ -1175,17 +1251,7 @@ export function renderCharacterCreator(
     ctx.textAlign = "center";
     ctx.fillText(npText, prevCX, npY);
 
-    if (!isMobile) {
-      ctx.fillStyle = "rgba(180,200,220,0.45)";
-      ctx.font = "11px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        "Click or TAB/\u2190/\u2192 = category  \u00B7  ENTER = save  \u00B7  ESC = cancel",
-        w / 2,
-        h - 20,
-      );
-      ctx.textAlign = "left";
-    }
+    drawCreatorFooter(ctx, w, h, null, isTouchDevice, input);
     return;
   }
 
@@ -1663,18 +1729,15 @@ export function renderCharacterCreator(
   ctx.textAlign = "center";
   ctx.fillText(npText, prevCX, npY);
 
-  // ─── Footer controls ───
-  if (!isMobile) {
-    ctx.fillStyle = "rgba(180,200,220,0.45)";
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(
-      multi
-        ? "Click or TAB/A/D = category  \u00B7  W/S = row  \u00B7  SPACE = wear here  \u00B7  ENTER = save  \u00B7  ESC = cancel"
-        : "Click or TAB/A/D = category  \u00B7  Click or W/S = select  \u00B7  ENTER = save  \u00B7  ESC = cancel",
-      w / 2,
-      h - 20,
-    );
-    ctx.textAlign = "left";
-  }
+  drawCreatorFooter(ctx, w, h, curCat, isTouchDevice, input);
+}
+
+/**
+ * The foot's keys or pad buttons, in the glyphs of the device in use. Not
+ * on a touch screen: BACK and SAVE stand there, with their own hints
+ * beside them (drawCreatorTouchHints, drawn by js/touch.js).
+ */
+function drawCreatorFooter(ctx, w, h, curCat, isTouchDevice, input) {
+  if (isTouchDevice) return;
+  drawPrompt(ctx, w / 2, h - 20, creatorPrompt(curCat), { input, look: "legacy", align: "center", size: 10, color: "rgba(180,200,220,0.6)" });
 }
