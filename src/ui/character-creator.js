@@ -109,18 +109,29 @@ export function tabRect(L, i) {
 
 // ── Layout calculator (shared between render + click detection) ──
 
-/**
- * Width to keep clear down each side of the tab strip. The touch overlay puts
- * its ◀/▶ category arrows and their 60 CSS-px tap zones there (js/touch.js),
- * and with this many tabs the strip would otherwise run underneath them.
- */
-function edgeInset(w, isTouch) {
-  if (!isTouch) return 0;
+/** Canvas px per CSS px: the touch overlay and the safe area are measured in CSS px. */
+function cssScale(w) {
   const cssW = typeof window !== "undefined" && window.innerWidth > 0 ? window.innerWidth : w;
-  return Math.ceil(64 * (w / cssW));
+  return w / cssW;
 }
 
-export function getCreatorLayout(w, h, isMobile, isTouch = false) {
+/**
+ * Width to keep clear down each side of the tab strip and the panels. The
+ * touch overlay puts its ◀/▶ category arrows and their 60 CSS-px tap zones
+ * there (js/touch.js), and a notch's safe area may reach further in.
+ */
+function edgeInset(w, isTouch, safeArea = {}) {
+  if (!isTouch) return 0;
+  return Math.ceil(Math.max(CREATOR_EDGE_ZONE, safeArea.left || 0, safeArea.right || 0) * cssScale(w));
+}
+
+/**
+ * The creator's layout in canvas px. On touch, `safeArea` (CSS px, the touch
+ * overlay's: game.touchControls.safeArea) keeps the panels clear of a notch
+ * and above BACK / SAVE, which sit over the bottom inset (creatorTouchControls).
+ */
+export function getCreatorLayout(w, h, isMobile, isTouch = false, safeArea = null) {
+  const sa = safeArea || {};
   const titleY = isMobile ? 34 : 44;
   const n = CREATOR_CATEGORIES.length;
   // A touch phone on its side is short of rows, not of width: its tabs
@@ -133,7 +144,7 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   // Two dozen-odd tabs no longer fit on one row, so the strip wraps: take the
   // fewest rows that let every tab keep its minimum width, then spread the
   // tabs evenly over them.
-  const avail = w - (isMobile ? 16 : 50) - 2 * edgeInset(w, isTouch);
+  const avail = w - (isMobile ? 16 : 50) - 2 * edgeInset(w, isTouch, sa);
   const fitPerRow = Math.max(1, Math.floor((avail + tabGap) / (minTabW + tabGap)));
   const tabRows = Math.ceil(n / fitPerRow);
   const perRow = Math.ceil(n / tabRows);
@@ -150,25 +161,36 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   // beside it, which the short screen cannot fill anyway) so the HAIR tab's
   // colour swatches stay finger-sized beside two rows of cuts, and the
   // content clears the edge zones that cycle tabs (edgeInset).
-  const listW = isMobile ? Math.min(w * 0.45, shortTouch ? 300 : 180) : shortTouch ? 300 : 230;
-  const previewW = isMobile ? Math.min(w * 0.4, 140) : shortTouch ? 180 : 300;
-  const infoW = isMobile ? 0 : shortTouch ? 180 : 240;
+  let listW = isMobile ? Math.min(w * 0.45, shortTouch ? 300 : 180) : shortTouch ? 300 : 230;
+  let previewW = isMobile ? Math.min(w * 0.4, 140) : shortTouch ? 180 : 300;
+  let infoW = isMobile ? 0 : shortTouch ? 180 : 240;
   const contentGap = isMobile ? 8 : 20;
-  const totalContentW =
-    listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
+  const gaps = (isMobile ? 0 : contentGap) + contentGap;
+  // A notch wider than the edge zones: the panels narrow to stay clear of it.
+  const room = w - 2 * edgeInset(w, isTouch, sa) - gaps;
+  const fit = isTouch ? Math.min(1, room / (listW + previewW + infoW)) : 1;
+  listW = Math.floor(listW * fit);
+  previewW = Math.floor(previewW * fit);
+  infoW = Math.floor(infoW * fit);
+  const totalContentW = listW + previewW + infoW + gaps;
   const contentX = (w - totalContentW) / 2;
   const itemH = isMobile ? 32 : 36;
   // Desktop used to leave availH unbounded, so each panel sized itself to its
   // item count. A 5-entry category produced a ~200px block pinned to the top
   // with most of the screen empty, and the panel height jumped between tabs.
-  const availH = h - contentY - (isMobile ? 80 : 70);
+  // On touch the panels end above BACK / SAVE (creatorTouchControls), which
+  // stand on the bottom safe area.
+  const k = cssScale(w);
+  const availH = isTouch
+    ? Math.floor(creatorTouchControls(w / k, h / k, sa).back.y * k) - 8 - contentY
+    : h - contentY - (isMobile ? 80 : 70);
   const panelH = Math.max(itemH * 3 + 16, availH);
   const maxBySpace = Math.max(3, Math.floor((panelH - 16) / itemH));
 
   return {
     width: w,
     touch: isTouch,
-    inset: edgeInset(w, isTouch),
+    inset: edgeInset(w, isTouch, sa),
     titleY,
     tabGap,
     tabW,
@@ -619,6 +641,7 @@ export function renderCharacterCreator(
   unlockCtx = null,
   placementSel = 0,
   input = null,
+  safeArea = null,
 ) {
   const now = performance.now();
   const cat = creatorCategory;
@@ -649,7 +672,7 @@ export function renderCharacterCreator(
   }
 
   const isMobile = isTouchDevice && w < 700;
-  const L = getCreatorLayout(w, h, isMobile, !!isTouchDevice);
+  const L = getCreatorLayout(w, h, isMobile, !!isTouchDevice, safeArea);
 
   // ── Ambient floating particles ──
   const particleCount = isMobile ? 12 : 24;

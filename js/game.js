@@ -1880,6 +1880,7 @@ export class Game {
       gameUnlockContext(this),
       this.creatorPlacementSel,
       this,
+      this.touchControls?.safeArea,
     );
   }
 

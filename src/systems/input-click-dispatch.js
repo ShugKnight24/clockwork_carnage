@@ -34,7 +34,7 @@ export function handleCreatorClick(game, e) {
   const h = game.canvas.height;
   const isMobile = game.isTouchDevice && w < 700;
   const categories = CREATOR_CATEGORIES;
-  const L = getCreatorLayout(w, h, isMobile, !!game.isTouchDevice);
+  const L = getCreatorLayout(w, h, isMobile, !!game.isTouchDevice, game.touchControls?.safeArea);
 
   // Tab click detection — the strip wraps over several rows once there are
   // more tabs than fit across the screen.

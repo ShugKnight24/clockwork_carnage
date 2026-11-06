@@ -76,6 +76,35 @@ describe("legacy creator touch hints", () => {
   });
 });
 
+describe("legacy creator with a notch's safe area", () => {
+  // iPhone 14 on its side: the insets it reports (tests/unit/touch-layout.test.js).
+  const sa = { top: 0, bottom: 21, left: 47, right: 47 };
+  const wide = { top: 0, bottom: 21, left: 90, right: 90 };
+  it.each([[844, 390, sa], [667, 375, sa], [844, 390, wide]])("keeps the panels, tabs and hints clear at %ix%i", (w, h, area) => {
+    const L = getCreatorLayout(w, h, w < 700, true, area);
+    const controls = creatorTouchControls(w, h, area);
+    const panels = { x: L.contentX, y: L.contentY, w: L.totalContentW, h: L.panelH };
+    // Above BACK / SAVE, which stand on the bottom inset.
+    expect(panels.y + panels.h).toBeLessThanOrEqual(controls.back.y - 8);
+    expect(overlap(panels, controls.back)).toBe(false);
+    expect(overlap(panels, controls.save)).toBe(false);
+    // Clear of the notch and the edge zones, panels and tab strip alike.
+    const side = Math.max(CREATOR_EDGE_ZONE, area.left, area.right);
+    expect(L.inset).toBe(side);
+    expect(panels.x).toBeGreaterThanOrEqual(side);
+    expect(panels.x + panels.w).toBeLessThanOrEqual(w - side);
+    const strip = L.perRow * L.tabW + (L.perRow - 1) * L.tabGap;
+    expect((w - strip) / 2).toBeGreaterThanOrEqual(side);
+    expect(L.tabRows).toBe(2);
+    // Two rows of picks still fit.
+    expect(L.panelH).toBeGreaterThanOrEqual(2 * L.itemH + 16);
+    for (const r of creatorTouchHints(textCtx(), controls, game({ isTouchDevice: true, inputDevice: "touch" }))) {
+      expect(overlap(r, panels)).toBe(false);
+      expect(r.x).toBeGreaterThanOrEqual(side);
+    }
+  });
+});
+
 describe("legacy creator footer", () => {
   const draw = (input, cat, touch = false) => {
     const ctx = textCtx();
