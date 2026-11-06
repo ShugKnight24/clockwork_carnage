@@ -43,6 +43,9 @@ export default defineConfig({
     // Whole-world sweeps (terrain generation, meshing, save round trips) take
     // a second or two on a laptop and can pass 5 s on a shared 2-core runner.
     testTimeout: 30_000,
+    // A missing snapshot fails instead of being written: a new golden file is
+    // recorded only on purpose, with -u.
+    update: "none",
     coverage: {
       provider: "v8",
       include: ["src/systems/**", "src/utils/**", "src/core/**"],

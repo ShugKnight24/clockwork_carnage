@@ -4,6 +4,7 @@
 // every file unchanged; an intended art change updates only the pieces it
 // meant to, reviewed as a readable diff.
 import { describe, it, expect } from "vitest";
+import { readdirSync } from "node:fs";
 import { buildAgentSvg, buildCastModel, CAST_KEYS } from "../../src/rendering/svg-art/agent-rig.js";
 import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { BODY_FRAMES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES, BODY_TYPES } from "../../src/data/cosmetics.js";
@@ -83,6 +84,12 @@ describe("agent rig golden snapshots", () => {
       expect(tiles.some(open), `head open realistic=${realistic}`).toBe(true);
       expect(tiles.some((e) => !open(e)), `head closed realistic=${realistic}`).toBe(true);
     }
+  });
+
+  it("keeps exactly one file per matrix entry: none missing, none orphaned", () => {
+    // A renamed or dropped look would otherwise leave its old file behind.
+    const files = readdirSync(new URL("./__golden__/", import.meta.url)).filter((f) => f.endsWith(".svg")).sort();
+    expect(files).toEqual(GOLDEN_MATRIX.map((e) => `${e.name}.svg`).sort());
   });
 
   it("lookFromIds rejects unknown fields and ids", () => {
