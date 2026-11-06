@@ -89,14 +89,19 @@ export const FACE = {
     return { face: stroke(d, mix(c.skin.shadow, "#7a2a28", 0.35), 0.75, 0.9) + stroke(d, mix(c.skin.color, "#ffffff", 0.35), 0.25, 0.7) };
   },
   // Two stripes under each eye in the player's paint (c.tints.face; its
-  // default for a look resolved without one), never the suit's colours. Each stripe is edged against the skin under it, dark
-  // on light skin and light on deep skin, so any paint reads on any face; the
-  // lower stripe is thinner, as if dragged by two fingers.
+  // default for a look resolved without one), never the suit's colours.
+  // Each stripe is edged against the skin under it, not the paint: dark on
+  // light skin and light on deep skin, so any paint reads on any face, even
+  // one close to the skin's own colour (the edge then thickens, since the
+  // paint alone no longer parts it from the skin). The lower stripe is
+  // thinner, as if dragged by two fingers.
   warpaint: (A, c) => {
     const paint = c.tints?.face ?? accessoryItem("face", "warpaint").tint.default;
-    const edge = lum(c.skin.color) > 0.42 ? mix(paint, "#000000", 0.55) : mix(paint, "#ffffff", 0.5);
+    const skin = lum(c.skin.color);
+    const edge = skin > 0.42 ? mix(c.skin.shadow, "#000000", 0.55) : mix(c.skin.color, "#ffffff", 0.55);
+    const width = Math.abs(skin - lum(paint)) < 0.3 ? 0.5 : 0.32;
     const stripe = (s, y, t) => `M${f(s * 1.8)},${f(y)} L${f(s * 6.6)},${f(y - 0.8)} L${f(s * 6.5)},${f(y - 0.8 + t)} L${f(s * 2)},${f(y + t * 0.9)} Z`;
-    const band = (d, op) => `<path d="${d}" fill="${paint}" stroke="${edge}" stroke-width=".3" stroke-linejoin="round" opacity="${op}"/>`;
+    const band = (d, op) => `<path d="${d}" fill="${paint}" stroke="${edge}" stroke-width="${width}" stroke-linejoin="round" opacity="${op}"/>`;
     return {
       face: [-1, 1].map((s) => band(stripe(s, -79.8, 1.5), ".92") + band(stripe(s, -77.7, 1.1), ".85")).join(""),
     };
