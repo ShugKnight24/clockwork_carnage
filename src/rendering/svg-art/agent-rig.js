@@ -1921,19 +1921,21 @@ const visorCracks = (c) =>
   line("M4.4,-89.2 L6.2,-86.6 L5.4,-85.6 M6.2,-86.6 L8.6,-86.8", INK, 0.55, 0.9);
 
 /**
- * The pose with one arm only, the other side left a hole in P.arms (frames
- * walk P.arms with map, which skips it): the fallen agent draws each arm's
- * frame layer at that arm's own depth.
+ * The pose with one arm (withArm) or one leg (withLeg) only, the other side
+ * left a hole in P.arms or P.legs (frames walk them with map, which skips
+ * it): the fallen agent draws each limb's frame layer at that limb's own depth.
  */
 export const withArm = (P, i) => ({ ...P, arms: Object.assign([], { [i]: P.arms[i] }) });
+export const withLeg = (P, i) => ({ ...P, legs: Object.assign([], { [i]: P.legs[i] }) });
 
 /**
  * The customised agent down on the floor, in the rig coordinates of the stock
  * hero_fallen (models/hero.js): same limbs, damage and cape, dressed in the
  * character's frame, armour, shoulders, helmet, gear and colours. The frame
  * draws as standing (its layers, the stock layers it hides, its width and
- * shoulder scale), with the arm under the body and the arm over it each
- * wearing its own sleeve.
+ * shoulder scale), each limb wearing its own part of the frame at its own
+ * depth: the arm under the body and the arm over it, the lower leg and the
+ * upper leg across it.
  */
 function fallenParts(c) {
   const map = { ...bodyMap(c), "#4a0c0c": c.cape[2], "#e05050": mix(c.cape[0], "#ffffff", 0.2), "#140202": mix(c.cape[3], "#000000", 0.5) };
@@ -1955,6 +1957,7 @@ function fallenParts(c) {
   const K = { mix, ...scope.kit(`frame-${c.frame}`) };
   const fr = frameLayers(c.frame, P, c, K);
   const [upperSleeve, trappedSleeve] = [0, 1].map((i) => frameLayers(c.frame, withArm(P, i), c, K).arms);
+  const [upperLegKit, lowerLegKit] = [0, 1].map((i) => frameLayers(c.frame, withLeg(P, i), c, K).legs);
   const fs = frameShape(c.frame);
   const hides = (what) => frameHides(c.frame, what);
   const hideKit = hides("kit");
@@ -1972,7 +1975,7 @@ function fallenParts(c) {
     under:
       kit.back +
       acc.back +
-      recolor(fr.under + trappedArm.body + trappedSleeve + lowerLeg.body + upperLeg.body + fr.legs + torso({ hips: !hides("hips") }) + fr.torso, map) +
+      recolor(fr.under + trappedArm.body + trappedSleeve + lowerLeg.body + lowerLegKit + upperLeg.body + upperLegKit + torso({ hips: !hides("hips") }) + fr.torso, map) +
       (fs.softTorso || hideKit ? "" : chestTrim(c)) +
       (hideKit ? "" : insignia(c) + kit.front + variantTrim(c)) +
       fallenDamage() +

@@ -16,7 +16,7 @@ import {
   shoulderArt,
   validateWardrobe,
 } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
-import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, mix } from "../../src/rendering/svg-art/agent-rig.js";
+import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, withLeg, mix } from "../../src/rendering/svg-art/agent-rig.js";
 import { idScope } from "../../src/rendering/svg-art/id-scope.js";
 import { STAND } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
@@ -295,16 +295,20 @@ describe("every theme piece draws cleanly", () => {
   });
 });
 
-describe("frames draw each arm on its own", () => {
-  // The fallen agent paints each arm's frame layer at that arm's depth
-  // (withArm), so a frame's arms layer must come out the same arm by arm.
-  const arms = (id, P, c) => FRAME_ART[id].layers(P, c, { mix, ...idScope().kit(`frame-${id}`) }).arms;
+describe("frames draw each limb on its own", () => {
+  // The fallen agent paints each limb's frame layer at that limb's depth
+  // (withArm, withLeg), so a frame's arms and legs layers must come out the
+  // same limb by limb.
+  const layer = (key) => (id, P, c) => FRAME_ART[id].layers(P, c, { mix, ...idScope().kit(`frame-${id}`) })[key];
+  const arms = layer("arms");
+  const legs = layer("legs");
   it.each(Object.keys(FRAME_ART))("%s", (id) => {
     for (const body of ["masc", "fem"]) {
       const c = buildAgentParts(lookFromIds({ frame: id, body })).look;
       for (const pose of ["standing", "armed", "fallen"]) {
         const P = framePose(pose, c.fem);
-        expect(arms(id, withArm(P, 0), c) + arms(id, withArm(P, 1), c), `${body} ${pose}`).toBe(arms(id, P, c));
+        expect(arms(id, withArm(P, 0), c) + arms(id, withArm(P, 1), c), `arms ${body} ${pose}`).toBe(arms(id, P, c));
+        expect(legs(id, withLeg(P, 0), c) + legs(id, withLeg(P, 1), c), `legs ${body} ${pose}`).toBe(legs(id, P, c));
       }
     }
   });

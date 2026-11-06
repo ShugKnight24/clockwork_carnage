@@ -17,10 +17,10 @@
  *       `legs`/`torso`/`arms` over their stock parts, `glow` is energy light.
  *       Helpers: ../frame-kit.js and ../models/hero.js by import; K is the
  *       rig's kit (K.mix blends two hex colours). The fallen agent also
- *       asks for each arm on its own, the other side a hole in P.arms, so
- *       walk P.arms (and P.legs) with map and never index them, and put an
- *       arm's own light in `arms`, not `glow`: `arms` is drawn at that
- *       arm's depth, `glow` once over the whole figure.
+ *       asks for each limb on its own, the other side a hole in P.arms or
+ *       P.legs, so walk them with map and never index them, and put a
+ *       limb's own light in `arms`/`legs`, not `glow`: those are drawn at
+ *       that limb's depth, `glow` once over the whole figure.
  *
  *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors, seats? } }
  *     paint: the whole head under the helmet (not called for a face peek,
