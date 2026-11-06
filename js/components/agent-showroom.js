@@ -249,11 +249,12 @@ function readLook(raw) {
 const previewChanges = (ch, p) => (p.key === "armorVariant" ? { armorVariant: p.value } : withIndex(ch, p.key, p.value));
 const previewedValue = (ch, key) => (key === "armorVariant" ? ch.armorVariant | 0 : getIndex(ch, key));
 
-/** Why the frame overrides the shoulder pick (it hides shoulders, or keeps the right one bare), or "". */
+/** Why the frame overrides the shoulder pick (it hides shoulders, or wears its own right one), or "". */
 function shoulderNote(ch) {
   const frame = pieceOf(ch, "frame");
   if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
-  if (frameShape(frame.id).bareRight) return `${frame.name} keeps the right shoulder bare: this pick fits the left.`;
+  const right = frameShape(frame.id).rightShoulder;
+  if (right) return `${frame.name} keeps its own right shoulder (${pieceOf({ shoulder: right }, "shoulder").name}): this pick fits the left.`;
   return "";
 }
 

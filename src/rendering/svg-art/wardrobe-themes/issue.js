@@ -176,8 +176,8 @@ const HELMETS = {
 const trim = (c, M, d) => line(M(d), INK, 2.2, 0.9) + line(M(d), c.pal.primary, 1.4, 1);
 
 const SHOULDER_PAINTERS = {
-  // Bare: a soft cap over the joint, no plate. A bareRight frame wears it
-  // on the right whatever the pick.
+  // Bare: a soft cap over the joint, no plate. The Strider wears it on
+  // the right whatever the pick (rightShoulder).
   none: (c, s, K) => {
     const { M, rot, lit } = K;
     const cap = "M11,-66.8 C15.6,-68.8 21.6,-67.8 23.8,-63 C25,-60.2 24.6,-57.4 23.4,-55.4 C21,-56.8 18.4,-57.2 16,-56.6 C15.8,-60.6 14,-64 11,-65.6 Z";
@@ -315,7 +315,8 @@ export default {
   id: "issue",
   frames: {
     standard: { shape: { width: 1, shoulder: 1, hides: [] }, layers: () => NONE },
-    strider: { shape: { width: 0.93, shoulder: 0.92, bareRight: true, hides: [] }, layers: strider },
+    // The right shoulder stays bare (the soft cap) for the asymmetric kit.
+    strider: { shape: { width: 0.93, shoulder: 0.92, rightShoulder: "none", hides: [] }, layers: strider },
     vanguard: { shape: { width: 1, shoulder: 1.04, hides: [] }, layers: vanguard },
     // softTorso: fabric over the chest, so no chest trim or core light;
     // sleeves and wraps cover the limbs' energy channels (limbGlow).

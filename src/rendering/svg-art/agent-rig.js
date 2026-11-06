@@ -1039,12 +1039,6 @@ function eyeGlow(c, op, behindVisor = false) {
 // ---------------------------------------------------------------------------
 
 /**
- * The shoulder piece a bareRight frame wears on its right side, whatever the
- * pick: the bare soft cap.
- */
-const SOFT_CAP = "none";
-
-/**
  * One shoulder piece, drawn on side `s` (-1 left, 1 right) at the arm's
  * tilt, through its art's painter (wardrobe-themes/index.js documents the
  * kit). `scope` is the figure's idScope.
@@ -1644,11 +1638,11 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const collar = collarOf(c, showFace, map, !hides("collar"));
   const hideKit = hides("kit");
   // Shoulders scale about their joint with the frame, as far as the piece
-  // allows (maxShoulderScale); a Strider leaves the right shoulder bare (soft
-  // cap) for its asymmetric kit.
+  // allows (maxShoulderScale); a frame with its own right shoulder piece
+  // (rightShoulder: the Strider's bare cap) wears it whatever the pick.
   const shoulderAt = (s, t) => {
     if (hides("shoulders")) return "";
-    const id = fs.bareRight && s > 0 ? SOFT_CAP : c.shoulder;
+    const id = fs.rightShoulder && s > 0 ? fs.rightShoulder : c.shoulder;
     const inner = shoulder(c, s, t, scope, id);
     const k = Math.min(fs.shoulder, shoulderArt(id).maxShoulderScale ?? Infinity) * B.shoulder;
     const dx = s * 20 * (B.sh - 1);

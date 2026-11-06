@@ -5,10 +5,11 @@
  * its id the same as its data module's.
  *
  *   frames: { [id]: { shape, layers(P, c, K) -> { under, legs, torso, arms, glow } } }
- *     shape: { width, shoulder, softTorso?, bareRight?, hides: string[] }
+ *     shape: { width, shoulder, softTorso?, rightShoulder?, hides: string[] }
  *       width, shoulder — silhouette scales (1 is the issued suit)
  *       softTorso       — fabric over the chest: no chest trim, belt-only core light
- *       bareRight       — the right shoulder takes the soft cap, not its piece
+ *       rightShoulder   — a shoulder id the frame always wears on the right,
+ *                         whatever the pick (the left still takes the pick)
  *       hides           — the stock rig layers the frame replaces, words from
  *                         HIDES (see there for what each one removes)
  *     layers: drawn from the pose's joints (P.arms, P.legs) over the
@@ -195,6 +196,7 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
   const artIds = artThemes.map((t) => t.id);
   for (const id of dataIds) if (!artIds.includes(id)) errors.push(`theme "${id}" has no art module`);
   for (const id of artIds) if (!dataIds.includes(id)) errors.push(`art module "${id}" has no data theme`);
+  const shoulderIds = new Set(themes.flatMap((t) => (t.shoulders || []).map((e) => e.id)));
   for (const t of artThemes) {
     for (const table of THEME_TABLES) {
       for (const id of Object.keys(t[table] || {})) {
@@ -227,6 +229,8 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
       for (const key of ["width", "shoulder"]) {
         if (!Number.isFinite(a.shape?.[key])) errors.push(`frames: "${id}" shape.${key} is not a finite number`);
       }
+      const right = a.shape?.rightShoulder;
+      if (right !== undefined && !shoulderIds.has(right)) errors.push(`frames: "${id}" shape.rightShoulder "${right}" is not a shoulder`);
       const hides = a.shape?.hides;
       if (!Array.isArray(hides)) {
         errors.push(`frames: "${id}" has no shape.hides list`);

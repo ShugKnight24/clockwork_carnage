@@ -101,6 +101,11 @@ describe("wardrobe registries", () => {
     }
   });
 
+  it("the Strider names its bare right shoulder in its shape; no other legacy frame has one", () => {
+    expect(FRAME_ART.strider.shape.rightShoulder).toBe("none");
+    for (const id of LEGACY_FRAMES.filter((f) => f !== "strider")) expect(FRAME_ART[id].shape.rightShoulder, id).toBeUndefined();
+  });
+
   it("rejects a hides word outside the vocabulary", () => {
     expect(() => frameHides("standard", "helmet")).toThrow(/helmet/);
   });
@@ -267,6 +272,14 @@ describe("validateWardrobe", () => {
   it("reports art filed under another theme than its entry", () => {
     const msgs = validateWardrobe([theme("a", ["x"]), theme("b", [])], [{ id: "a", frames: {} }, { id: "b", frames: { x: art() } }]);
     expect(msgs).toEqual([expect.stringMatching(/"x" is in theme "b" but its entry is in "a"/)]);
+  });
+
+  it("reports a rightShoulder that is not a shoulder id", () => {
+    const run = (rightShoulder) =>
+      validateWardrobe([theme("a", ["x"], [], ["p"])], [{ id: "a", frames: { x: { ...art(), shape: { width: 1, shoulder: 1, hides: [], rightShoulder } } }, shoulders: { p: pad() } }]);
+    expect(run(undefined)).toEqual([]);
+    expect(run("p")).toEqual([]);
+    expect(run("q")).toEqual([expect.stringMatching(/frames: "x" shape\.rightShoulder "q" is not a shoulder/)]);
   });
 
   it("reports a frame without a layers function", () => {

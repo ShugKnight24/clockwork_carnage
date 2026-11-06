@@ -134,7 +134,7 @@ describe("shoulders come from their art", () => {
     expect(scaleOf(body("capped-fixture"), "capped-left")).toBe(0.6);
   });
 
-  it("a bareRight frame wears the soft cap on the right, its pick on the left", () => {
+  it("a frame with its own right shoulder (the Strider's soft cap) wears it there, the pick on the left", () => {
     const body = buildAgentParts(look({ shoulder: "shoulder-fixture", frame: "strider" })).body;
     expect(body).toContain(`data-fixture="shoulder-left"`);
     expect(body).not.toContain(`data-fixture="shoulder-right"`);
