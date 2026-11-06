@@ -667,21 +667,22 @@ const gridDiff = (a, b) => a.reduce((t, v, i) => t + Math.abs(v - b[i]), 0) / a.
 
 test("canvas creator preview shows a theme frame", async ({ page }) => {
   await openLegacyCreator(page);
-  await legacyTab(page, "armor");
+  await legacyTab(page, "frame");
   await installPreviewProbe(page);
   await page.evaluate(() => window.__preview.settled());
   const base = await page.evaluate(() => window.__preview.sample());
   // Two frames of the same look differ only by the panel's animation: the noise floor.
   await page.waitForTimeout(250);
   const again = await page.evaluate(() => window.__preview.sample());
-  await page.evaluate(() => {
-    window.ccDebug.game.character.frame = "diving";
-  });
+  // Picked as a player would: down the SUIT FRAME list to the Abyssal Diver's suit.
+  const diving = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).BODY_FRAMES.findIndex((e) => e.id === "diving"));
+  for (let i = 0; i < diving; i++) await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => window.ccDebug.game.character.frame)).toBe("diving");
   const f = await page.evaluate(() => window.__preview.settled());
   expect(f.shown).toContain(".diving.");
-  const diving = await page.evaluate(() => window.__preview.sample());
+  const suit = await page.evaluate(() => window.__preview.sample());
   const noise = gridDiff(base.grid, again.grid);
-  const change = gridDiff(base.grid, diving.grid);
+  const change = gridDiff(base.grid, suit.grid);
   console.log(`canvas preview: theme frame changes the figure by ${change.toFixed(2)} (noise ${noise.toFixed(2)})`);
   expect(base.lit).toBeGreaterThan(1000);
   expect(change).toBeGreaterThan(Math.max(2, noise * 4));

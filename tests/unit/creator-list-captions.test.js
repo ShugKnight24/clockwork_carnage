@@ -41,6 +41,20 @@ describe("legacy creator list captions", () => {
     }
   }
 
+  it.each([[844, 390, false], [667, 375, true], [640, 360, true]])("the tab strip keeps two rows of fingertip tabs at %ix%i", (w, h, mobile) => {
+    const L = getCreatorLayout(w, h, mobile, true);
+    expect(CREATOR_CATEGORIES.map((c) => c.key)).toEqual(expect.arrayContaining(["frame", "body", "cape", "camo"]));
+    expect(L.tabRows).toBe(2);
+    expect(L.tabW).toBeGreaterThanOrEqual(28);
+    expect(L.perRow * L.tabW + (L.perRow - 1) * L.tabGap).toBeLessThanOrEqual(w - 2 * L.inset);
+  });
+
+  it("the SUIT FRAME list is captioned by theme like the helmets", () => {
+    const L = getCreatorLayout(1280, 720, false, false);
+    const rows = listWindow(L, cat("frame"), ch, cat("frame").data.findIndex((e) => e.id === "diving"));
+    expect(rows.filter((r) => r.type === "caption").map((r) => r.text)).toContain("ABYSSAL DIVER");
+  });
+
   it("lists without themes keep one row per option, scrolled as before", () => {
     const L = getCreatorLayout(1280, 720, false, false);
     const c = cat("color");

@@ -12,6 +12,10 @@ import {
   LOADOUT_CLASSES,
   BACKSTORIES,
   VOICE_PROFILES,
+  BODY_FRAMES,
+  BODY_TYPES,
+  CAPE_STYLES,
+  CAMO_STYLES,
 } from "../data/index.js";
 import { takesVisor } from "../data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
@@ -45,7 +49,11 @@ export const CREATOR_CATEGORIES = [
   { name: "FACE", shortLabel: "FACE", data: SKIN_TONES, key: "skinTone" },
   { name: "HAIR", shortLabel: "HAIR", data: HAIR_STYLES, key: "hair" },
   { name: "EYES", shortLabel: "EYES", data: EYE_COLORS, key: "eye" },
+  { name: "BODY", shortLabel: "BODY", data: BODY_TYPES, key: "body" },
   { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armor" },
+  // The suit's silhouette, theme by theme (listWindow captions), as the showroom's Frame grid.
+  { name: "SUIT FRAME", shortLabel: "SUIT", data: BODY_FRAMES, key: "frame" },
+  { name: "UNDER-SUIT", shortLabel: "UNDR", data: CAMO_STYLES, key: "camo" },
   { name: "HELMET", shortLabel: "HELM", data: HELMET_STYLES, key: "helmet" },
   { name: "VISOR", shortLabel: "VSR", data: VISOR_STYLES, key: "visor" },
   { name: "SHOULDER", shortLabel: "SHLD", data: SHOULDER_STYLES, key: "shoulder" },
@@ -55,6 +63,7 @@ export const CREATOR_CATEGORIES = [
   { name: "METAL", shortLabel: "MTL", data: METALS, key: "badge.metal" },
   { name: "FINISH", shortLabel: "FIN", data: FINISHES, key: "badge.finish" },
   { name: "PLACE", shortLabel: "PLC", data: PLACEMENTS, key: "badge.placement", multi: true },
+  { name: "CAPE", shortLabel: "CAPE", data: CAPE_STYLES, key: "cape" },
   ...ACCESSORY_SLOTS.map((s) => ({
     name: `GEAR ${s.name.toUpperCase()}`,
     shortLabel: `G${s.name.slice(0, 3).toUpperCase()}`,
@@ -113,12 +122,13 @@ function edgeInset(w, isTouch) {
 
 export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   const titleY = isMobile ? 34 : 44;
-  const tabGap = isMobile ? 4 : 8;
   const n = CREATOR_CATEGORIES.length;
-  // A touch phone on its side (shortTouch, below) is short of rows, not of
-  // width: its tabs narrow to fit their short labels so the strip keeps to
-  // two rows and the lists keep their height.
-  const minTabW = isMobile ? 28 : isTouch && h < 500 ? 38 : 42;
+  // A touch phone on its side is short of rows, not of width: its tabs
+  // narrow to a fingertip (28px) with tighter gaps, so thirty-odd tabs keep
+  // to two rows and the lists keep their height.
+  const shortTouch = isTouch && h < 500;
+  const tabGap = shortTouch ? 3 : isMobile ? 4 : 8;
+  const minTabW = isMobile || shortTouch ? 28 : 42;
   const maxTabW = isMobile ? 46 : 86;
   // Two dozen-odd tabs no longer fit on one row, so the strip wraps: take the
   // fewest rows that let every tab keep its minimum width, then spread the
@@ -140,7 +150,6 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   // beside it, which the short screen cannot fill anyway) so the HAIR tab's
   // colour swatches stay finger-sized beside two rows of cuts, and the
   // content clears the edge zones that cycle tabs (edgeInset).
-  const shortTouch = isTouch && h < 500;
   const listW = isMobile ? Math.min(w * 0.45, shortTouch ? 300 : 180) : shortTouch ? 300 : 230;
   const previewW = isMobile ? Math.min(w * 0.4, 140) : shortTouch ? 180 : 300;
   const infoW = isMobile ? 0 : shortTouch ? 180 : 240;
