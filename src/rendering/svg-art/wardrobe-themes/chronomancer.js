@@ -14,10 +14,31 @@ import { STEEL_DK, plateAt, lineAt, k, angle } from "../frame-kit.js";
 
 const PAINT = "url(#paint)";
 
-/** Robe cloth from the palette: a deep shade of its dark, lit and shadowed. */
+/** Embroidery thread: gold, or silver on a palette that is gold already. */
+const GOLD_THREAD = "#d8b25a";
+const SILVER_THREAD = "#c9d3dc";
+
+/** Hue in degrees and saturation (0–1) of a #rrggbb colour. */
+function hueSat(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const hi = Math.max(r, g, b);
+  const lo = Math.min(r, g, b);
+  const d = hi - lo;
+  if (!d) return [0, 0];
+  const h = hi === r ? ((g - b) / d) % 6 : hi === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, d / (1 - Math.abs(hi + lo - 1))];
+}
+
+/**
+ * Robe cloth: a deep plum-black only tinted by the palette, so the palette's
+ * own colour (the tabard, the mantle plates) and the thread stand out on it
+ * rather than the whole robe going one colour.
+ */
 const cloth = (c, mix) => {
-  const base = mix(c.pal.dark, "#06070c", 0.5);
-  return { base, lo: mix(base, "#000000", 0.45), hi: mix(c.pal.primary, base, 0.55), trim: c.pal.accent };
+  const base = mix("#1a1622", c.pal.dark, 0.3);
+  const [h, sat] = hueSat(c.pal.primary);
+  const trim = h > 30 && h < 66 && sat > 0.4 ? SILVER_THREAD : GOLD_THREAD;
+  return { base, lo: mix(base, "#000000", 0.45), hi: mix(c.pal.primary, base, 0.6), trim };
 };
 
 /** Glyphs for the runes, drawn about their own origin (~3 units tall). */
@@ -105,19 +126,19 @@ function vestment(P, c, K) {
     line("M-5,-63 L-5.3,-32 L-5.8,15.6 L-3.6,13.6 L0,18.4 L3.6,13.6 L5.8,15.6 L5.3,-32 L5,-63", C.trim, 0.55, 0.85) +
     line("M-5.8,-62 L-6,-34", "#ffffff", 0.5, 0.35) +
     clock(0, -51, 5, c) +
-    // A rune under the crest and one on the apron.
+    // A rune under the crest and one on the apron, below the hourglass.
     lineAt([0, -40.4], [0, 0], [0, 1], RUNES[2], C.trim, 0.55, 0.9) +
-    lineAt([0, -6], [0, 0], [0, 1], RUNES[4], C.trim, 0.6, 0.85) +
-    lineAt([0, 4], [0, 0], [0, 1], RUNES[1], C.trim, 0.6, 0.85);
+    lineAt([0, 5], [0, 0], [0, 1], RUNES[4], C.trim, 0.6, 0.85);
 
   // Cowl folded round the collar.
   const cowl = "M-12,-68.6 C-6,-64.6 6,-64.6 12,-68.6 C14.6,-67 16.4,-65.4 16.6,-63.4 C10,-60.2 -10,-60.2 -16.6,-63.4 C-16.4,-65.4 -14.6,-67 -12,-68.6 Z";
 
-  // Sash and clasp at the waist; the hourglass hangs on a chain at the right hip.
+  // Sash and clasp at the waist; the hourglass hangs from the clasp down the
+  // middle of the tabard, where neither build's arms reach it.
   const sash = "M-19.4,-27.6 C-10,-29.2 10,-29.2 19.4,-27.6 L19.2,-22 C10,-23.4 -10,-23.4 -19.2,-22 Z";
-  const hx = 10.6;
+  const hx = 0;
   const glassD = `M${f(hx - 2.6)},-21.4 C${f(hx - 2.6)},-18.4 ${f(hx - 0.5)},-17.6 ${f(hx - 0.5)},-16 C${f(hx - 0.5)},-14.4 ${f(hx - 2.6)},-13.6 ${f(hx - 2.6)},-10.6 L${f(hx + 2.6)},-10.6 C${f(hx + 2.6)},-13.6 ${f(hx + 0.5)},-14.4 ${f(hx + 0.5)},-16 C${f(hx + 0.5)},-17.6 ${f(hx + 2.6)},-18.4 ${f(hx + 2.6)},-21.4 Z`;
-  const cap = (y) => shape(`M${f(hx - 3.6)},${f(y)} L${f(hx + 3.6)},${f(y)} L${f(hx + 3.2)},${f(y + 1.6)} L${f(hx - 3.2)},${f(y + 1.6)} Z`, PAINT, 0.6);
+  const cap = (y) => shape(`M${f(hx - 3.6)},${f(y)} L${f(hx + 3.6)},${f(y)} L${f(hx + 3.2)},${f(y + 1.6)} L${f(hx - 3.2)},${f(y + 1.6)} Z`, C.trim, 0.6);
   const sand = `M${f(hx - 1.8)},-19.4 L${f(hx + 1.8)},-19.4 L${f(hx)},-16.4 Z M${f(hx - 2.2)},-11.4 C${f(hx - 1)},-13.2 ${f(hx + 1)},-13.2 ${f(hx + 2.2)},-11.4 Z`;
   const hourglass =
     line(`M${f(hx)},-25 L${f(hx)},-23.2`, "#8c96a2", 0.7, 1) +
