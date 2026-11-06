@@ -3,6 +3,7 @@
 import { DEFAULT_BADGE } from "./badges.js";
 import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, accessoryItem } from "./accessories.js";
 import { RETIRED_PIECES } from "./retired-pieces.js";
+import { themeTable } from "./wardrobe-themes/index.js";
 
 export const CHARACTER_COLORS = [
   {
@@ -167,17 +168,11 @@ export const EYE_COLORS = [
 ];
 
 /**
- * Body frames: the silhouette the suit is built on (src/rendering/svg-art/frames.js).
- * Any armour style can be worn on any frame. Appended, never inserted.
+ * Body frames: the silhouette the suit is built on, from the wardrobe themes
+ * (src/data/wardrobe-themes/), in theme order. Any armour style can be worn
+ * on any frame.
  */
-export const BODY_FRAMES = [
-  { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },
-  { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
-  { id: "vanguard", name: "Vanguard", desc: "Sleek sculpted plate, panel lines and glowing seams" },
-  { id: "operator", name: "Operator", desc: "Soft kit: fabric sleeves and trousers, chest rig, elbow pads" },
-  { id: "wraith", name: "Wraith", desc: "Hooded long coat, wrapped forearms and shins" },
-  { id: "breacher", name: "Breacher", desc: "Ballistic chest plate, riot vambrace, grenade belt, heavy boots" },
-];
+export const BODY_FRAMES = themeTable("frames");
 
 /**
  * Under-suit camouflage (the fabric between the plates). `base` and `blobs`

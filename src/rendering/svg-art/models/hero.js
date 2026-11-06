@@ -550,7 +550,12 @@ function PEC(s) {
   );
 }
 
-export function torso({ pecs = true } = {}) {
+/**
+ * The armoured torso: under-suit, abdomen lames, chest plate, belt and hip plates.
+ * `pecs` moulds the chest plate; `hips: false` leaves off the hip plates (a
+ * frame that covers them).
+ */
+export function torso({ pecs = true, hips = true } = {}) {
   const chest =
     "M-15,-65 C-8,-66.8 8,-66.8 15,-65 C18.4,-60 18.8,-53.6 17.4,-48.4 C16,-43.8 13,-40.8 10.2,-39.4 " +
     "C6,-38.6 3,-37.7 0,-36.6 C-3,-37.7 -6,-38.6 -10.2,-39.4 C-13,-40.8 -16,-43.8 -17.4,-48.4 C-18.8,-53.6 -18.4,-60 -15,-65 Z";
@@ -607,15 +612,17 @@ export function torso({ pecs = true } = {}) {
     line("M-12.6,-25.2 L-8.1,-24.9 M12.6,-25.2 L8.1,-24.9", INK, 0.4, 0.8) +
     `<rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx=".9" fill="url(#steel)" stroke="${INK}" stroke-width=".6"/>` +
     `<rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx=".4" fill="#0b6f80"/>` +
-    // hip plates
-    shape("M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z", "url(#steelDk)", 0.8) +
-    shape(tasset, "url(#steel)") +
-    `<path d="${tasset}" fill="url(#cyl)"/>` +
-    shape(mirror(tasset), "url(#steel)") +
-    line("M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8", "#eaf4ff", 0.5, 0.6) +
-    line("M-14.4,-17 L-6.2,-16", INK, 0.45, 0.55) +
-    line("M14.4,-17 L6.2,-16", INK, 0.45, 0.55) +
-    line("M15.4,-20.6 C15.8,-17 15.9,-14 15.6,-11.4", RIM, 0.6, 0.85)
+    (hips
+      ? // hip plates
+        shape("M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z", "url(#steelDk)", 0.8) +
+        shape(tasset, "url(#steel)") +
+        `<path d="${tasset}" fill="url(#cyl)"/>` +
+        shape(mirror(tasset), "url(#steel)") +
+        line("M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8", "#eaf4ff", 0.5, 0.6) +
+        line("M-14.4,-17 L-6.2,-16", INK, 0.45, 0.55) +
+        line("M14.4,-17 L6.2,-16", INK, 0.45, 0.55) +
+        line("M15.4,-20.6 C15.8,-17 15.9,-14 15.6,-11.4", RIM, 0.6, 0.85)
+      : "")
   );
 }
 
