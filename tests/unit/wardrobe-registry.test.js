@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { BODY_FRAMES, HELMET_STYLES, SHOULDER_STYLES } from "../../src/data/cosmetics.js";
-import { ACCESSORIES } from "../../src/data/accessories.js";
+import { BODY_FRAMES, HELMET_STYLES, SHOULDER_STYLES, CAMO_STYLES } from "../../src/data/cosmetics.js";
+import { ACCESSORIES, ACCESSORY_SLOTS } from "../../src/data/accessories.js";
 import { WARDROBE_THEMES, FACE_HELMETS, themeOf } from "../../src/data/wardrobe-themes/index.js";
 import {
   FRAME_ART,
@@ -16,9 +16,10 @@ import {
   shoulderArt,
   validateWardrobe,
 } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
-import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, withLeg, mix } from "../../src/rendering/svg-art/agent-rig.js";
+import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, withLeg, mix, RIG_DEFS, HELMET_KIT, HELMET_KIT_IDS } from "../../src/rendering/svg-art/agent-rig.js";
+import { paintAccessories } from "../../src/rendering/svg-art/accessories/index.js";
 import { idScope } from "../../src/rendering/svg-art/id-scope.js";
-import { STAND } from "../../src/rendering/svg-art/models/hero.js";
+import { STAND, mirror, pauldron } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
 
 const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
@@ -370,16 +371,89 @@ describe("frames draw each limb on its own", () => {
         // Light split by arm: each element of the whole figure's glow comes
         // out of one side or both (light that is no arm's), as often as in
         // the whole; nothing is lost, duplicated or made up.
-        if (pose === "fallen") continue;
         const whole = counts(elements(glow(id, P, c)));
         const [g0, g1] = [0, 1].map((i) => counts(elements(glow(id, withArm(P, i), c))));
         const keys = new Set([...whole.keys(), ...g0.keys(), ...g1.keys()]);
         for (const e of keys) expect(Math.max(g0.get(e) || 0, g1.get(e) || 0), `glow ${body} ${pose} ${e.slice(0, 80)}`).toBe(whole.get(e) || 0);
+        if (pose !== "fallen") continue;
+        // The fallen agent lies on arm 1: its light is the free arm's split
+        // alone, so every element of arm 0's glow shines and nothing only
+        // arm 1 lights does.
+        const cast = buildCastModel(lookFromIds({ frame: id, body }), "hero_fallen").layers[2].markup;
+        const seen = (e) => cast.split(e).length - 1;
+        for (const [e, n] of g0) expect(seen(e), `fallen free arm ${body} ${e.slice(0, 80)}`).toBeGreaterThanOrEqual(n);
+        for (const e of g1.keys()) if (!g0.has(e)) expect(seen(e), `fallen trapped arm ${body} ${e.slice(0, 80)}`).toBe(0);
       }
     }
   });
 });
 
+describe("painters name only their own ids and the rig's shared defs", () => {
+  const refs = (markup) => [...markup.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
+  const idsIn = (markup) => [...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  // Every url(#…) is the piece's own (K.uid, under its prefix) or a shared def.
+  // The helmet kit's own inline ids pass where the kit drew them.
+  const expectOwn = (markup, prefix, what, kitIds = []) => {
+    for (const ref of refs(markup)) {
+      const kit = kitIds.includes(ref) && idsIn(markup).includes(ref);
+      expect(ref.startsWith(prefix) || RIG_DEFS.includes(ref) || kit, `${what}: url(#${ref})`).toBe(true);
+    }
+  };
+  const lookOf = (ids) => buildAgentParts(lookFromIds(ids)).look;
+  const PIECE = /^(frame|helmet|shoulder|acc)-/;
+
+  it("RIG_DEFS is what every figure defines", () => {
+    for (const ids of [{}, { camo: CAMO_STYLES[1].id }, { body: "fem" }]) {
+      for (const key of ["hero", "hero_fallen"]) {
+        for (const realistic of [false, true]) {
+          const own = idsIn(buildCastModel(lookFromIds(ids), key, { realistic }).defs);
+          for (const id of RIG_DEFS) expect(own, `${JSON.stringify(ids)} ${key} realistic=${realistic}`).toContain(id);
+        }
+      }
+      const plain = idsIn(buildAgentParts(lookFromIds(ids)).defs).filter((i) => !PIECE.test(i) && i !== "capeCut");
+      expect([...plain].sort()).toEqual([...RIG_DEFS].sort());
+    }
+  });
+
+  it.each(Object.keys(FRAME_ART))("frame %s", (id) => {
+    for (const body of ["masc", "fem"]) {
+      const c = lookOf({ frame: id, body });
+      for (const pose of ["standing", "armed", "fallen"]) {
+        const scope = idScope();
+        const out = FRAME_ART[id].layers(framePose(pose, c.fem), c, { mix, ...scope.kit(`frame-${id}`) });
+        expectOwn(Object.values(out).join("") + scope.markup(), `frame-${id}-`, `frame ${id} ${body} ${pose}`);
+      }
+    }
+  });
+
+  it.each(Object.keys(HELMET_ART))("helmet %s", (id) => {
+    for (const body of ["masc", "fem"]) {
+      const scope = idScope();
+      const out = HELMET_ART[id].paint(lookOf({ helmet: id, body }), { ...HELMET_KIT, ...scope.kit(`helmet-${id}`) });
+      expectOwn(out.front + out.glow + scope.markup(), `helmet-${id}-`, `helmet ${id} ${body}`, HELMET_KIT_IDS);
+    }
+  });
+
+  it.each(Object.keys(SHOULDER_ART))("shoulder %s", (id) => {
+    const c = lookOf({ shoulder: id });
+    for (const s of [-1, 1]) {
+      const scope = idScope();
+      const K = { M: s < 0 ? mirror : (d) => d, rot: (m) => m, lit: s < 0, pauldron: (side) => pauldron(side, 0), mix, ...scope.kit(`shoulder-${id}`) };
+      expectOwn(SHOULDER_ART[id].paint(c, s, K) + scope.markup(), `shoulder-${id}-`, `shoulder ${id} ${s}`);
+    }
+  });
+
+  it.each(ACCESSORY_SLOTS.map((s) => s.id))("accessories %s", (slot) => {
+    const c = lookOf({});
+    const A = rigAnchors(STAND, [0, 0], "standing");
+    for (const { id } of ACCESSORIES[slot]) {
+      if (id === "none") continue;
+      const out = paintAccessories({ [slot]: id }, A, c);
+      const markup = ["back", "front", "top", "glow", "head", "headGlow", "defs"].map((k) => out[k]).join("");
+      expectOwn(markup, `acc-${slot}-${id}-`, `${slot} ${id}`);
+    }
+  });
+});
 
 describe("shoulders", () => {
   it("every SHOULDER_STYLES id has SHOULDER_ART", () => {

@@ -73,6 +73,21 @@
  *   as url(#${K.uid(name)}). Ids come out scoped to the figure and the
  *   piece, so figures sharing a page never collide. Never write a bare id.
  *
+ *   The one exception is the rig's shared defs, RIG_DEFS in ../agent-rig.js,
+ *   which every figure defines and a painter names bare as url(#id):
+ *     steel, steelDk  — armour steel, lit and shaded
+ *     paint           — the palette's primary colour
+ *     suit            — the under-suit (or its camo pattern)
+ *     cape, leather, skin, hair, gun
+ *     visor, mirrorGlass, goldGlass — visor glass
+ *     sheen, shade    — white and black radial falloffs
+ *     cyl, pecShade   — cylinder and chest shading overlays
+ *     weave           — fabric weave pattern
+ *     glow, bloom, ao — blur filters (light, wide light, ambient occlusion)
+ *   The helmet kit's K.hair defines its own clip inline (HELMET_KIT_IDS,
+ *   beside the kit); a painter never names it. tests/unit/
+ *   wardrobe-registry.test.js holds every painter to these.
+ *
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */

@@ -264,6 +264,35 @@ export function camoPattern(camo, id, scale = 1) {
   return `<pattern id="${id}" width="${T}" height="${T}" patternUnits="userSpaceOnUse" patternTransform="scale(${scale}) rotate(-12)">${body}</pattern>`;
 }
 
+/**
+ * The ids of the figure's shared defs (defs below), the same in the realistic
+ * treatment: the only ids a piece painter may name bare, as url(#id). All
+ * else a painter refers to it defines itself under K.uid (../id-scope.js).
+ * (`capeCut` is the rig's own, on some armours only, and not listed.)
+ */
+export const RIG_DEFS = Object.freeze([
+  "steel",
+  "steelDk",
+  "suit",
+  "cape",
+  "paint",
+  "visor",
+  "mirrorGlass",
+  "gun",
+  "goldGlass",
+  "skin",
+  "hair",
+  "leather",
+  "shade",
+  "sheen",
+  "glow",
+  "bloom",
+  "ao",
+  "pecShade",
+  "cyl",
+  "weave",
+]);
+
 function defs(c) {
   const s = ARMOR_STEEL[c.armor] || ARMOR_STEEL.standard;
   const g = c.finish.stops;
@@ -1023,7 +1052,9 @@ function helmetShell(c, { path, half: w, ears = true }) {
  * each). Generic: none of it knows a helmet id; a helmet's own shape comes
  * in as arguments.
  */
-const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix });
+export const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix });
+/** Ids the helmet kit defines inline with what it draws (K.hair's clip); a painter never names them itself. */
+export const HELMET_KIT_IDS = Object.freeze(["hairClip"]);
 
 /**
  * Head assembly: the helmet's painter, or for a face peek the bare head.
