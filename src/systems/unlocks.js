@@ -21,10 +21,10 @@ import {
   CHARACTER_COLORS,
   CAMO_STYLES,
   TIER_UNLOCKS,
+  DEFAULT_LOOK_IDS,
 } from "../data/cosmetics.js";
-import { FIELD_TABLES, getIndex, pieceOf } from "../core/character-fields.js";
+import { FIELD_TABLES, getId, pieceOf } from "../core/character-fields.js";
 import { LEGACY_LOOK_INDICES, LEGACY_FIELD_NAMES } from "../core/legacy-look-indices.js";
-import { indexOfId } from "../data/badges.js";
 import { ACCESSORY_SLOTS } from "../data/accessories.js";
 import { levelsBefore, totalActs, totalLevels } from "../data/campaign/acts.js";
 
@@ -56,14 +56,24 @@ for (const [key, table] of Object.entries(FIELD_TABLES)) {
   LOCKABLE[key] = { table, kind: VIRTUAL_KINDS[key] || `${key.slice(4)[0].toUpperCase()}${key.slice(5)} gear`, virtual: true };
 }
 
-/** Ownership id, by item id so it survives table reordering: `helmet:#reaper`. */
-export function ownedKey(key, index) {
-  return `${key}:#${LOCKABLE[key]?.table[index]?.id}`;
+/** The lockable item `id` names under `key`, or null. */
+export function itemOf(key, id) {
+  return LOCKABLE[key]?.table.find((x) => x.id === id) || null;
 }
 
-/** Rule attached to an item, or null when it is always available. */
-export function ruleFor(key, index) {
-  const item = LOCKABLE[key]?.table[index];
+/**
+ * Ownership id, by item id so it survives table reordering: `helmet:#reaper`.
+ * Throws a RangeError for an id the key's table does not have, so a bad id
+ * never becomes a key like `helmet:#undefined`.
+ */
+export function ownedKey(key, id) {
+  if (!itemOf(key, id)) throw new RangeError(`ownedKey: "${key}" has no item "${id}"`);
+  return `${key}:#${id}`;
+}
+
+/** Rule attached to an item, or null when it is always available (or unknown). */
+export function ruleFor(key, id) {
+  const item = itemOf(key, id);
   if (!item) return null;
   if (item.unlock) return item.unlock;
   if (item.tier && TIER_UNLOCKS[item.tier]) return TIER_UNLOCKS[item.tier];
@@ -154,11 +164,11 @@ export function progressText(rule, evaluation) {
  * Full state for one option.
  * @returns {{ unlocked: boolean, rule: object|null, value: number, target: number, pct: number, hint: string }}
  */
-export function unlockState(key, index, ctx) {
-  const rule = ruleFor(key, index);
+export function unlockState(key, id, ctx) {
+  const rule = ruleFor(key, id);
   if (!rule) return { unlocked: true, rule: null, value: 1, target: 1, pct: 1, hint: "" };
   const e = evaluateRule(rule, ctx);
-  const owned = !!ctx.owned?.[ownedKey(key, index)];
+  const owned = !!ctx.owned?.[ownedKey(key, id)];
   return {
     unlocked: e.met || owned,
     rule,
@@ -169,16 +179,16 @@ export function unlockState(key, index, ctx) {
   };
 }
 
-export const isUnlocked = (key, index, ctx) => unlockState(key, index, ctx).unlocked;
+export const isUnlocked = (key, id, ctx) => unlockState(key, id, ctx).unlocked;
 
 /** Every lockable option that is currently unlocked by its rule, as ownedKey() ids. */
 export function earnedIds(ctx) {
   const out = [];
   for (const [key, { table }] of Object.entries(LOCKABLE)) {
-    table.forEach((_, i) => {
-      const rule = ruleFor(key, i);
-      if (rule && evaluateRule(rule, ctx).met) out.push(ownedKey(key, i));
-    });
+    for (const { id } of table) {
+      const rule = ruleFor(key, id);
+      if (rule && evaluateRule(rule, ctx).met) out.push(ownedKey(key, id));
+    }
   }
   // Armour variants live on ARMOR_STYLES[i].variant, not in a LOCKABLE table.
   for (const a of ARMOR_STYLES) {
@@ -357,8 +367,9 @@ export function ensureUnlockStore(character, stats, achievements) {
   } catch (_) {}
   if (hasSavedCharacter && character) {
     for (const key of Object.keys(LOCKABLE)) {
-      const i = getIndex(character, key);
-      if (ruleFor(key, i) && !evaluateRule(ruleFor(key, i), ctx).met) store.owned[ownedKey(key, i)] = true;
+      const id = getId(character, key);
+      const rule = ruleFor(key, id);
+      if (rule && !evaluateRule(rule, ctx).met) store.owned[ownedKey(key, id)] = true;
     }
   }
   for (const id of earnedIds(ctx)) store.seen[id] = true;
@@ -386,31 +397,30 @@ export function invalidateUnlockContext() {
  * battlefield drop is recorded. Returns false when it was already owned, so
  * callers can skip the pickup toast for a duplicate.
  */
-export function grantOwned(key, index) {
-  if (!LOCKABLE[key]?.table[index]) return false;
+export function grantOwned(key, id) {
+  if (!itemOf(key, id)) return false;
   const store = ensureUnlockStore();
-  const id = ownedKey(key, index);
-  if (store.owned[id]) return false;
-  store.owned[id] = true;
+  const owned = ownedKey(key, id);
+  if (store.owned[owned]) return false;
+  store.owned[owned] = true;
   // A dropped item is never a surprise — the player watched it fall — so mark
   // it seen and let the pickup speak for itself instead of the unlock toast.
-  store.seen[id] = true;
+  store.seen[owned] = true;
   saveUnlockStore(store);
   invalidateUnlockContext();
   return true;
 }
 
 /**
- * Items the player has not earned or been given yet, as {key, index} pairs.
+ * Items the player has not earned or been given yet, as {key, id} pairs.
  * Gear drops pick from here so a kill never hands over a duplicate.
  */
 export function lockedItems(ctx) {
   const out = [];
-  for (const key of Object.keys(LOCKABLE)) {
-    const table = LOCKABLE[key].table;
-    for (let i = 0; i < table.length; i++) {
-      if (!ruleFor(key, i)) continue; // always-available items are not loot
-      if (!unlockState(key, i, ctx).unlocked) out.push({ key, index: i });
+  for (const [key, { table }] of Object.entries(LOCKABLE)) {
+    for (const { id } of table) {
+      if (!ruleFor(key, id)) continue; // always-available items are not loot
+      if (!unlockState(key, id, ctx).unlocked) out.push({ key, id });
     }
   }
   return out;
@@ -451,17 +461,18 @@ export function withinReach(rule, ctx) {
  * little and never a later act's.
  */
 export function droppableItems(ctx) {
-  return lockedItems(ctx).filter(({ key, index }) => withinReach(ruleFor(key, index), ctx));
+  return lockedItems(ctx).filter(({ key, id }) => withinReach(ruleFor(key, id), ctx));
 }
 
 /**
  * Unlock state for an armour style's variant treatment. Variants live on
  * ARMOR_STYLES[i].variant rather than in a LOCKABLE table, so they get their
- * own reader instead of `unlockState`.
+ * own reader instead of `unlockState`. An unknown armour has no variant.
+ * @param {string} armorId
  * @returns {{ unlocked: boolean, rule: object|null, value: number, target: number, pct: number, hint: string }}
  */
-export function variantState(armorPos, ctx) {
-  const v = ARMOR_STYLES[armorPos]?.variant;
+export function variantState(armorId, ctx) {
+  const v = ARMOR_STYLES.find((a) => a.id === armorId)?.variant;
   if (!v) return { unlocked: false, rule: null, value: 0, target: 1, pct: 0, hint: "" };
   const e = evaluateRule(v.unlock, ctx);
   const owned = !!ctx.owned?.[`armorVariant:#${v.id}`];
@@ -484,7 +495,7 @@ export function variantState(armorPos, ctx) {
  */
 export function sanitizeLocked(ch, ctx) {
   const changes = {};
-  const ok = (key, id) => unlockState(key, indexOfId(LOCKABLE[key].table, id), ctx).unlocked;
+  const ok = (key, id) => unlockState(key, id, ctx).unlocked;
   const acc = { ...ch.accessories };
   let accChanged = false;
   for (const { id } of ACCESSORY_SLOTS) {
@@ -503,15 +514,16 @@ export function sanitizeLocked(ch, ctx) {
     }
   }
   // The flat picks too (palette, camo, armour, helmet...): a saved look worn
-  // after its unlock was cleared falls back to the first one still earned.
+  // after its unlock was cleared falls back to the field's default, or the
+  // first piece still earned if even that is locked.
   for (const [key, { table, virtual }] of Object.entries(LOCKABLE)) {
-    if (virtual || unlockState(key, getIndex(ch, key), ctx).unlocked) continue;
-    const free = table.find((_, j) => unlockState(key, j, ctx).unlocked);
-    if (free) changes[key] = free.id;
+    if (virtual || unlockState(key, pieceOf(ch, key).id, ctx).unlocked) continue;
+    const fallback = [DEFAULT_LOOK_IDS[key], ...table.map((e) => e.id)].find((id) => unlockState(key, id, ctx).unlocked);
+    if (fallback) changes[key] = fallback;
   }
   if (ch.armorVariant) {
     const armor = pieceOf({ armor: changes.armor ?? ch.armor }, "armor");
-    if (!variantState(ARMOR_STYLES.indexOf(armor), ctx).unlocked) changes.armorVariant = 0;
+    if (!variantState(armor.id, ctx).unlocked) changes.armorVariant = 0;
   }
   return changes;
 }

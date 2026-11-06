@@ -17,7 +17,7 @@ import {
 } from "./combat.js";
 import { playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { playerEyeZ3D } from "../world/voxel-physics.js";
-import { LOCKABLE, gameUnlockContext, droppableItems } from "./unlocks.js";
+import { LOCKABLE, gameUnlockContext, droppableItems, itemOf } from "./unlocks.js";
 import { FINISHES } from "../data/weapon-skins.js";
 import { WEAPONS } from "../data/weapons.js";
 import { Projectile, Enemy, Pickup } from "../entities/index.js";
@@ -624,11 +624,10 @@ export function maybeDropGear(game, enemy, { chance = GEAR_DROP_CHANCE } = {}) {
   if (!pool.length) return null;
   const pick = pool[(Math.random() * pool.length) | 0];
   const entry = LOCKABLE[pick.key];
-  const piece = entry.table[pick.index];
   const drop = new Pickup(enemy.x, enemy.y, "gear", {
     slot: pick.key,
-    pieceId: piece?.id,
-    label: piece?.name || "Gear",
+    pieceId: pick.id,
+    label: itemOf(pick.key, pick.id)?.name || "Gear",
     kind: entry.kind,
   });
   game.entities.push(drop);

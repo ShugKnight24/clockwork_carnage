@@ -64,50 +64,80 @@ export const tableFor = (key) => FIELD_TABLES[key];
 
 const sameLayer = (a, b) => a.frame === b.frame && a.symbol === b.symbol && a.enamel === b.enamel && a.metal === b.metal;
 
-export function getIndex(ch, key) {
+/** The table behind any key, flat or virtual; undefined for a key that has none. */
+const anyTable = (key) => LOOK_TABLES[key] || FIELD_TABLES[key];
+
+/** `id` when `table` has it, else the table's first entry's (how virtual fields always read). */
+const idIn = (table, id) => (table.some((e) => e.id === id) ? id : table[0].id);
+
+/**
+ * The id a character wears under a key. Flat look fields resolve through
+ * pieceOf; badge layers, finish and accessory slots read their nested id;
+ * `badge.preset` is the library preset the badge matches, or null.
+ */
+export function getId(ch, key) {
+  if (LOOK_TABLES[key]) return pieceOf(ch, key).id;
   const badge = ch.badge;
   if (key === "badge.preset") {
-    if (!badge?.placements?.length || badge.layers.length !== 1) return -1;
-    return BADGE_PRESETS.findIndex((p) => p.badge.finish === badge.finish && sameLayer(p.badge.layers[0], badge.layers[0]));
+    if (!badge?.placements?.length || badge.layers.length !== 1) return null;
+    return BADGE_PRESETS.find((p) => p.badge.finish === badge.finish && sameLayer(p.badge.layers[0], badge.layers[0]))?.id ?? null;
   }
   if (key in LAYER_FIELD) {
     const [field, table] = LAYER_FIELD[key];
-    return Math.max(0, indexOfId(table, badge?.layers?.[0]?.[field]));
+    return idIn(table, badge?.layers?.[0]?.[field]);
   }
-  if (key === "badge.finish") return Math.max(0, indexOfId(FINISHES, badge?.finish));
-  if (key.startsWith("acc.")) {
-    const slot = key.slice(4);
-    return Math.max(0, indexOfId(ACCESSORIES[slot] || [], ch.accessories?.[slot]));
-  }
-  const table = LOOK_TABLES[key];
-  return table ? table.indexOf(pieceOf(ch, key)) : ch[key] | 0;
+  if (key === "badge.finish") return idIn(FINISHES, badge?.finish);
+  if (key.startsWith("acc.") && ACCESSORIES[key.slice(4)]) return idIn(ACCESSORIES[key.slice(4)], ch.accessories?.[key.slice(4)]);
+  throw new TypeError(`getId: no table for "${key}"`);
+}
+
+/**
+ * Position of the worn piece in its table, for grid navigation only; -1 for
+ * a badge that matches no preset. Everything else works in ids (getId).
+ */
+export function getIndex(ch, key) {
+  return indexOfId(anyTable(key) || [], getId(ch, key));
 }
 
 const shown = (placements) => (placements.length ? [...placements] : ["chest"]);
 
-export function withIndex(ch, key, idx) {
+/**
+ * The changes that put piece `id` on under `key`, as fresh objects. Throws a
+ * RangeError for an id its table does not have: equipping one is a bug.
+ */
+export function withId(ch, key, id) {
+  const table = anyTable(key);
+  if (!table) throw new TypeError(`withId: no table for "${key}"`);
+  const item = table.find((e) => e.id === id);
+  if (!item) throw new RangeError(`withId: "${key}" has no piece "${id}"`);
   const badge = ch.badge;
   if (key === "badge.preset") {
-    const p = BADGE_PRESETS[idx];
-    return { badge: { layers: structuredClone(p.badge.layers), finish: p.badge.finish, placements: shown(badge.placements) } };
+    return { badge: { layers: structuredClone(item.badge.layers), finish: item.badge.finish, placements: shown(badge.placements) } };
   }
   if (key in LAYER_FIELD) {
-    const [field, table] = LAYER_FIELD[key];
-    const layers = badge.layers.map((l, i) => (i === 0 ? { ...l, [field]: table[idx].id } : { ...l }));
+    const [field] = LAYER_FIELD[key];
+    const layers = badge.layers.map((l, i) => (i === 0 ? { ...l, [field]: id } : { ...l }));
     return { badge: { ...badge, layers, placements: shown(badge.placements) } };
   }
   if (key === "badge.finish") {
-    return { badge: { ...badge, layers: badge.layers.map((l) => ({ ...l })), placements: shown(badge.placements), finish: FINISHES[idx].id } };
+    return { badge: { ...badge, layers: badge.layers.map((l) => ({ ...l })), placements: shown(badge.placements), finish: id } };
   }
-  if (key.startsWith("acc.")) {
-    const slot = key.slice(4);
-    return { accessories: { ...ch.accessories, [slot]: ACCESSORIES[slot][idx].id } };
-  }
-  const table = LOOK_TABLES[key];
-  if (!table) return { [key]: idx };
-  const id = table[idx]?.id;
+  if (key.startsWith("acc.")) return { accessories: { ...ch.accessories, [key.slice(4)]: id } };
   if (key === "armor" && ch.armorVariant) return { armor: id, armorVariant: 0 };
   return { [key]: id };
+}
+
+/**
+ * withId for the piece at a grid position. Throws a RangeError for a position
+ * outside the table: grids only ever offer real positions.
+ */
+export function withIndex(ch, key, idx) {
+  const table = anyTable(key);
+  if (!table) throw new TypeError(`withIndex: no table for "${key}"`);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= table.length) {
+    throw new RangeError(`withIndex: position ${idx} is outside "${key}" (0..${table.length - 1})`);
+  }
+  return withId(ch, key, table[idx].id);
 }
 
 export function togglePlacement(ch, placementId) {

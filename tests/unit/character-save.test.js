@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { saveCharacter, loadCharacter } from "../../src/core/save-system.js";
-import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
+import { DEFAULT_CHARACTER, DEFAULT_LOOK_IDS } from "../../src/data/cosmetics.js";
 import { LOOK_TABLES } from "../../src/core/character-fields.js";
 
 const store = {};
@@ -32,7 +32,7 @@ describe("character save/load", () => {
     // hand the renderer an id nothing checked.
     const stringFields = Object.keys(DEFAULT_CHARACTER).filter((k) => typeof DEFAULT_CHARACTER[k] === "string" && k !== "name");
     expect(stringFields.sort()).toEqual([...lookFields].sort());
-    for (const field of lookFields) expect(DEFAULT_CHARACTER[field]).toBe(LOOK_TABLES[field][0].id);
+    for (const field of lookFields) expect(DEFAULT_CHARACTER[field]).toBe(DEFAULT_LOOK_IDS[field]);
     expect(Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"))).toEqual([]);
   });
 
@@ -54,7 +54,7 @@ describe("character save/load", () => {
     saveCharacter({ ...maxedCharacter(), [field]: "no_such_piece" });
     const loaded = { ...DEFAULT_CHARACTER };
     loadCharacter(loaded);
-    expect(loaded[field]).toBe(DEFAULT_CHARACTER[field]);
+    expect(loaded[field]).toBe(DEFAULT_LOOK_IDS[field]);
     for (const other of lookFields) if (other !== field) expect(loaded[other]).toBe(last(other));
   });
 

@@ -32,15 +32,14 @@ test("a dropped piece is granted, announced and kept", async ({ page }) => {
     const m = await import("/src/systems/unlocks.js");
     const g = window.ccDebug.game;
     const pick = m.lockedItems(m.gameUnlockContext(g, { fresh: true }))[0];
-    const entry = m.LOCKABLE[pick.key];
     g.entities.push(new Pickup(g.player.x + 0.3, g.player.y, "gear", {
-      slot: pick.key, pieceId: entry.table[pick.index].id,
-      label: entry.table[pick.index].name, kind: entry.kind,
+      slot: pick.key, pieceId: pick.id,
+      label: m.itemOf(pick.key, pick.id).name, kind: m.LOCKABLE[pick.key].kind,
     }));
     await new Promise((r) => setTimeout(r, 700));
     const ctx = m.gameUnlockContext(g, { fresh: true });
     return {
-      granted: m.unlockState(pick.key, pick.index, ctx).unlocked,
+      granted: m.unlockState(pick.key, pick.id, ctx).unlocked,
       stillLocked: m.lockedItems(ctx).length,
       gearFound: g.achievementStats.gearFound,
       toast: !!document.querySelector("unlock-toast"),
@@ -59,7 +58,7 @@ test("a dropped piece is granted, announced and kept", async ({ page }) => {
   const after = await page.evaluate(async (pick) => {
     const m = await import("/src/systems/unlocks.js");
     const g = window.ccDebug.game;
-    return m.unlockState(pick.key, pick.index, m.gameUnlockContext(g, { fresh: true })).unlocked;
+    return m.unlockState(pick.key, pick.id, m.gameUnlockContext(g, { fresh: true })).unlocked;
   }, result.picked);
   expect(after).toBe(true);
 });

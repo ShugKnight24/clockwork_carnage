@@ -78,7 +78,7 @@ test("a dropped badge preset cannot smuggle in a locked symbol", async ({ page }
     const m = await import("/src/systems/unlocks.js");
     const { BADGE_PRESETS, indexOfId } = await import("/src/data/badges.js");
     const idx = indexOfId(BADGE_PRESETS, "p_lordslayer");
-    m.grantOwned("badge.preset", idx);
+    m.grantOwned("badge.preset", "p_lordslayer");
     const room = document.querySelector("agent-showroom");
     room._unlockCtx = null; // the showroom caches the context per open
     room.renderAll(false);
@@ -272,7 +272,7 @@ for (const [style, name] of [[0, "legacy"], [1, "comic"], [2, "modern"]]) {
     await page.evaluate(async () => {
       const g = window.ccDebug.game;
       const m = await import("/src/systems/unlocks.js");
-      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
+      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.id);
       g.character.badge = { layers: [{ frame: "shield", symbol: "guard", enamel: "oxblood", metal: "brass", x: 0, y: 0, scale: 1, rot: 0 }], finish: "auto", placements: ["chest", "shoulder", "helmet"] };
       g.character.accessories = { back: "backpack", waist: "belt", helmet: "nvg", arms: "screen", neck: "scarf", legs: "kneepads" };
       document.querySelector("agent-showroom")?.renderAll?.();

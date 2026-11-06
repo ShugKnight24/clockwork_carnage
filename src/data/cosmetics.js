@@ -510,24 +510,57 @@ export const VOICE_PROFILES = [
   { id: "synthetic", name: "Synthetic", desc: "Vocoder edge, chrono-modulated", pitch: 1.45 },
 ];
 
+/**
+ * The piece each look field starts on, and falls back to for an id the tables
+ * do not know. Named by id, never by position: a table's order is only how
+ * the creator lists it.
+ */
+export const DEFAULT_LOOK_IDS = Object.freeze({
+  color: "chrono_teal",
+  skinTone: "warm_light",
+  hair: "buzz",
+  eye: "amber",
+  armor: "standard",
+  helmet: "standard",
+  visor: "standard",
+  shoulder: "none",
+  weaponSkin: "default",
+  loadout: "recruit",
+  backstory: "beat_cop",
+  voice: "rookie",
+  frame: "standard",
+  cape: "cape",
+  body: "masc",
+  camo: "none",
+});
+
 const ID_MAPS = new WeakMap();
+
+/** A table's entries by id, built once per table. */
+function idMap(table) {
+  let map = ID_MAPS.get(table);
+  if (!map) ID_MAPS.set(table, (map = new Map(table.map((e) => [e.id, e]))));
+  return map;
+}
 
 /**
  * The entry a stored id names in a look table: the id itself, else the piece
- * that replaced it (RETIRED_PIECES), else the table's first entry, so an id
- * the tables do not know (a cut piece, a newer build's save) draws the
- * default rather than nothing. Prefer `pieceOf(ch, field)` in
- * src/core/character-fields.js; this is the same lookup for code that holds a
- * table rather than a character.
+ * that replaced it (RETIRED_PIECES), else the field's default
+ * (DEFAULT_LOOK_IDS), so an id the tables do not know (a cut piece, a newer
+ * build's save) draws the default rather than nothing. Prefer
+ * `pieceOf(ch, field)` in src/core/character-fields.js; this is the same
+ * lookup for code that holds a table rather than a character.
  * @param {object[]} table
- * @param {string} field look field name, for the retired map
+ * @param {string} field look field name, for the retired map and the default
  * @param {unknown} id
  */
 export function pieceIn(table, field, id) {
-  let map = ID_MAPS.get(table);
-  if (!map) ID_MAPS.set(table, (map = new Map(table.map((e) => [e.id, e]))));
-  if (typeof id !== "string") return table[0];
-  return map.get(id) ?? map.get(RETIRED_PIECES[field]?.[id]) ?? table[0];
+  const map = idMap(table);
+  const found = typeof id === "string" ? map.get(id) ?? map.get(RETIRED_PIECES[field]?.[id]) : undefined;
+  if (found) return found;
+  const fallback = map.get(DEFAULT_LOOK_IDS[field]);
+  if (!fallback) throw new Error(`pieceIn: no default "${DEFAULT_LOOK_IDS[field]}" for look field "${field}"`);
+  return fallback;
 }
 
 /**
@@ -537,25 +570,25 @@ export function pieceIn(table, field, id) {
  */
 export const DEFAULT_CHARACTER = {
   name: "Agent",
-  color: CHARACTER_COLORS[0].id,
-  skinTone: SKIN_TONES[0].id,
-  hair: HAIR_STYLES[0].id,
-  eye: EYE_COLORS[0].id,
-  armor: ARMOR_STYLES[0].id,
-  frame: BODY_FRAMES[0].id,
-  body: BODY_TYPES[0].id,
-  camo: CAMO_STYLES[0].id,
-  cape: CAPE_STYLES[0].id,
-  helmet: HELMET_STYLES[0].id,
-  visor: VISOR_STYLES[0].id,
-  shoulder: SHOULDER_STYLES[0].id,
-  weaponSkin: WEAPON_SKINS[0].id,
+  color: DEFAULT_LOOK_IDS.color,
+  skinTone: DEFAULT_LOOK_IDS.skinTone,
+  hair: DEFAULT_LOOK_IDS.hair,
+  eye: DEFAULT_LOOK_IDS.eye,
+  armor: DEFAULT_LOOK_IDS.armor,
+  frame: DEFAULT_LOOK_IDS.frame,
+  body: DEFAULT_LOOK_IDS.body,
+  camo: DEFAULT_LOOK_IDS.camo,
+  cape: DEFAULT_LOOK_IDS.cape,
+  helmet: DEFAULT_LOOK_IDS.helmet,
+  visor: DEFAULT_LOOK_IDS.visor,
+  shoulder: DEFAULT_LOOK_IDS.shoulder,
+  weaponSkin: DEFAULT_LOOK_IDS.weaponSkin,
   // Per-weapon finishes and the player's own (src/data/weapon-skins.js).
   weaponFinishes: {},
   customSkins: [],
-  loadout: LOADOUT_CLASSES[0].id,
-  backstory: BACKSTORIES[0].id,
-  voice: VOICE_PROFILES[0].id,
+  loadout: DEFAULT_LOOK_IDS.loadout,
+  backstory: DEFAULT_LOOK_IDS.backstory,
+  voice: DEFAULT_LOOK_IDS.voice,
   badge: DEFAULT_BADGE,
   accessories: DEFAULT_ACCESSORIES,
   armorVariant: 0,

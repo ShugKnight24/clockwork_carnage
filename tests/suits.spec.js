@@ -23,7 +23,7 @@ for (const look of LOOKS) {
     const missing = await page.evaluate(async (l) => {
       const g = window.ccDebug.game;
       const m = await import("/src/systems/unlocks.js");
-      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
+      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.id);
       const d = await import("/src/data/cosmetics.js");
       const missing = [];
       const known = (table, id) => {

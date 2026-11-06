@@ -19,17 +19,17 @@ import {
 } from "../../src/systems/unlocks.js";
 import { LEGACY_LOOK_INDICES } from "../../src/core/legacy-look-indices.js";
 import { LOADOUT_CLASSES, ARMOR_STYLES, HELMET_STYLES, DEFAULT_CHARACTER, TIER_UNLOCKS } from "../../src/data/cosmetics.js";
-import { SYMBOLS, FINISHES, BADGE_PRESETS, byId, indexOfId } from "../../src/data/badges.js";
+import { SYMBOLS, BADGE_PRESETS, byId } from "../../src/data/badges.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 import { cloneLook } from "../../src/core/character-fields.js";
 
-const idx = (table, id) => table.findIndex((x) => x.id === id);
-const GUN = idx(LOADOUT_CLASSES, "gunslinger");
-const ENF = idx(LOADOUT_CLASSES, "enforcer");
-const PHA = idx(LOADOUT_CLASSES, "phantom");
-const MK2 = ARMOR_STYLES.findIndex((a) => a.tier === 2);
-const MK3 = ARMOR_STYLES.findIndex((a) => a.tier === 3);
+// Unlock state is asked by piece id, never by table position.
+const GUN = "gunslinger";
+const ENF = "enforcer";
+const PHA = "phantom";
+const MK2 = ARMOR_STYLES.find((a) => a.tier === 2).id;
+const MK3 = ARMOR_STYLES.find((a) => a.tier === 3).id;
 
 describe("unlock rules", () => {
   it("backfills a finished campaign with every act and every level", () => {
@@ -48,9 +48,9 @@ describe("unlock rules", () => {
 
   it("fresh agent: recruit and tier I only", () => {
     const ctx = unlockContext();
-    expect(unlockState("loadout", 0, ctx).unlocked).toBe(true);
+    expect(unlockState("loadout", "recruit", ctx).unlocked).toBe(true);
     for (const i of [GUN, ENF, PHA]) expect(unlockState("loadout", i, ctx).unlocked).toBe(false);
-    expect(unlockState("armor", 0, ctx).unlocked).toBe(true);
+    expect(unlockState("armor", "standard", ctx).unlocked).toBe(true);
     expect(unlockState("armor", MK2, ctx).unlocked).toBe(false);
     expect(unlockState("armor", MK3, ctx).unlocked).toBe(false);
     expect(earnedIds(ctx)).toEqual([]);
@@ -82,9 +82,9 @@ describe("unlock rules", () => {
 
   it("tier II takes Act 1 or arena round 10; tier III takes Act 2 or arena round 15", () => {
     // The tutorial and most of Act I no longer open MK II.
-    expect(unlockState("helmet", 1, unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(false);
-    expect(unlockState("helmet", 1, unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 7 })).unlocked).toBe(false);
-    expect(unlockState("helmet", 1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
+    expect(unlockState("helmet", "wide", unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(false);
+    expect(unlockState("helmet", "wide", unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 7 })).unlocked).toBe(false);
+    expect(unlockState("helmet", "wide", unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
     expect(unlockState("armor", MK2, unlockContext({ stats: { highestArenaRound: 10 } })).unlocked).toBe(true);
     const actOne = unlockContext({ campaignSaveAct: 2 });
     expect(unlockState("armor", MK2, actOne).unlocked).toBe(true);
@@ -99,8 +99,8 @@ describe("unlock rules", () => {
   });
 
   it("Corpsman's rule is the act its label names", () => {
-    const COR = idx(LOADOUT_CLASSES, "corpsman");
-    expect(LOADOUT_CLASSES[COR].unlock).toMatchObject({ type: "campaignActs", count: 2, label: "Clear Act 2 of the campaign" });
+    const COR = "corpsman";
+    expect(byId(LOADOUT_CLASSES, COR).unlock).toMatchObject({ type: "campaignActs", count: 2, label: "Clear Act 2 of the campaign" });
     expect(unlockState("loadout", COR, unlockContext({ campaignSaveAct: 2, campaignSaveLevel: 6 })).unlocked).toBe(false);
     expect(unlockState("loadout", COR, unlockContext({ campaignSaveAct: 3 })).unlocked).toBe(true);
   });
@@ -126,27 +126,28 @@ describe("unlock rules", () => {
     expect(evaluateRule({ type: "nope" }, unlockContext()).met).toBe(false);
     const ctx = unlockContext({ stats: { weaponKills: null, totalDashes: "x" } });
     expect(unlockState("loadout", PHA, ctx).value).toBe(0);
-    expect(ruleFor("badge", 1)).toBe(null);
+    expect(ruleFor("badge", "shield")).toBe(null);
+    expect(ruleFor("helmet", "no_such_helmet")).toBe(null);
   });
 });
 
 describe("badge and accessory unlocks", () => {
   it("classic and faction symbols are free; earned ones are locked", () => {
     const ctx = unlockContext();
-    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "clock"), ctx).unlocked).toBe(true);
-    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "corps"), ctx).unlocked).toBe(true);
-    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "lordslayer"), ctx).unlocked).toBe(false);
+    expect(unlockState("badge.symbol", "clock", ctx).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", "corps", ctx).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", "lordslayer", ctx).unlocked).toBe(false);
   });
 
   it("achievement rules unlock symbols and presets", () => {
     const ctx = unlockContext({ achievements: { lordSlayer: true } });
-    expect(unlockState("badge.symbol", indexOfId(SYMBOLS, "lordslayer"), ctx).unlocked).toBe(true);
-    expect(unlockState("badge.preset", indexOfId(BADGE_PRESETS, "p_lordslayer"), ctx).unlocked).toBe(true);
+    expect(unlockState("badge.symbol", "lordslayer", ctx).unlocked).toBe(true);
+    expect(unlockState("badge.preset", "p_lordslayer", ctx).unlocked).toBe(true);
   });
 
   it("backfills acts for saves made before campaignActsCleared was tracked", () => {
-    const act1 = indexOfId(SYMBOLS, "act1");
-    const act2 = indexOfId(SYMBOLS, "act2");
+    const act1 = "act1";
+    const act2 = "act2";
     // A run parked in act 3 got there by felling the act 1 and act 2 Lords.
     const parked = unlockContext({ stats: {}, campaignSaveAct: 3 });
     expect(parked.campaignActsCleared).toBe(2);
@@ -162,9 +163,9 @@ describe("badge and accessory unlocks", () => {
   });
 
   it("campaignActs counts defeated acts and a finished campaign counts as all four", () => {
-    const act1 = indexOfId(SYMBOLS, "act1");
-    const act3 = indexOfId(SYMBOLS, "act3");
-    const act4 = indexOfId(SYMBOLS, "act4");
+    const act1 = "act1";
+    const act3 = "act3";
+    const act4 = "act4";
     expect(unlockState("badge.symbol", act1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
     expect(unlockState("badge.symbol", act3, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(false);
     expect(unlockState("badge.symbol", act4, unlockContext({ stats: { campaignActsCleared: 3 } })).unlocked).toBe(false);
@@ -181,33 +182,33 @@ describe("badge and accessory unlocks", () => {
 
   it("finishes: insignia free, holo needs the campaign", () => {
     const ctx = unlockContext();
-    expect(unlockState("badge.finish", indexOfId(FINISHES, "insignia"), ctx).unlocked).toBe(true);
-    expect(unlockState("badge.finish", indexOfId(FINISHES, "holo"), ctx).unlocked).toBe(false);
+    expect(unlockState("badge.finish", "insignia", ctx).unlocked).toBe(true);
+    expect(unlockState("badge.finish", "holo", ctx).unlocked).toBe(false);
   });
 
   it("accessory tiers follow the tier rules", () => {
     const ctx = unlockContext();
-    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "backpack"), ctx).unlocked).toBe(true);
-    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), ctx).unlocked).toBe(false);
-    expect(unlockState("acc.back", indexOfId(ACCESSORIES.back, "antenna"), unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
+    expect(unlockState("acc.back", "backpack", ctx).unlocked).toBe(true);
+    expect(unlockState("acc.back", "antenna", ctx).unlocked).toBe(false);
+    expect(unlockState("acc.back", "antenna", unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
     // One rule set for armour and accessories alike.
     for (const [slot, items] of Object.entries(ACCESSORIES)) {
-      items.forEach((item, i) => {
-        if (item.tier > 1) expect(ruleFor(`acc.${slot}`, i)).toBe(TIER_UNLOCKS[item.tier]);
-      });
+      for (const item of items) {
+        if (item.tier > 1) expect(ruleFor(`acc.${slot}`, item.id)).toBe(TIER_UNLOCKS[item.tier]);
+      }
     }
   });
 
   it("ownership of id-based items survives table reordering", () => {
-    const i = indexOfId(SYMBOLS, "lordslayer");
+    const i = "lordslayer";
     expect(ownedKey("badge.symbol", i)).toBe("badge.symbol:#lordslayer");
-    expect(ownedKey("armor", 2)).toBe(`armor:#${ARMOR_STYLES[2].id}`);
+    expect(ownedKey("armor", "heavy")).toBe("armor:#heavy");
     const ctx = unlockContext({ owned: { "badge.symbol:#lordslayer": true } });
     expect(unlockState("badge.symbol", i, ctx).unlocked).toBe(true);
   });
 
   it("variants lock by their own rule", () => {
-    const ghost = ARMOR_STYLES.findIndex((a) => a.variant.unlock.id === "untouchable");
+    const ghost = ARMOR_STYLES.find((a) => a.variant.unlock.id === "untouchable").id;
     expect(variantState(ghost, unlockContext()).unlocked).toBe(false);
     expect(variantState(ghost, unlockContext({ achievements: { untouchable: true } })).unlocked).toBe(true);
   });
@@ -224,12 +225,11 @@ describe("badge and accessory unlocks", () => {
     expect(changes.armorVariant).toBe(0);
   });
 
-  it("sanitizeLocked resets a locked flat pick to the first earned one, and keeps an owned one", () => {
+  it("sanitizeLocked resets a locked flat pick to the default, and keeps an owned one", () => {
     const ctx = unlockContext();
-    const locked = ARMOR_STYLES.findIndex((_, i) => !unlockState("armor", i, ctx).unlocked);
-    expect(locked).toBeGreaterThan(0);
-    const ch = { ...cloneLook(DEFAULT_CHARACTER), armor: ARMOR_STYLES[locked].id };
-    expect(sanitizeLocked(ch, ctx).armor).toBe(ARMOR_STYLES[0].id);
+    const locked = ARMOR_STYLES.find((a) => !unlockState("armor", a.id, ctx).unlocked).id;
+    const ch = { ...cloneLook(DEFAULT_CHARACTER), armor: locked };
+    expect(sanitizeLocked(ch, ctx).armor).toBe("standard");
     const owned = unlockContext({ owned: { [ownedKey("armor", locked)]: true } });
     expect(sanitizeLocked(ch, owned).armor).toBeUndefined();
     expect(sanitizeLocked(cloneLook(DEFAULT_CHARACTER), ctx)).toEqual({});
@@ -247,7 +247,7 @@ describe("badge and accessory unlocks", () => {
 });
 
 describe("gear drop reach", () => {
-  const helm = (tier) => HELMET_STYLES.findIndex((h) => h.tier === tier && !h.unlock);
+  const helm = (tier) => HELMET_STYLES.find((h) => h.tier === tier && !h.unlock).id;
 
   it("drops only the act in progress's tier, never a later one", () => {
     const actOne = unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 2 });
@@ -256,7 +256,7 @@ describe("gear drop reach", () => {
     const actTwo = unlockContext({ campaignSaveAct: 2 });
     expect(withinReach(ruleFor("helmet", helm(3)), actTwo)).toBe(true);
     // Act emblems follow the same reach: Act 3's waits for Act 3.
-    expect(withinReach(ruleFor("badge.symbol", indexOfId(SYMBOLS, "act3")), actTwo)).toBe(false);
+    expect(withinReach(ruleFor("badge.symbol", "act3"), actTwo)).toBe(false);
   });
 
   it("never drops what a feat earns", () => {
@@ -265,8 +265,8 @@ describe("gear drop reach", () => {
     expect(withinReach({ type: "dashes", count: 50 }, ctx)).toBe(false);
     const pool = droppableItems(unlockContext({ campaignSaveAct: 1 }));
     expect(pool.length).toBeGreaterThan(0);
-    expect(pool.some(({ key, index }) => key === "helmet" && HELMET_STYLES[index].id === "reaper")).toBe(false);
-    for (const { key, index } of pool) expect(ruleFor(key, index)).not.toBe(TIER_UNLOCKS[3]);
+    expect(pool.some(({ key, id }) => key === "helmet" && id === "reaper")).toBe(false);
+    for (const { key, id } of pool) expect(ruleFor(key, id)).not.toBe(TIER_UNLOCKS[3]);
   });
 
   it("counts a level rule by the act its level falls in", () => {
@@ -406,13 +406,36 @@ describe("unlock store v3 migration (index keys to ids)", () => {
     expect(s.v3).toBe(true);
     expect(JSON.parse(store.cc_unlocks).v3).toBe(true);
     const ctx = unlockContext({ stats, owned: s.owned });
-    for (const id of mk3) expect(unlockState("armor", idx(ARMOR_STYLES, id), ctx).unlocked, id).toBe(true);
-    expect(unlockState("helmet", HELMET_STYLES.findIndex((h) => h.tier === 3), ctx).unlocked).toBe(false);
+    for (const id of mk3) expect(unlockState("armor", id, ctx).unlocked, id).toBe(true);
+    expect(unlockState("helmet", HELMET_STYLES.find((h) => h.tier === 3).id, ctx).unlocked).toBe(false);
     expect(newlyEarned(ctx, s.seen)).toEqual([]);
     expect(Object.keys({ ...s.owned, ...s.seen }).filter((k) => /Index:/.test(k))).toEqual([]);
   });
 
   it("a fresh store starts as v3", () => {
     expect(ensureUnlockStore(null, {}, {}).v3).toBe(true);
+  });
+});
+
+describe("unlock lookups take piece ids", () => {
+  it("ownedKey refuses an id its table does not have", () => {
+    expect(() => ownedKey("helmet", undefined)).toThrow(RangeError);
+    expect(() => ownedKey("helmet", "nope")).toThrow(RangeError);
+    expect(() => ownedKey("notASlot", "standard")).toThrow(RangeError);
+    expect(ownedKey("helmet", "reaper")).toBe("helmet:#reaper");
+  });
+
+  it("an unknown id has no rule and never produces an ownership key", () => {
+    const ctx = unlockContext();
+    expect(ruleFor("helmet", "nope")).toBe(null);
+    expect(unlockState("helmet", "nope", ctx).unlocked).toBe(true);
+    expect(earnedIds(unlockContext({ stats: { campaignComplete: true } })).some((k) => k.endsWith("#undefined"))).toBe(false);
+  });
+
+  it("variantState reads the armour by id", () => {
+    const heavy = ARMOR_STYLES.find((a) => a.id === "heavy");
+    const met = unlockContext({ owned: { [`armorVariant:#${heavy.variant.id}`]: true } });
+    expect(variantState("heavy", met).unlocked).toBe(true);
+    expect(variantState("nope", met).unlocked).toBe(false);
   });
 });

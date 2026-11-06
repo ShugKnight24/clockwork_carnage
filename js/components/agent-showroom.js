@@ -3,9 +3,9 @@ import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
-import { LOOK_TABLES, cloneLook, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
+import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withId, withIndex } from "../../src/core/character-fields.js";
 import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
-import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, indexOfId, layer } from "../../src/data/badges.js";
+import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/data/accessories.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
@@ -241,6 +241,11 @@ function readLook(raw) {
   }
   return look;
 }
+
+// A preview is a hovered tile: a grid position under a table key, or the
+// armour variant chip (0 standard, 1 variant), which is a plain number.
+const previewChanges = (ch, p) => (p.key === "armorVariant" ? { armorVariant: p.value } : withIndex(ch, p.key, p.value));
+const previewedValue = (ch, key) => (key === "armorVariant" ? ch.armorVariant | 0 : getIndex(ch, key));
 
 /** Why the frame overrides the shoulder pick (its FRAME_SHAPE flags), or "". */
 function shoulderNote(ch) {
@@ -1602,7 +1607,7 @@ class AgentShowroom extends HTMLElement {
 
   effective() {
     const ch = this.pick(this.character);
-    if (this.preview) Object.assign(ch, withIndex(ch, this.preview.key, this.preview.value));
+    if (this.preview) Object.assign(ch, previewChanges(ch, this.preview));
     return ch;
   }
 
@@ -1610,7 +1615,7 @@ class AgentShowroom extends HTMLElement {
     const same = p && this.preview && p.key === this.preview.key && p.value === this.preview.value;
     if (same || (!p && !this.preview && this._yawRestore == null)) return;
     if (p) this.turnFor(p.key);
-    if (p && getIndex(this.character, p.key) === p.value) p = null;
+    if (p && previewedValue(this.character, p.key) === p.value) p = null;
     clearTimeout(this._previewClear);
     if (!p) {
       // Short grace so sliding between tiles doesn't flash the committed look.
@@ -1643,7 +1648,7 @@ class AgentShowroom extends HTMLElement {
     const sec = this.sectionFor(key);
     const item = sec?.data?.[idx];
     if (!item) return;
-    const st = unlockState(key, idx, this.unlockCtx());
+    const st = unlockState(key, item.id, this.unlockCtx());
     if (!st.unlocked) {
       el?.classList.remove("shake");
       void el?.offsetWidth;
@@ -1653,11 +1658,11 @@ class AgentShowroom extends HTMLElement {
       return;
     }
     this.turnFor(key);
-    if (getIndex(this.character, key) === idx) {
+    if (getId(this.character, key) === item.id) {
       this.preview = null;
       return;
     }
-    const changes = withIndex(this.character, key, idx);
+    const changes = withId(this.character, key, item.id);
     // A preset is one unlock but carries a whole badge: a dropped one can hold
     // a symbol or finish the agent has not earned. Strip those now rather than
     // saving a look that sanitizeLocked silently rewrites on the next load.
@@ -1707,7 +1712,7 @@ class AgentShowroom extends HTMLElement {
   chooseVariant(v, el) {
     const ch = this.character;
     if (v) {
-      const st = variantState(getIndex(ch, "armor"), this.unlockCtx());
+      const st = variantState(getId(ch, "armor"), this.unlockCtx());
       if (!st.unlocked) {
         el?.classList.remove("shake");
         void el?.offsetWidth;
@@ -1768,13 +1773,12 @@ class AgentShowroom extends HTMLElement {
     // Only what the agent has earned: re-roll locked picks from the unlocked set.
     // Badge and gear keys are virtual fields, rolled separately below.
     const ctx = this.unlockCtx();
-    const unlocked = (key, table) => table.map((_, i) => i).filter((i) => unlockState(key, i, ctx).unlocked);
+    const unlocked = (key, table) => table.filter((e) => unlockState(key, e.id, ctx).unlocked).map((e) => e.id);
     for (const key of Object.keys(LOCKABLE)) {
       if (LOCKABLE[key].virtual) continue;
-      const table = LOCKABLE[key].table;
-      const open = unlocked(key, table);
-      if (key === "loadout") next.loadout = open.length ? table[open[r(open.length)]].id : this.character.loadout;
-      else if (!open.includes(key in next ? getIndex(next, key) : -1)) next[key] = table[open.length ? open[r(open.length)] : 0].id;
+      const open = unlocked(key, LOCKABLE[key].table);
+      if (key === "loadout") next.loadout = open.length ? open[r(open.length)] : this.character.loadout;
+      else if (!open.includes(next[key])) next[key] = open.length ? open[r(open.length)] : DEFAULT_CHARACTER[key];
     }
     const roll = (key, table, skip = -1) => {
       const open = unlocked(key, table).filter((i) => i !== skip);
@@ -1810,11 +1814,11 @@ class AgentShowroom extends HTMLElement {
       ...Object.entries(accessories).filter(([, id]) => id !== "none").map(([slot, id]) => [`acc.${slot}`, id]),
     ];
     const picks = [
-      ...Object.keys(flat).filter((key) => LOCKABLE[key] && !LOCKABLE[key].virtual).map((key) => [key, getIndex(flat, key)]),
-      ...byIdPicks.map(([key, id]) => [key, indexOfId(LOCKABLE[key].table, id)]),
+      ...Object.keys(flat).filter((key) => LOCKABLE[key] && !LOCKABLE[key].virtual).map((key) => [key, flat[key]]),
+      ...byIdPicks,
     ];
-    for (const [key, idx] of picks) {
-      const st = unlockState(key, idx, ctx);
+    for (const [key, id] of picks) {
+      const st = unlockState(key, id, ctx);
       if (!st.unlocked) return st;
     }
     return null;
@@ -2320,12 +2324,13 @@ class AgentShowroom extends HTMLElement {
       const cur = sec.querySelector(".cur");
       if (!s || !cur) return;
       const previewing = this.preview?.key === s.key;
-      const idx = previewing ? this.preview.value : getIndex(this.character, s.key);
-      const st = previewing && LOCKABLE[s.key] ? unlockState(s.key, idx, this.unlockCtx()) : null;
+      // A preview is a grid position; the worn piece is read by id.
+      const item = previewing ? s.data[this.preview.value] : s.data.find((e) => e.id === getId(this.character, s.key));
+      const st = previewing && item && LOCKABLE[s.key] ? unlockState(s.key, item.id, this.unlockCtx()) : null;
       const locked = !!st && !st.unlocked;
       const ch = previewing ? this.effective() : this.character;
-      const variant = s.key === "armor" && ch.armorVariant ? ` · ${ARMOR_STYLES[idx]?.variant?.name || ""}` : "";
-      cur.textContent = `${s.data[idx]?.name || ""}${variant}${locked ? ` · ${st.hint}` : ""}`;
+      const variant = s.key === "armor" && ch.armorVariant ? ` · ${item?.variant?.name || ""}` : "";
+      cur.textContent = `${item?.name || ""}${variant}${locked ? ` · ${st.hint}` : ""}`;
       cur.classList.toggle("preview", previewing && !locked);
       cur.classList.toggle("locked", locked);
     });
@@ -2600,7 +2605,7 @@ class AgentShowroom extends HTMLElement {
     const ch = this.character;
     const v = pieceOf(ch, "armor").variant;
     if (!v) return "";
-    const st = variantState(getIndex(ch, "armor"), this.unlockCtx());
+    const st = variantState(getId(ch, "armor"), this.unlockCtx());
     const lock = st.unlocked
       ? `<span class="vdesc">${esc(v.desc)}</span>`
       : `<span class="vlock"><span class="lock caption amber">${I.lock}${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></span>`;
@@ -2617,8 +2622,8 @@ class AgentShowroom extends HTMLElement {
     if (!LOCKABLE[s.key] || s.kind === "class") return "";
     const ctx = this.unlockCtx();
     const rows = new Map();
-    s.data.forEach((item, i) => {
-      const st = unlockState(s.key, i, ctx);
+    s.data.forEach((item) => {
+      const st = unlockState(s.key, item.id, ctx);
       if (st.unlocked) return;
       const row = rows.get(st.hint) || { st, names: [] };
       row.names.push(item.name);
@@ -2633,7 +2638,7 @@ class AgentShowroom extends HTMLElement {
   }
 
   optionHtml(s, item, i) {
-    const st = LOCKABLE[s.key] ? unlockState(s.key, i, this.unlockCtx()) : null;
+    const st = LOCKABLE[s.key] ? unlockState(s.key, item.id, this.unlockCtx()) : null;
     const locked = !!st && !st.unlocked;
     const attrs = `class="opt plate${s.kind === "origin" || s.kind === "voice" || s.kind === "class" ? " card" : ""}${locked ? " locked" : ""}" role="radio" aria-checked="false" data-key="${s.key}" data-idx="${i}" tabindex="-1"`;
     const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${item.perk ? `. Perk: ${item.perk}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;

@@ -1122,7 +1122,7 @@ export function renderCharacterCreator(
     ctx.fillText(item.name, labelX, iy + 22);
 
     // Lock icon for anything still locked (loadouts, tiered gear)
-    if (unlockCtx && !unlockState(curCat.key, i, unlockCtx).unlocked) {
+    if (unlockCtx && !unlockState(curCat.key, item.id, unlockCtx).unlocked) {
       ctx.fillStyle = "rgba(255,100,100,0.6)";
       ctx.font = "10px monospace";
       ctx.fillText("\uD83D\uDD12", listX + L.listW - 28, iy + 22);
@@ -1353,7 +1353,7 @@ export function renderCharacterCreator(
       if (b.maxStamina != null) {
         drawStatBar("MAX STAMINA", b.maxStamina, 150, "#4488ff");
       }
-      if (unlockCtx && !unlockState("loadout", getIndex(char, "loadout"), unlockCtx).unlocked) {
+      if (unlockCtx && !unlockState("loadout", loadout.id, unlockCtx).unlocked) {
         ctx.fillStyle = "rgba(255, 100, 100, 0.7)";
         ctx.font = "bold 12px monospace";
         ctx.fillText("LOCKED", infoX + 12, by + 10);
@@ -1387,7 +1387,7 @@ export function renderCharacterCreator(
   if (!isMobile && unlockCtx && curCat.key) {
     const infoX = L.contentX + L.listW + L.contentGap + L.previewW + L.contentGap;
     const locked = items
-      .map((it, i) => ({ it, st: unlockState(curCat.key, i, unlockCtx) }))
+      .map((it) => ({ it, st: unlockState(curCat.key, it.id, unlockCtx) }))
       .filter((e) => !e.st.unlocked);
     // A category can have dozens of locked options (badge symbols); list only
     // as many as the panel holds and count the rest, or the block runs off the

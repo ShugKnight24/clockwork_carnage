@@ -54,8 +54,7 @@ import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController, getPresentSquad } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
-import { cloneLook, getIndex, withIndex, pieceOf } from "../src/core/character-fields.js";
-import { indexOfId } from "../src/data/badges.js";
+import { cloneLook, getId, withId, pieceOf } from "../src/core/character-fields.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
@@ -164,7 +163,7 @@ import {
   sanitizeLocked,
   earnedIds,
   announcements,
-  LOCKABLE,
+  itemOf,
 } from "../src/systems/unlocks.js";
 import { GEAR_SLOTS } from "../src/data/cosmetics.js";
 import { syncGearStats } from "../src/systems/gear-sync.js";
@@ -1846,12 +1845,11 @@ export class Game {
    * already carrying a stat piece is left as the player chose it.
    * @returns {boolean} true when it was equipped
    */
-  _equipDroppedGear(key, index) {
+  _equipDroppedGear(key, id) {
     const isGear = GEAR_SLOTS.some(([k]) => k === key) || key?.startsWith("acc.");
-    const table = LOCKABLE[key]?.table;
-    if (!isGear || !table?.[index]?.bonuses) return false;
-    if (table[getIndex(this.character, key)]?.bonuses) return false;
-    Object.assign(this.character, withIndex(this.character, key, index));
+    if (!isGear || !itemOf(key, id)?.bonuses) return false;
+    if (itemOf(key, getId(this.character, key))?.bonuses) return false;
+    Object.assign(this.character, withId(this.character, key, id));
     this.saveCharacter();
     setCastCharacter(this.character);
     setSkinCharacter(this.character);
@@ -3345,15 +3343,14 @@ export class Game {
         // A battlefield drop grants the piece outright: it shows up unlocked
         // in both creators, and is put on at once when its slot is free of
         // stats, so its bonuses work this run (_equipDroppedGear).
-        const index = indexOfId(LOCKABLE[e.slot]?.table || [], e.pieceId);
-        const granted = grantOwned(e.slot, index);
+        const granted = grantOwned(e.slot, e.pieceId);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this.audio.pickup();
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
           _spawnEnergyBurst(ps, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 }));
         if (granted) {
-          const worn = this._equipDroppedGear(e.slot, index);
+          const worn = this._equipDroppedGear(e.slot, e.pieceId);
           this.showGearToast?.(e.kind, worn ? `${e.label} · equipped` : e.label);
           this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
           this._levelLog?.gear.push({ kind: e.kind || "Gear", name: e.label || "Salvage" });

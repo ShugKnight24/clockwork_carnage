@@ -97,32 +97,34 @@ describe("gear drops", () => {
   it("offers only items that are still locked", () => {
     const pool = lockedItems(ctx());
     expect(pool.length).toBeGreaterThan(0);
-    for (const { key, index } of pool) {
-      expect(unlockState(key, index, ctx()).unlocked).toBe(false);
+    for (const { key, id } of pool) {
+      expect(unlockState(key, id, ctx()).unlocked).toBe(false);
     }
   });
 
   it("grants an item and records it as owned", () => {
-    const { key, index } = lockedItems(ctx())[0];
-    expect(grantOwned(key, index)).toBe(true);
-    expect(JSON.parse(store.cc_unlocks).owned[ownedKey(key, index)]).toBe(true);
+    const { key, id } = lockedItems(ctx())[0];
+    expect(grantOwned(key, id)).toBe(true);
+    expect(JSON.parse(store.cc_unlocks).owned[ownedKey(key, id)]).toBe(true);
   });
 
   it("reports a duplicate so the pickup can stay quiet", () => {
-    const { key, index } = lockedItems(ctx())[0];
-    expect(grantOwned(key, index)).toBe(true);
-    expect(grantOwned(key, index)).toBe(false);
+    const { key, id } = lockedItems(ctx())[0];
+    expect(grantOwned(key, id)).toBe(true);
+    expect(grantOwned(key, id)).toBe(false);
   });
 
   it("marks a drop as already seen, so it is not re-announced as an unlock", () => {
-    const { key, index } = lockedItems(ctx())[0];
-    grantOwned(key, index);
-    expect(JSON.parse(store.cc_unlocks).seen[ownedKey(key, index)]).toBe(true);
+    const { key, id } = lockedItems(ctx())[0];
+    grantOwned(key, id);
+    expect(JSON.parse(store.cc_unlocks).seen[ownedKey(key, id)]).toBe(true);
   });
 
-  it("refuses an index that is not a real option", () => {
-    expect(grantOwned("armor", 999)).toBe(false);
-    expect(grantOwned("notASlot", 0)).toBe(false);
+  it("refuses an id that is not a real option", () => {
+    expect(grantOwned("armor", "no_such_armor")).toBe(false);
+    expect(grantOwned("armor", undefined)).toBe(false);
+    expect(grantOwned("notASlot", "standard")).toBe(false);
+    expect(store.cc_unlocks ? Object.keys(JSON.parse(store.cc_unlocks).owned) : []).not.toContain("armor:#undefined");
   });
 });
 

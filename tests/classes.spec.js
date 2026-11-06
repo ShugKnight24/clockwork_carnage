@@ -13,7 +13,7 @@ for (const id of CLASSES) {
     await page.evaluate(async (cid) => {
       const g = window.ccDebug.game;
       const m = await import("/src/systems/unlocks.js");
-      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
+      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.id);
       const d = await import("/src/data/cosmetics.js");
       g.character.loadout = (d.LOADOUT_CLASSES.find((c) => c.id === cid) || d.LOADOUT_CLASSES[0]).id;
       g.character.armor = d.ARMOR_STYLES[0].id;

@@ -227,7 +227,7 @@ export function dispatchKeyPress(game, code, e) {
       // Skip options that are still locked (classes, tiered gear).
       const unlockCtx = gameUnlockContext(game);
       for (let tries = 0; tries < itemLen; tries++) {
-        if (isUnlocked(curCat.key, next, unlockCtx)) break;
+        if (isUnlocked(curCat.key, curCat.data[next].id, unlockCtx)) break;
         next = (next + step + itemLen) % itemLen;
       }
       Object.assign(game.character, withIndex(game.character, curCat.key, next));

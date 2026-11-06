@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FIELD_TABLES, LOOK_TABLES, isVirtualKey, getIndex, withIndex, togglePlacement, cloneLook, lookKey, pieceOf } from "../../src/core/character-fields.js";
-import { DEFAULT_CHARACTER, ARMOR_STYLES, HELMET_STYLES } from "../../src/data/cosmetics.js";
+import { FIELD_TABLES, LOOK_TABLES, isVirtualKey, getId, getIndex, withId, withIndex, togglePlacement, cloneLook, lookKey, pieceOf } from "../../src/core/character-fields.js";
+import { DEFAULT_CHARACTER, DEFAULT_LOOK_IDS, ARMOR_STYLES, HELMET_STYLES } from "../../src/data/cosmetics.js";
 import { SYMBOLS, FRAMES, FINISHES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 
@@ -70,9 +70,48 @@ describe("character fields", () => {
   it("pieceOf resolves an id to its entry, and anything else to the default", () => {
     const ch = { ...fresh(), helmet: "reaper" };
     expect(pieceOf(ch, "helmet")).toBe(HELMET_STYLES.find((h) => h.id === "reaper"));
-    expect(pieceOf({ helmet: "nope" }, "helmet")).toBe(HELMET_STYLES[0]);
-    expect(pieceOf({ helmet: 3 }, "helmet")).toBe(HELMET_STYLES[0]);
-    expect(pieceOf(null, "frame")).toBe(LOOK_TABLES.frame[0]);
+    expect(pieceOf({ helmet: "nope" }, "helmet").id).toBe("standard");
+    expect(pieceOf({ helmet: 3 }, "helmet").id).toBe("standard");
+    expect(pieceOf(null, "frame").id).toBe("standard");
+    expect(pieceOf({}, "shoulder").id).toBe("none");
+  });
+
+  it("every default look id is a piece of its table, and the default character wears it", () => {
+    expect(Object.keys(DEFAULT_LOOK_IDS).sort()).toEqual(Object.keys(LOOK_TABLES).sort());
+    expect(Object.isFrozen(DEFAULT_LOOK_IDS)).toBe(true);
+    for (const [field, id] of Object.entries(DEFAULT_LOOK_IDS)) {
+      expect(LOOK_TABLES[field].some((e) => e.id === id), `${field}: ${id}`).toBe(true);
+      expect(DEFAULT_CHARACTER[field]).toBe(id);
+      expect(pieceOf({}, field).id).toBe(id);
+    }
+  });
+
+  it("withIndex throws a RangeError for a position outside the table", () => {
+    const ch = fresh();
+    for (const bad of [-1, HELMET_STYLES.length, 1.5, undefined, NaN]) {
+      expect(() => withIndex(ch, "helmet", bad), String(bad)).toThrow(RangeError);
+    }
+    expect(() => withIndex(ch, "acc.back", ACCESSORIES.back.length)).toThrow(RangeError);
+    expect(() => withIndex(ch, "badge.preset", -1)).toThrow(RangeError);
+    expect(() => withIndex(ch, "notAField", 0)).toThrow(TypeError);
+  });
+
+  it("withId sets a piece by id and refuses one its table does not have", () => {
+    const ch = fresh();
+    expect(withId(ch, "helmet", "reaper")).toEqual({ helmet: "reaper" });
+    expect(withId(ch, "acc.back", "cloak").accessories.back).toBe("cloak");
+    expect(() => withId(ch, "helmet", "nope")).toThrow(RangeError);
+    expect(() => withId(ch, "helmet", undefined)).toThrow(RangeError);
+  });
+
+  it("getId reads flat and nested ids", () => {
+    const ch = { ...fresh(), helmet: "reaper" };
+    ch.accessories.back = "cloak";
+    expect(getId(ch, "helmet")).toBe("reaper");
+    expect(getId({ helmet: "nope" }, "helmet")).toBe("standard");
+    expect(getId(ch, "acc.back")).toBe("cloak");
+    expect(getId(ch, "badge.symbol")).toBe("clock");
+    expect(getId(ch, "badge.preset")).toBe(null);
   });
 
   it("changing armour resets the variant to standard", () => {

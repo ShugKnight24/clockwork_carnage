@@ -76,7 +76,7 @@ export function handleCreatorClick(game, e) {
           game.audio.menuSelect();
           return;
         }
-        if (!isUnlocked(curCat.key, idx, gameUnlockContext(game))) return;
+        if (!isUnlocked(curCat.key, items[idx].id, gameUnlockContext(game))) return;
         Object.assign(game.character, withIndex(game.character, curCat.key, idx));
         return;
       }

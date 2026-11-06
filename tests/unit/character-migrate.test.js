@@ -78,8 +78,9 @@ describe("migrateCharacterSave", () => {
 
 describe("normalizeLook", () => {
   it("unknown id falls back to the default", () => {
-    expect(load({ version: 2, helmet: "nope" }).helmet).toBe(DEFAULT_CHARACTER.helmet);
-    expect(load({ version: 2, helmet: 7 }).helmet).toBe(DEFAULT_CHARACTER.helmet);
+    expect(load({ version: 2, helmet: "nope" }).helmet).toBe("standard");
+    expect(load({ version: 2, helmet: 7 }).helmet).toBe("standard");
+    expect(load({ version: 2, shoulder: "nope" }).shoulder).toBe("none");
   });
 
   it("retired id redirects", () => {
@@ -103,7 +104,7 @@ describe("normalizeLook", () => {
   it("a save with one bad field keeps every other field", () => {
     const good = { version: 2, name: "Vex", color: "sakura", hair: "locs", helmet: "reaper", visor: "glow", frame: "wraith", body: "fem", camo: "urban" };
     const out = load({ ...good, shoulder: "cut_piece" });
-    expect(out.shoulder).toBe(DEFAULT_CHARACTER.shoulder);
+    expect(out.shoulder).toBe("none");
     for (const [k, v] of Object.entries(good)) if (k !== "version") expect(out[k], k).toBe(v);
 
     const v1 = load({ colorIndex: 11, hairIndex: 13, helmetIndex: 9, shoulderIndex: 4000 });
