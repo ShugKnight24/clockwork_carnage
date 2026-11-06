@@ -214,7 +214,7 @@ describe("the Exo-Frame theme", () => {
 
 // The themes in creator order; the spike's later themes join as they are ported.
 const THEME_ORDER = ["issue", "exo", "marshal", "ronin", "horologist", "runner", "diver", "ranger", "chronomancer"];
-const PORTED = ["issue", "exo", "marshal"];
+const PORTED = ["issue", "exo", "marshal", "ronin"];
 
 describe("the spike themes", () => {
   const spike = () => WARDROBE_THEMES.filter((t) => !["issue", "exo"].includes(t.id));
@@ -239,6 +239,17 @@ describe("the spike themes", () => {
     expect(HELMET_STYLES.find((e) => e.id === "brim")).toMatchObject({ face: true, visor: false });
     expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true });
     expect(HELMET_ART.brim.anchors.badge).toBe(false);
+  });
+});
+
+describe("the Ronin theme", () => {
+  it("wears the laced plate over the suit, the kabuto's crest and fitting take the crown and brow, the badge rides the wing", () => {
+    expect([...FRAME_ART.lamellar.shape.hides]).toEqual([]);
+    expect(FRAME_ART.lamellar.shape.softTorso).toBe(true);
+    expect(HELMET_STYLES.find((e) => e.id === "kabuto").visor).toBe(false);
+    expect(FACE_HELMETS.has("kabuto")).toBe(false);
+    expect(helmetSeats("kabuto")).toEqual({ crown: false, brow: false, side: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "kabuto").helmet).toEqual({ x: -15.6, y: -86.8, rot: -12, size: 3.8 });
   });
 });
 

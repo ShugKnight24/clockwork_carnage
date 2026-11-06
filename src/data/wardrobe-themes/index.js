@@ -15,11 +15,12 @@ import { deepFreeze, readonlySet } from "../../utils/freeze.js";
 import issue from "./issue.js";
 import exo from "./exo.js";
 import marshal from "./marshal.js";
+import ronin from "./ronin.js";
 
 /** The tables a theme fills, by key. */
 export const THEME_TABLES = Object.freeze(["frames", "helmets", "shoulders"]);
 
-const THEMES = [issue, exo, marshal];
+const THEMES = [issue, exo, marshal, ronin];
 
 /** Every theme in creator order, each with all three tables; frozen through. */
 export const WARDROBE_THEMES = deepFreeze(

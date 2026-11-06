@@ -78,9 +78,10 @@ import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
 import exo from "./exo.js";
 import marshal from "./marshal.js";
+import ronin from "./ronin.js";
 
 /** Art modules, one per data theme, in the data registry's order; frozen through. */
-const ART_THEMES = deepFreeze([issue, exo, marshal]);
+const ART_THEMES = deepFreeze([issue, exo, marshal, ronin]);
 
 /**
  * The stock rig layers a frame may hide (shape.hides), and what each removes:
