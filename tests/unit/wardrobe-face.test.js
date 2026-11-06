@@ -1,6 +1,7 @@
 // Whether a helmet shows the face is data (`face: true` on its entry), and
 // every reader takes it from the one derived FACE_HELMETS set. A fixture
-// helmet ("open-fixture", painted like the Centurion) is added to the Field
+// helmet ("open-fixture", painted like the Centurion) and a closed one
+// ("closed-fixture", painted like the standard dome) are added to the Field
 // Issue theme's data and art modules for this file only: if any reader kept
 // its own list, it would not know the fixture is open.
 import { describe, it, expect, vi } from "vitest";
@@ -18,7 +19,7 @@ vi.mock("../../src/data/wardrobe-themes/issue.js", async (importOriginal) => {
 
 vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOriginal) => {
   const { default: issue } = await importOriginal();
-  return { default: { ...issue, helmets: { ...issue.helmets, "open-fixture": issue.helmets.mohawk, "closed-fixture": issue.helmets.mohawk } } };
+  return { default: { ...issue, helmets: { ...issue.helmets, "open-fixture": issue.helmets.mohawk, "closed-fixture": issue.helmets.standard } } };
 });
 
 const look = (helmet, placements = ["helmet"]) => {

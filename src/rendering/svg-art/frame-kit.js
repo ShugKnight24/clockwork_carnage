@@ -1,6 +1,7 @@
 /**
- * Drawing kit shared by the body frames (wardrobe-themes/): joint-local
- * plates and strokes, and limb lerps along a pose's joints.
+ * Drawing kit shared by the wardrobe themes' painters (wardrobe-themes/) and
+ * the rig: shared colours, joint-local plates and strokes, and limb lerps
+ * along a pose's joints.
  */
 import { f, pt, lerp, mirror, shape, line } from "./models/hero.js";
 
@@ -8,6 +9,12 @@ import { f, pt, lerp, mirror, shape, line } from "./models/hero.js";
 export const STEEL = "url(#steel)";
 export const STEEL_DK = "url(#steelDk)";
 export const SUIT = "url(#suit)";
+
+/** Candy red: the Reliquary's tabard and trim, not the player's palette (the Modern look keeps it lacquer-dark). */
+export const CANDY = "#c8102e";
+export const CANDY_HI = "#ff3c54";
+/** Ordnance amber: feed belts, warning lights and launcher rails. */
+export const AMBER = "#ffae3a";
 
 export const angle = (a, b) => (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI - 90;
 /** A plate path drawn in a joint's local frame: origin at `at`, +y along `from`→`to`. */

@@ -5,8 +5,10 @@
  * rifle), top (over the arms, hands and collar), glow, head (with the helmet).
  * Helmet-slot glows come back as headGlow so they turn and fall with the head.
  * Every group is tagged data-acc="<id>" for tests and debugging.
+ * Helmet gear needs its `seat` on the helmet (A.seats, from the helmet's
+ * art); a helmet that turns that seat off does not wear it.
  */
-import { ACCESSORY_SLOTS } from "../../../data/accessories.js";
+import { ACCESSORY_SLOTS, ACCESSORIES } from "../../../data/accessories.js";
 import { PAINTERS as back } from "./back.js";
 import { PAINTERS as waist } from "./waist.js";
 import { PAINTERS as helmet } from "./helmet.js";
@@ -17,6 +19,8 @@ import { PAINTERS as legs } from "./legs.js";
 export const PAINTERS_BY_SLOT = { back, waist, helmet, arms, neck, legs };
 const CAPE_REPLACERS = new Set(["cloak"]);
 const LAYERS = ["back", "front", "top", "glow", "head"];
+/** The helmet seat each helmet-slot item needs. */
+const SEAT_OF = new Map(ACCESSORIES.helmet.filter((e) => e.seat).map((e) => [e.id, e.seat]));
 
 export function paintAccessories(accessories, A, c) {
   const out = { back: "", front: "", top: "", glow: "", head: "", headGlow: "", replacesCape: false };
@@ -25,6 +29,7 @@ export function paintAccessories(accessories, A, c) {
     if (!itemId || itemId === "none") continue;
     const paint = PAINTERS_BY_SLOT[slot][itemId];
     if (!paint) continue;
+    if (slot === "helmet" && A.seats?.[SEAT_OF.get(itemId)] === false) continue;
     const r = paint(A, c);
     for (const k of LAYERS) {
       if (!r[k]) continue;

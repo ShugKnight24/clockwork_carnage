@@ -31,13 +31,16 @@ export const ACCESSORIES = {
     { id: "grenades", name: "Grenade Rig", desc: "Canisters on a webbing belt", tier: 3, bonuses: { armorAdd: 3 }, perk: "+3 armour" },
     { id: "canister", name: "Chrono Canister", desc: "Glowing energy cell at the hip", tier: 2 },
   ],
+  // Helmet gear sits on one of the helmet's seats (`seat`: crown, brow or
+  // side, HELMET_SEATS in src/rendering/svg-art/wardrobe-themes/index.js); a
+  // helmet that turns a seat off does not draw the gear that needs it.
   helmet: [
     NONE,
-    { id: "nvg", name: "Night-Vision Mount", desc: "Flip-up quad tubes", tier: 2 },
-    { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, perk: "+5 chrono energy" },
-    { id: "lamp", name: "Head Lamp", desc: "Side-mounted torch", tier: 1 },
-    { id: "plume", name: "Plume", desc: "Parade crest", tier: 3 },
-    { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1 },
+    { id: "nvg", name: "Night-Vision Mount", desc: "Flip-up quad tubes", tier: 2, seat: "brow" },
+    { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, perk: "+5 chrono energy", seat: "side" },
+    { id: "lamp", name: "Head Lamp", desc: "Side-mounted torch", tier: 1, seat: "side" },
+    { id: "plume", name: "Plume", desc: "Parade crest", tier: 3, seat: "crown" },
+    { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1, seat: "side" },
   ],
   arms: [
     NONE,

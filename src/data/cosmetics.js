@@ -324,17 +324,8 @@ export const VISOR_STYLES = [
   { id: "goldwrap", name: "Gold Wrap", desc: "Wraparound tinted dome visor", tier: 2, bonuses: { maxChronoEnergyAdd: 6 } },
 ];
 
-export const SHOULDER_STYLES = [
-  { id: "none", name: "Bare", desc: "No additional plating", tier: 1 },
-  { id: "pads", name: "Combat Pads", desc: "Standard oval shoulder pads", tier: 1 },
-  { id: "spikes", name: "Jagged", desc: "Aggressive spiked guards", tier: 2, bonuses: { armorAdd: 3 } },
-  { id: "pauldrons", name: "Pauldrons", desc: "Heavy trapezoidal plates", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 4 } },
-  { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3, bonuses: { armorAdd: 8, moveSpeedAdd: -0.1 } },
-  { id: "slab", name: "Slab", desc: "Oversized rounded shoulder slabs", tier: 3, bonuses: { maxHealthAdd: 18, armorAdd: 4, moveSpeedAdd: -0.12 } },
-  { id: "dome", name: "Domed", desc: "Deep crusader half-shells with a raised rim", tier: 3, bonuses: { armorAdd: 9, moveSpeedAdd: -0.08 } },
-  { id: "ordnance", name: "Launcher", desc: "Vented ordnance housing on a rail", tier: 3, bonuses: { armorAdd: 6, maxHealthAdd: 10, moveSpeedAdd: -0.1 } },
-  { id: "layered", name: "Layered", desc: "Stepped overlapping plates", tier: 2, bonuses: { maxStaminaAdd: 14, moveSpeedAdd: 0.1 } },
-];
+/** Shoulder pieces, from the wardrobe themes (src/data/wardrobe-themes/), in theme order. */
+export const SHOULDER_STYLES = themeTable("shoulders");
 
 /**
  * Unlock rules for tiered gear (armor, helmet, visor, shoulders, and the

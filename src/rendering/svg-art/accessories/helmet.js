@@ -1,7 +1,8 @@
 /**
  * Helmet slot. Everything sits on the helmet shell (`head`), so it follows
  * the head's turn and the fallen head roll; lights go in `glow`. The rig
- * seats crown / browL / sideL on each helmet's shell.
+ * seats crown / browL / sideL on each helmet's shell, and an item is drawn
+ * only on a helmet that takes its seat (see accessories/index.js).
  */
 
 import { mixHex as mix } from "../../../utils/color.js";
@@ -71,9 +72,8 @@ export const PAINTERS = {
     };
   },
   // Parade crest: a dense tuft rising from a socket on the crown, tips
-  // falling outward. The Centurion already wears its own crest.
+  // falling outward. A helmet with its own crest turns the crown seat off.
   plume: (A, c) => {
-    if (c.helmet === "mohawk") return {};
     const { x, y } = A.crown;
     const feathers = Array.from({ length: 9 }, (_, i) => {
       const t = (i - 4) / 4; // -1 .. 1 across the tuft

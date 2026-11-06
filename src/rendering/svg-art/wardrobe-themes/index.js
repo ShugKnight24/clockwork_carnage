@@ -1,8 +1,8 @@
 /**
  * Art for the wardrobe themes (src/data/wardrobe-themes/), merged by id.
  *
- * Each theme module's default export: `{ id, frames, helmets }`, its id the
- * same as its data module's.
+ * Each theme module's default export: `{ id, frames, helmets, shoulders }`,
+ * its id the same as its data module's.
  *
  *   frames: { [id]: { shape, layers(P, c, K) -> { under, legs, torso, arms, glow } } }
  *     shape: { width, shoulder, softTorso?, bareRight?, hides: string[] }
@@ -17,7 +17,7 @@
  *       Helpers: ../frame-kit.js and ../models/hero.js by import; K is the
  *       rig's kit (K.mix blends two hex colours).
  *
- *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors: { top, half, rail } } }
+ *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors, seats? } }
  *     paint: the whole head under the helmet (not called for a face peek,
  *       which the rig draws bare). `front` is the head, `glow` its lit parts.
  *       K is the rig's helmet kit; none of it knows a helmet id, so all a
@@ -37,9 +37,28 @@
  *           rim light, and the bolted ear cups at ±half (ears: false for a
  *           one-piece shell)
  *         K.mix(a, b, t) — blend two hex colours
- *     anchors: where helmet gear seats, in rig units. `top` is the top of
- *       the shell (crown gear), `half` its half-width (side gear), `rail` the
- *       height of the side rail lamps and whips mount on.
+ *     anchors: { top, half, rail, badge } — where helmet gear seats, in rig
+ *       units. `top` is the top of the shell (crown gear), `half` its
+ *       half-width (side gear), `rail` the height of the side rail lamps and
+ *       whips mount on. `badge` is where the helmet wears the player's badge,
+ *       `{ x, y, rot, size }` (size: the badge's diameter), or `false` for a
+ *       head with no place for one.
+ *     seats: which accessory seats the helmet takes, words from HELMET_SEATS
+ *       mapped to booleans; a seat left out is taken. A helmet that already
+ *       wears what a seat holds (the Centurion's crest) turns it off, and
+ *       the helmet-slot accessory for that seat is not drawn on it.
+ *
+ *   shoulders: { [id]: { paint(c, s, K) -> markup, maxShoulderScale? } }
+ *     paint: one shoulder, drawn for the right side and mirrored for the
+ *       left (s = -1 left, 1 right). K is the rig's shoulder kit:
+ *         K.M(d) — mirror a right-side path for this side
+ *         K.rot(markup) — turn markup with the arm's tilt about the joint
+ *         K.lit — true on the lit (left) side
+ *         K.pauldron(side) — the stock hero pad, already tilted
+ *         K.mix(a, b, t) — blend two hex colours
+ *     maxShoulderScale: the most a frame's `shoulder` scale may grow the
+ *       piece (a large piece that would swamp a broad frame caps it); the
+ *       rig draws it at min(frame shoulder, maxShoulderScale).
  *
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
@@ -92,6 +111,38 @@ export function helmetArt(id) {
   return art;
 }
 
+/** Shoulder art by shoulder id. */
+export const SHOULDER_ART = Object.freeze(Object.assign({}, ...ART_THEMES.map((t) => t.shoulders || {})));
+
+/**
+ * A shoulder's art. Looks resolve through pieceOf, so the id is always a
+ * known shoulder; an unknown one is a bug and throws rather than drawing another.
+ */
+export function shoulderArt(id) {
+  const art = SHOULDER_ART[id];
+  if (!art) throw new Error(`shoulderArt: no shoulder "${id}"`);
+  return art;
+}
+
+/**
+ * The accessory seats on a helmet (helmet art `seats`), and the helmet-slot
+ * gear each holds (src/data/accessories.js `seat`):
+ *   crown — on top of the shell (a plume)
+ *   brow  — on the forehead above the visor (night vision)
+ *   side  — on the side rail and over the ears (lamps, whips, a headset)
+ */
+export const HELMET_SEATS = Object.freeze(["crown", "brow", "side"]);
+
+/**
+ * Which accessory seats a helmet takes: every seat, unless its art turns one off.
+ * @param {string} id helmet id
+ * @returns {Record<string, boolean>}
+ */
+export function helmetSeats(id) {
+  const seats = helmetArt(id).seats || {};
+  return Object.fromEntries(HELMET_SEATS.map((seat) => [seat, seats[seat] !== false]));
+}
+
 /**
  * Whether a frame replaces one of the rig's stock layers.
  * @param {string} id frame id
@@ -102,11 +153,11 @@ export function frameHides(id, what) {
   return frameArt(id).shape.hides.includes(what);
 }
 
-/** The art tables an art module fills, by data table key. */
-const ART_TABLES = ["frames", "helmets"];
-
 /** The anchor numbers every helmet's art declares. */
 const HELMET_ANCHORS = ["top", "half", "rail"];
+
+/** The numbers a helmet's badge point declares. */
+const BADGE_POINT = ["x", "y", "rot", "size"];
 
 /**
  * Check the data and art registries against each other.
@@ -122,7 +173,6 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
         else seen.set(id, t.id);
       }
     }
-    if (!ART_TABLES.includes(table)) continue;
     const art = new Map();
     for (const t of artThemes) {
       for (const id of Object.keys(t[table] || {})) {
@@ -138,7 +188,7 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
   for (const id of dataIds) if (!artIds.includes(id)) errors.push(`theme "${id}" has no art module`);
   for (const id of artIds) if (!dataIds.includes(id)) errors.push(`art module "${id}" has no data theme`);
   for (const t of artThemes) {
-    for (const table of ART_TABLES) {
+    for (const table of THEME_TABLES) {
       for (const id of Object.keys(t[table] || {})) {
         const owner = themes.find((d) => (d[table] || []).some((e) => e.id === id));
         if (owner && owner.id !== t.id) errors.push(`${table}: art "${id}" is in theme "${t.id}" but its entry is in "${owner.id}"`);
@@ -149,6 +199,20 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
       for (const key of HELMET_ANCHORS) {
         if (!Number.isFinite(a.anchors?.[key])) errors.push(`helmets: "${id}" anchors.${key} is not a finite number`);
       }
+      const badge = a.anchors?.badge;
+      if (badge !== false) {
+        for (const key of BADGE_POINT) {
+          if (!Number.isFinite(badge?.[key])) errors.push(`helmets: "${id}" anchors.badge.${key} is not a finite number (or set badge: false)`);
+        }
+      }
+      for (const [seat, on] of Object.entries(a.seats || {})) {
+        if (!HELMET_SEATS.includes(seat)) errors.push(`helmets: "${id}" seats unknown seat "${seat}" (${HELMET_SEATS.join(", ")})`);
+        else if (typeof on !== "boolean") errors.push(`helmets: "${id}" seats.${seat} is not true or false`);
+      }
+    }
+    for (const [id, a] of Object.entries(t.shoulders || {})) {
+      if (typeof a.paint !== "function") errors.push(`shoulders: "${id}" has no paint function`);
+      if ("maxShoulderScale" in a && !Number.isFinite(a.maxShoulderScale)) errors.push(`shoulders: "${id}" maxShoulderScale is not a finite number`);
     }
     for (const [id, a] of Object.entries(t.frames || {})) {
       if (typeof a.layers !== "function") errors.push(`frames: "${id}" has no layers function`);

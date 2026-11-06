@@ -53,7 +53,8 @@ import { pieceOf } from "../../core/character-fields.js";
 import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { frameShape, frameLayers } from "./frames.js";
-import { frameHides, helmetArt } from "./wardrobe-themes/index.js";
+import { CANDY, CANDY_HI, AMBER } from "./frame-kit.js";
+import { frameHides, helmetArt, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
 import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 import { clamp } from "../../utils/math.js";
@@ -105,10 +106,6 @@ const ARMOR_WIDTH = {
  */
 const MATTE = new Set(["stealth", "reliquary"]);
 
-/** Candy red: the Reliquary's tabard and trim, not the player's palette. */
-const CANDY = "#c8102e";
-const CANDY_HI = "#ff3c54";
-
 /** Rifle finish ramps and energy colour override (null = palette accent). */
 const WEAPON_FINISH = {
   default: { stops: ["#6a7888", "#36414d", "#0e1217"], energy: null },
@@ -118,8 +115,6 @@ const WEAPON_FINISH = {
   frost: { stops: ["#eaf6ff", "#8fb6d4", "#1e3044"], energy: "#9ff0ff" },
   toxic: { stops: ["#5a7a40", "#243418", "#070c04"], energy: "#7dff4a" },
 };
-
-const AMBER = "#ffae3a";
 
 // ---------------------------------------------------------------------------
 // Resolved look
@@ -1041,132 +1036,21 @@ function eyeGlow(c, op, behindVisor = false) {
 // Shoulders
 // ---------------------------------------------------------------------------
 
-function shoulder(c, s, tilt) {
-  const M = s < 0 ? mirror : (d) => d;
-  const lit = s < 0;
+/**
+ * The shoulder piece a bareRight frame wears on its right side, whatever the
+ * pick: the bare soft cap.
+ */
+const SOFT_CAP = "none";
+
+/**
+ * One shoulder piece, drawn on side `s` (-1 left, 1 right) at the arm's
+ * tilt, through its art's painter (wardrobe-themes/index.js documents the
+ * kit). `id` defaults to the look's pick.
+ */
+function shoulder(c, s, tilt, id = c.shoulder) {
   const rot = (inner) => `<g transform="rotate(${f(tilt)} ${f(s * 12)} -65)">${inner}</g>`;
-  const trim = (d) => line(M(d), INK, 2.2, 0.9) + line(M(d), c.pal.primary, 1.4, 1);
-  switch (c.shoulder) {
-    case "none": {
-      const cap = "M11,-66.8 C15.6,-68.8 21.6,-67.8 23.8,-63 C25,-60.2 24.6,-57.4 23.4,-55.4 C21,-56.8 18.4,-57.2 16,-56.6 C15.8,-60.6 14,-64 11,-65.6 Z";
-      return rot(
-        shape(M(cap), "url(#steel)", 0.9) +
-          line(M("M13.4,-65.6 C17,-67 21,-66.4 22.8,-63"), "#f4faff", 0.7, lit ? 0.8 : 0.4) +
-          (lit ? "" : line("M23.8,-62 C24.8,-59.6 24.6,-57.4 23.6,-55.8", c.rim, 0.7, 0.85)),
-      );
-    }
-    case "spikes": {
-      const spikes = [
-        ["M14.6,-66.2 L15.6,-76.8 L19.4,-67.6 Z"],
-        ["M20.2,-67.8 L23.8,-79 L25.2,-66.2 Z"],
-        ["M25.4,-65 L32.6,-72.8 L29,-61.4 Z"],
-      ]
-        .map(([d]) => shape(M(d), "url(#steelDk)", 0.8) + line(M(d.split(" L")[0] + " L" + d.split(" L")[1]), "#eaf4ff", 0.4, 0.5))
-        .join("");
-      const jag = "M16.6,-43.6 L19.4,-39.6 L21.8,-43 L24.6,-39.2 L26.8,-42.6 L27.4,-44 Z";
-      return rot(spikes) + pauldron(s, tilt) + rot(shape(M(jag), "url(#steelDk)", 0.7) + trim("M13.8,-64.2 C18.6,-66.2 24.2,-65.4 27,-60.8"));
-    }
-    case "pauldrons": {
-      const plate = "M9.8,-68.6 L27.4,-72 L35,-60.6 L33.6,-44.4 L16.2,-46.6 C17.2,-55 14.8,-62.2 9.8,-65 Z";
-      const lameA = "M16.4,-46.8 L33.8,-44.4 L32.8,-39.4 L17,-41.6 Z";
-      const lameB = "M17,-42 L32.8,-39.8 L31.4,-35.2 L17.6,-37.2 Z";
-      return rot(
-        shape(M(lameB), "url(#steelDk)", 0.8) +
-          shape(M(lameA), "url(#steel)", 0.8) +
-          shape(M(plate), "url(#steel)") +
-          shape(M("M12.4,-67.2 L27,-70.2 L29.6,-66.4 L14.6,-63.4 Z"), "url(#paint)", 0.6) +
-          line(M("M17.6,-60.4 L32.6,-58"), INK, 0.5, 0.6) +
-          line(M("M15.4,-62.8 L30.4,-60.4"), "#f4faff", 0.55, lit ? 0.8 : 0.4) +
-          `<g fill="#0a0f16"><circle cx="${f(s * 30.6)}" cy="-50" r=".7"/><circle cx="${f(s * 21)}" cy="-50.8" r=".7"/></g>` +
-          (lit ? `<ellipse cx="-24" cy="-56" rx="6" ry="4" fill="url(#sheen)"/>` : line("M35.2,-60 L33.8,-44.6", c.rim, 0.8, 0.9)),
-      );
-    }
-    case "armored": {
-      const block = "M10.4,-67.8 L30.4,-70.4 L34.4,-66.2 L34.4,-48.6 L30.2,-44.8 L15.6,-46.8 C16.8,-55 14.6,-61.8 10.4,-64.4 Z";
-      const face = "M15.4,-64.6 L29.6,-66.4 L31.4,-64 L31.4,-50.4 L29,-48.2 L18,-49.6 C18.4,-55 17.6,-60.6 15.4,-64.6 Z";
-      return rot(
-        shape(M(block), "url(#steelDk)") +
-          shape(M(face), "url(#steel)", 0.7) +
-          shape(M("M22.6,-65.6 L25.2,-65.9 L25.2,-48.8 L22.6,-49.2 Z"), "url(#paint)", 0.5) +
-          line(M("M16.6,-63.6 L29.2,-65.4"), "#f4faff", 0.55, lit ? 0.85 : 0.4) +
-          `<g fill="#0a0f16"><circle cx="${f(s * 18.6)}" cy="-61.8" r=".6"/><circle cx="${f(s * 29.4)}" cy="-63.2" r=".6"/><circle cx="${f(s * 29.4)}" cy="-51.4" r=".6"/><circle cx="${f(s * 19.6)}" cy="-50.8" r=".6"/></g>` +
-          (lit ? "" : line("M34.6,-65.6 L34.6,-49", c.rim, 0.8, 0.9)),
-      );
-    }
-    case "slab": {
-      // Oversized rounded slab — the single widest silhouette in the set. It
-      // overhangs the arm rather than capping it, so the shoulders read first.
-      const plate = "M8.6,-69.4 C20,-74.6 33,-72.2 38.4,-62 C41.4,-56.2 41,-48.6 38.2,-42.4 " +
-        "C31.6,-38.4 22.4,-38.2 15.4,-41.6 C17.4,-51.2 14.6,-62.4 8.6,-66.2 Z";
-      const lip = "M12.6,-66.8 C22.6,-70.6 32.6,-68.2 37,-60.2";
-      return rot(
-        shape(M(plate), "url(#steel)") +
-          shape(M("M16.4,-45.6 C23.6,-42.4 32,-42.6 38,-46"), "url(#steelDk)", 0.9) +
-          line(M(lip), INK, 2.4, 0.9) +
-          line(M(lip), c.pal.primary, 1.5, 1) +
-          line(M("M14.4,-63.2 C23.4,-67 32.2,-64.8 36,-57.6"), "#f4faff", 0.7, lit ? 0.85 : 0.4) +
-          // Unit indicator, the one bright mark on a very large plate.
-          `<circle cx="${f(s * 27)}" cy="-55" r="3.4" fill="url(#steelDk)" stroke="${INK}" stroke-width=".8"/>` +
-          `<circle cx="${f(s * 27)}" cy="-55" r="1.7" fill="${c.pal.primary}" stroke="${INK}" stroke-width=".4"/>` +
-          (lit
-            ? `<ellipse cx="-26" cy="-60" rx="8" ry="5" fill="url(#sheen)"/>`
-            : line("M40.2,-58 C41.4,-50 40.6,-45.4 38.6,-42.8", c.rim, 0.9, 0.9)),
-      );
-    }
-    case "dome": {
-      // Domed crusader pauldron: a deep half-shell with a raised rim, the
-      // heraldic surface of the suit.
-      const shell = "M9.4,-68.6 C21,-76 34.6,-71.4 38,-58.8 C39.8,-52 38.4,-45.6 35.4,-41.4 " +
-        "C28,-38.6 20,-39.6 15.8,-42.8 C17.8,-52.4 15.2,-63.6 9.4,-66.6 Z";
-      const rim = "M9.6,-67.4 C21.4,-74.2 33.6,-69.8 36.8,-58.4 C38.4,-52.4 37.2,-46.8 34.6,-42.8";
-      return rot(
-        shape(M(shell), "url(#steel)") +
-          line(M(rim), INK, 3.6, 1) +
-          line(M(rim), CANDY, 2.2, 1) +
-          line(M("M13.8,-62.8 C22.4,-67.6 30.6,-64.4 33.8,-56"), CANDY_HI, 0.7, lit ? 0.8 : 0.35) +
-          // Heraldic drop on the face of the plate.
-          `<path d="M${f(s * 26)},-61.6 L${f(s * 30.4)},-53.4 L${f(s * 26)},-45.6 L${f(s * 21.6)},-53.4 Z" fill="${CANDY}" stroke="${INK}" stroke-width=".7"/>` +
-          `<circle cx="${f(s * 26)}" cy="-53.4" r="1.4" fill="#e8d9a4" stroke="${INK}" stroke-width=".35"/>` +
-          (lit ? "" : line("M37.4,-52 C38,-46.6 36.8,-43.4 35,-41.6", c.rim, 0.9, 0.9)),
-      );
-    }
-    case "ordnance": {
-      // Boxy launcher housing rather than a plate: vents, a lift handle and a
-      // rail along the top.
-      const box = "M10.4,-68.6 L29.6,-71.8 L35.2,-66.4 L35.6,-48.2 L30,-43.4 L15.6,-45.4 C17,-54.4 14.8,-63.4 10.4,-65.6 Z";
-      return rot(
-        shape(M(box), "url(#steelDk)") +
-          shape(M("M15,-64.2 L29.4,-66.4 L31.8,-63.6 L32,-49.6 L29.2,-47 L18.2,-48.4 C18.8,-55.4 17.6,-60.4 15,-64.2 Z"), "url(#steel)", 0.8) +
-          // Vent louvres
-          [0, 1, 2].map((i) => line(M(`M19.4,${f(-60.6 + i * 4.4)} L30,${f(-62 + i * 4.4)}`), INK, 1.1, 0.75)).join("") +
-          line(M("M12.4,-69 L30.2,-72"), INK, 2.6, 1) +
-          line(M("M12.4,-69 L30.2,-72"), AMBER, 1.4, 0.9) +
-          // Lift handle
-          line(M("M21,-73.4 C24,-77.2 28.6,-77.6 31,-74.4"), INK, 2.4) +
-          line(M("M21,-73.4 C24,-77.2 28.6,-77.6 31,-74.4"), "#9aa3ad", 1.3) +
-          (lit ? "" : line("M35.8,-65.4 L36.2,-48.6", c.rim, 0.9, 0.9)),
-      );
-    }
-    case "layered": {
-      // Three angular plates stepping down the arm, the sealed-suit answer to
-      // a pauldron: light, overlapping, no bulk.
-      const p1 = "M10.6,-68 L26.4,-70.4 L31.6,-63.4 L29.4,-57.4 L13.4,-58.6 C14.4,-62.4 13,-66 10.6,-68 Z";
-      const p2 = "M13.8,-57 L29.6,-55.8 L32.4,-50.2 L29.2,-46.6 L15.4,-47.4 Z";
-      const p3 = "M15.8,-46 L29.4,-45.2 L31,-41 L27.8,-38.4 L16.8,-39.4 Z";
-      return rot(
-        shape(M(p3), "url(#steelDk)", 0.9) +
-          shape(M(p2), "url(#steel)", 0.9) +
-          shape(M(p1), "url(#steel)", 1) +
-          line(M("M13.4,-65.6 L25.6,-67.4 L29.6,-62.4"), "#f4fbfa", 0.65, lit ? 0.85 : 0.4) +
-          line(M("M13.8,-57 L29.6,-55.8"), INK, 0.55, 0.7) +
-          line(M("M15.8,-46 L29.4,-45.2"), INK, 0.55, 0.7) +
-          (lit ? "" : line("M31.4,-62.8 L32.6,-50 L30.8,-40.6", c.rim, 0.8, 0.9)),
-      );
-    }
-    default:
-      // "pads": the hero pauldron with a painted rim stripe
-      return pauldron(s, tilt) + rot(trim("M13.8,-64.2 C18.6,-66.2 24.2,-65.4 27,-60.8"));
-  }
+  const K = { M: s < 0 ? mirror : (d) => d, rot, lit: s < 0, pauldron: (side) => pauldron(side, tilt), mix };
+  return shoulderArt(id).paint(c, s, K);
 }
 
 // ---------------------------------------------------------------------------
@@ -1662,13 +1546,15 @@ function forearmAxis({ el, wr }) {
  * Attachment points on the rig, in rig units: badges (Task 8) and
  * accessories (Task 9) are placed from here, never from their own offsets.
  * `size` is the badge diameter at that point. Helmet mounts (crown, browL,
- * sideL) are seated on the given helmet's shell (its art's anchors).
+ * sideL) and the helmet badge (`helmet`, null for a helmet with no place for
+ * one) are seated on the given helmet's shell (its art's anchors); `seats`
+ * says which accessory seats the helmet takes (helmetSeats).
  */
 export function rigAnchors(P, tilt, pose, helmet = "standard") {
   const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
   const [hipL, hipR] = P.legs.map((l) => l.hip);
   const [kneeL, kneeR] = P.legs.map((l) => l.kn);
-  const { top, half, rail } = helmetArt(helmet).anchors;
+  const { top, half, rail, badge } = helmetArt(helmet).anchors;
   const [legL, legR] = P.legs;
   const thigh = lerp(legL.hip, legL.kn, 0.36);
   return {
@@ -1678,7 +1564,7 @@ export function rigAnchors(P, tilt, pose, helmet = "standard") {
     forearmR: forearmAnchor(armR, 1),
     forearmAxisL: forearmAxis(armL),
     forearmAxisR: forearmAxis(armR),
-    helmet: { x: -8.6, y: -90, rot: -8, size: 4.6 },
+    helmet: badge ? { ...badge } : null,
     neck: { x: 0, y: -69, rot: 0, size: 0 },
     back: { x: 0, y: -48, rot: 0, size: 0 },
     belt: { x: 0, y: -25.2, rot: 0, size: 0, half: 14.4 },
@@ -1690,6 +1576,7 @@ export function rigAnchors(P, tilt, pose, helmet = "standard") {
     crown: { x: 0, y: top + 0.8, rot: 0, size: 0 },
     browL: { x: 0, y: top + 7.6, rot: 0, size: 0 },
     sideL: { x: -half + 0.2, y: rail, rot: 0, size: 0 },
+    seats: helmetSeats(helmet),
     pose,
   };
 }
@@ -1753,12 +1640,14 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const hides = (what) => frameHides(c.frame, what);
   const collar = collarOf(c, showFace, map, !hides("collar"));
   const hideKit = hides("kit");
-  // Shoulders scale about their joint with the frame; a Strider leaves the
-  // right shoulder bare (soft cap) for its asymmetric kit.
+  // Shoulders scale about their joint with the frame, as far as the piece
+  // allows (maxShoulderScale); a Strider leaves the right shoulder bare (soft
+  // cap) for its asymmetric kit.
   const shoulderAt = (s, t) => {
     if (hides("shoulders")) return "";
-    const inner = fs.bareRight && s > 0 ? shoulder({ ...c, shoulder: "none" }, s, t) : shoulder(c, s, t);
-    const k = fs.shoulder * B.shoulder;
+    const id = fs.bareRight && s > 0 ? SOFT_CAP : c.shoulder;
+    const inner = shoulder(c, s, t, id);
+    const k = Math.min(fs.shoulder, shoulderArt(id).maxShoulderScale ?? Infinity) * B.shoulder;
     const dx = s * 20 * (B.sh - 1);
     return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
   };
@@ -1787,7 +1676,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
   const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
-  const helmBadge = wears(c, "helmet") && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
+  const helmBadge = wears(c, "helmet") && A.helmet && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
@@ -2025,7 +1914,7 @@ function fallenParts(c) {
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
   const acc = paintAccessories(c.accessories, A, c);
-  const helmBadge = wears(c, "helmet") && !showFace ? badgeAt(c, A.helmet, "low") : "";
+  const helmBadge = wears(c, "helmet") && A.helmet && !showFace ? badgeAt(c, A.helmet, "low") : "";
   const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
   // The free arm lies on top of the body, so its vambrace badge rides with it.
   const armBadge = wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "";
