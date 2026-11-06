@@ -142,14 +142,14 @@ describe("helmets", () => {
     }
   });
 
-  it("FACE_HELMETS equals {wide, mohawk, brim}, derived from the data and read-only", () => {
-    expect([...FACE_HELMETS].sort()).toEqual(["brim", "mohawk", "wide"]);
+  it("FACE_HELMETS equals the open helmets, derived from the data and read-only", () => {
+    expect([...FACE_HELMETS].sort()).toEqual(["brim", "ledmask", "mohawk", "wide"]);
     expect([...FACE_HELMETS].sort()).toEqual(HELMET_STYLES.filter((e) => e.face === true).map((e) => e.id).sort());
     expect(() => FACE_HELMETS.add("standard")).toThrow();
     expect(() => FACE_HELMETS.delete("wide")).toThrow();
     expect(() => FACE_HELMETS.clear()).toThrow();
     expect(FACE_HELMETS.has("wide")).toBe(true);
-    expect(FACE_HELMETS.size).toBe(3);
+    expect(FACE_HELMETS.size).toBe(4);
   });
 
   it("throws on an unknown helmet rather than drawing another", () => {
@@ -263,6 +263,15 @@ describe("the Horologist theme", () => {
   });
 });
 
+describe("the Neon Runner theme", () => {
+  it("the jacket covers the kit, collar and limb light; the LED mask is a bare face with no crown seat", () => {
+    expect([...FRAME_ART.streetwear.shape.hides]).toEqual(["kit", "collar", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "ledmask")).toMatchObject({ face: true, visor: false });
+    expect(helmetSeats("ledmask")).toEqual({ crown: false, brow: true, side: true });
+    expect(HELMET_ART.ledmask.anchors.badge).toBe(false);
+  });
+});
+
 describe("every theme piece draws cleanly", () => {
   // Each theme's own set: both builds and poses, realistic, the head tile,
   // a face peek and both builds fallen. No NaN or undefined in the markup,
@@ -271,6 +280,8 @@ describe("every theme piece draws cleanly", () => {
   const looks = WARDROBE_THEMES.filter((t) => t.id !== "issue").map((t) => [t.id, { frame: t.frames[0].id, helmet: t.helmets[0].id, shoulder: t.shoulders[0].id }]);
   const check = (markup, prefix) => {
     expect(markup).not.toMatch(/NaN|undefined/);
+    // Well-formed attributes: one never runs into the next.
+    expect(markup).not.toMatch(/"[a-zA-Z:-]+="/);
     const ids = [...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
     if (prefix) expect(ids.filter((i) => !i.startsWith(prefix))).toEqual([]);
