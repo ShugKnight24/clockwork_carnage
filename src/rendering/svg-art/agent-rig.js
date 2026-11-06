@@ -1091,17 +1091,27 @@ const faceItems = (c, acc) => ({ front: c.fem ? warpX(acc.face, FEM_JAW) : acc.f
  * `scope` is the figure's idScope (scoped ids and defs for the painter).
  * `items` are the eyes and face items (faceItems): on the bare face under
  * the hair, handed to a helmet painter as K.faceAccessories, or, for a
- * painter that never asks, drawn over its head.
+ * painter that never asks (a safety net: every open helmet asks), drawn
+ * over its head.
  * @returns {{ front: string, glow: string }}
  */
 function head(c, peek, scope, items = NO_FACE_ACC) {
   if (peek) return { front: hairBack(c) + face(c) + items.front + hair(c, false), glow: eyeGlow(c, 0.45) + items.glow };
   let placed = false;
-  const faceAccessories = () => {
+  const kit = scope.kit(`helmet-${c.helmet}`);
+  // The items, and their light, kept to the helmet's face `window` (a path
+  // in head space) when it gives one: the light is drawn in the head's glow
+  // layer, over everything, so only a clip keeps it behind a cheek guard.
+  // The clip goes on after the feminine warp, as the helmet is not warped.
+  const faceAccessories = ({ window } = {}) => {
     placed = true;
-    return items;
+    if (!window || (!items.front && !items.glow)) return items;
+    const id = kit.uid("face-window");
+    kit.defs(`<clipPath id="${id}"><path d="${window}"/></clipPath>`);
+    const clip = (m) => (m ? `<g clip-path="url(#${id})">${m}</g>` : "");
+    return { front: clip(items.front), glow: clip(items.glow) };
   };
-  const h = helmetArt(c.helmet).paint(c, { ...HELMET_KIT, ...scope.kit(`helmet-${c.helmet}`), faceAccessories });
+  const h = helmetArt(c.helmet).paint(c, { ...HELMET_KIT, ...kit, faceAccessories });
   return placed ? h : { front: h.front + items.front, glow: h.glow + items.glow };
 }
 

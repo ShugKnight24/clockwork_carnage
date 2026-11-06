@@ -42,12 +42,17 @@
  *           earGlow } — a steel shell from its outline, the dome's sheen and
  *           rim light, and the bolted ear cups at ±half (ears: false for a
  *           one-piece shell)
- *         K.faceAccessories() -> { front, glow } — the eyes and face items
- *           the look wears, already fitted to the build (only the slots
- *           faceSlots leaves room for). A helmet that draws the face inside
- *           its own layering (the Ranger bubble's glass) calls it and places
- *           them right over its K.face; one that never calls it gets them
- *           drawn over its whole head by the rig
+ *         K.faceAccessories({ window? }) -> { front, glow } — the eyes and
+ *           face items the look wears, already fitted to the build (only
+ *           the slots faceSlots leaves room for). Every helmet that shows
+ *           the face calls it and places them over its K.face, inside its
+ *           own layering (under the hair, the shell, the bubble's glass).
+ *           `window` is the helmet's face opening as a path in head space:
+ *           both the items and their light are clipped to it, so a cheek
+ *           guard or a brim in front hides them (the light is drawn in the
+ *           head's glow layer, over everything, and only the clip keeps it
+ *           behind). The rig draws them over the whole head for a painter
+ *           that never asks, as a safety net only
  *         K.mix(a, b, t) — blend two hex colours
  *     anchors: { top, half, rail, badge } — where helmet gear seats, in rig
  *       units. `top` is the top of the shell (crown gear), `half` its

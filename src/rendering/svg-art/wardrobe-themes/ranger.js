@@ -248,7 +248,10 @@ function bubble(c, K) {
       `<stop offset="1" stop-color="#ffffff" stop-opacity=".45"/></radialGradient>`,
   );
   const ring = "M-12,-71.6 C-6,-73.8 6,-73.8 12,-71.6 L12.8,-66.6 C6,-64.2 -6,-64.2 -12.8,-66.6 Z";
-  const acc = K.faceAccessories();
+  // The face shows through the glass only: its items and their light are
+  // kept inside it.
+  const r = BR - 0.6;
+  const acc = K.faceAccessories({ window: `M${BX - r},${BY} A${r},${r} 0 1,0 ${BX + r},${BY} A${r},${r} 0 1,0 ${BX - r},${BY} Z` });
   const lamp = "M10.6,-76.6 L15.4,-78.6 L17.4,-74.2 L13.2,-71.8 Z";
   return {
     front:

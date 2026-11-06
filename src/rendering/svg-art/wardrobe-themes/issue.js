@@ -24,6 +24,19 @@ const NONE = { under: "", legs: "", torso: "", arms: "", glow: "" };
 
 // ── Helmets: outlines and table (painters at the end) ──────────────────────
 
+/**
+ * The face openings cut into the open shells (Bastion, Centurion): from the
+ * cut's right foot at the jaw, round the cheek guards and across the brow to
+ * its left foot. Each shell's outline below runs through its cut, and
+ * FACE_WINDOWS closes the same cut into the window the face shows through.
+ */
+const FACE_CUTS = {
+  wide: { from: "4.8,-68.2", cut: "L4.8,-71.6 C6.8,-73.2 8,-75.8 8.2,-79 L8.4,-87 L-8.4,-87 L-8.2,-79 C-8,-75.8 -6.8,-73.2 -4.8,-71.6 L-4.8,-68.2" },
+  mohawk: { from: "4.2,-68.4", cut: "C3.8,-71.4 3.6,-74 4.6,-76.6 L6.6,-80 L6.8,-86.6 L-6.8,-86.6 L-6.6,-80 L-4.6,-76.6 C-3.6,-74 -3.8,-71.4 -4.2,-68.4" },
+};
+/** The face window of an open shell: its cut, closed across the jaw. */
+const FACE_WINDOWS = Object.fromEntries(Object.entries(FACE_CUTS).map(([id, { from, cut }]) => [id, `M${from} ${cut} Z`]));
+
 /** Shell outlines, by helmet id. */
 const SHELLS = {
   standard:
@@ -34,13 +47,11 @@ const SHELLS = {
     "M0,-95.6 C7.8,-95 11.6,-89.8 11.6,-82.5 L11.2,-77 C10.8,-73 8.6,-70.4 5,-68.8 L0,-67.6 L-5,-68.8 " +
     "C-8.6,-70.4 -10.8,-73 -11.2,-77 L-11.6,-82.5 C-11.6,-89.8 -7.8,-95 0,-95.6 Z",
   wide:
-    "M0,-96.4 C9.6,-96.4 14.2,-90.6 14.2,-82.8 L14.4,-75.4 C14,-71.6 11.2,-69.2 7.4,-68.4 L4.8,-68.2 L4.8,-71.6 " +
-    "C6.8,-73.2 8,-75.8 8.2,-79 L8.4,-87 L-8.4,-87 L-8.2,-79 C-8,-75.8 -6.8,-73.2 -4.8,-71.6 L-4.8,-68.2 L-7.4,-68.4 " +
-    "C-11.2,-69.2 -14,-71.6 -14.4,-75.4 L-14.2,-82.8 C-14.2,-90.6 -9.6,-96.4 0,-96.4 Z",
+    `M0,-96.4 C9.6,-96.4 14.2,-90.6 14.2,-82.8 L14.4,-75.4 C14,-71.6 11.2,-69.2 7.4,-68.4 L${FACE_CUTS.wide.from} ${FACE_CUTS.wide.cut} ` +
+    "L-7.4,-68.4 C-11.2,-69.2 -14,-71.6 -14.4,-75.4 L-14.2,-82.8 C-14.2,-90.6 -9.6,-96.4 0,-96.4 Z",
   mohawk:
-    "M0,-95 C7.8,-95 11.8,-89.8 11.8,-82.5 L11.6,-76 C11.4,-72 9.8,-69.6 6.8,-68.6 L4.2,-68.4 C3.8,-71.4 3.6,-74 4.6,-76.6 " +
-    "L6.6,-80 L6.8,-86.6 L-6.8,-86.6 L-6.6,-80 L-4.6,-76.6 C-3.6,-74 -3.8,-71.4 -4.2,-68.4 L-6.8,-68.6 " +
-    "C-9.8,-69.6 -11.4,-72 -11.6,-76 L-11.8,-82.5 C-11.8,-89.8 -7.8,-95 0,-95 Z",
+    `M0,-95 C7.8,-95 11.8,-89.8 11.8,-82.5 L11.6,-76 C11.4,-72 9.8,-69.6 6.8,-68.6 L${FACE_CUTS.mohawk.from} ${FACE_CUTS.mohawk.cut} ` +
+    "L-6.8,-68.6 C-9.8,-69.6 -11.4,-72 -11.6,-76 L-11.8,-82.5 C-11.8,-89.8 -7.8,-95 0,-95 Z",
   // Ordnance: hard faceted brow over a narrow jaw, built around a raised
   // centre ridge that carries the targeting spine.
   ordnance:
@@ -78,6 +89,7 @@ const HELMETS = {
     at(-96.4, 14.2),
     openHelm(
       SHELLS.wide,
+      FACE_WINDOWS.wide,
       -86.6,
       () =>
         line("M-14.2,-82.8 C-10,-84.6 -8.8,-86 -8.4,-87", INK, 0.5, 0.6) +
@@ -100,6 +112,7 @@ const HELMETS = {
     at(-95, 11.7),
     openHelm(
       SHELLS.mohawk,
+      FACE_WINDOWS.mohawk,
       -86.4,
       (c, K) =>
         shape("M-2.9,-94.6 C-3.6,-100.6 -2.6,-105.6 0,-107.4 C2.6,-105.6 3.6,-100.6 2.9,-94.6 Z", "url(#paint)", 0.8) +
@@ -591,17 +604,18 @@ function closedHelm(path, opts = {}) {
 }
 
 /**
- * An open helmet: the face and hair under a lined shell, the visor pick
- * flipped up onto the brow at `visorY`, `extra(c, K)` over the shell.
+ * An open helmet: the face and hair under a lined shell whose face opening
+ * is `window` (FACE_WINDOWS), the visor pick flipped up onto the brow at
+ * `visorY`, `extra(c, K)` over the shell.
  */
-function openHelm(path, visorY, extra) {
+function openHelm(path, window, visorY, extra) {
   return (c, K, { half: w }) => {
     const s = K.helmetShell(c, { path, half: w });
     const liner = `<path d="M${f(-w + 1.2)},-86 C${f(-w + 1.2)},-92 -5,-94.4 0,-94.4 C5,-94.4 ${f(w - 1.2)},-92 ${f(w - 1.2)},-86 L${f(w - 1.6)},-70 L${f(-w + 1.6)},-70 Z" fill="#070a10"/>`;
     const visorUp = K.raisedVisor(c, visorY);
-    // Eyes and face items on the face, under the hair and the shell, so the
-    // cheek guards close over them.
-    const acc = K.faceAccessories();
+    // Eyes and face items on the face, under the hair and the shell, and
+    // their light kept to the face window, so the cheek guards close over both.
+    const acc = K.faceAccessories({ window });
     return {
       front: K.hairBack(c) + liner + K.face(c) + acc.front + K.hair(c, true) + s.shell + s.dome + extra(c, K) + s.ears + visorUp.body,
       glow: s.earGlow + visorUp.glow + K.eyeGlow(c, 0.35) + acc.glow,

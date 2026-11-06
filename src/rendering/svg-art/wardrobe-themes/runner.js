@@ -227,10 +227,14 @@ function ledmask(c, K) {
     `<circle cx="${f(s * 7.6)}" cy="-80.3" r=".7" fill="${CHROME}" stroke="${INK}" stroke-width=".3"/>`;
   const cord = "M7.8,-78.6 C10.6,-76 10.4,-72.4 8,-70.2 C6.8,-69 6.2,-67.6 6.4,-66";
   const band = "M-9.6,-84.4 L9.6,-84.4 L9.4,-80.6 L-9.4,-80.6 Z";
+  // Nothing worn on the face has room under the mask (faceSlots), so this
+  // places nothing; asked all the same, as every open helmet asks.
+  const acc = K.faceAccessories();
   return {
     front:
       K.hairBack(c) +
       K.face(c) +
+      acc.front +
       K.hair(c, false) +
       // Ear jacks, and the cord dropping from the right one to the collar.
       jack(-1) +
@@ -250,7 +254,8 @@ function ledmask(c, K) {
     glow:
       energy(`<g stroke="none">${grid}</g>`, hot) +
       energy(`<path d="M-9,-84 L9,-84" fill="none" stroke-width=".4"/><path d="M4.4,-82.6 L7.4,-82.6" fill="none" stroke-width=".3"/><circle cx="-7.6" cy="-80.3" r=".45"/><circle cx="7.6" cy="-80.3" r=".45"/>`, hot) +
-      K.eyeGlow(c, 0.55, true),
+      K.eyeGlow(c, 0.55, true) +
+      acc.glow,
   };
 }
 

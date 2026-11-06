@@ -103,6 +103,9 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="face-cybereye-freckles-brim-masc-idle-helmet-brim-face-window">
+<path d="M22,-93 C22.4,-90.2 19.4,-86.8 0,-86.4 C-19.4,-86.8 -22.4,-90.2 -22,-93 L-22,-60 L22,-60 Z"/>
+</clipPath>
 <radialGradient id="face-cybereye-freckles-brim-masc-idle-aura">
 <stop offset="0" stop-color="#00ffdd" stop-opacity="0.16"/>
 <stop offset="0.6" stop-color="#00ffdd" stop-opacity="0.05"/>
@@ -545,10 +548,12 @@
 <path d="M-8.4,-78.6 C-8.8,-75 -7.6,-72 -5,-70" fill="none" stroke="#66a698" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M8.8,-78 C9,-74.6 8,-71.6 5.6,-69.4" fill="none" stroke="#0af8e7" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
+<g clip-path="url(#face-cybereye-freckles-brim-masc-idle-helmet-brim-face-window)">
 <g data-acc="cybereye">
 <path d="M0.9,-84.8 L5.8,-85 L6.8,-81.8 L5.6,-78.6 L1.2,-78.6 L0.4,-81.6 Z" fill="#2a3038" stroke="#0a0d12" stroke-width="0.55" stroke-linejoin="round"/>
 <circle cx="3.2" cy="-81.7" r="1.9" fill="#05080c" stroke="#0a0d12" stroke-width="0.45"/>
 <path d="M5.8,-85 L7.2,-86.2 M6.8,-81.8 L7.6,-81.8" fill="none" stroke="#5a6470" stroke-width="0.45" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
 </g>
 <path d="M-21.6,-91.8 C-18,-95.2 -9,-96 0,-96 C9,-96 18,-95.2 21.6,-91.8 C16,-89.4 -16,-89.4 -21.6,-91.8 Z" fill="#23291e" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-8.8,-90.4 C-9.6,-95.4 -9,-100.4 -6.4,-102.8 C-3.6,-101.4 -1.6,-101 0,-101.8 C1.6,-101 3.6,-101.4 6.4,-102.8 C9,-100.4 9.6,-95.4 8.8,-90.4 Z" fill="#404a36" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
@@ -580,9 +585,11 @@
 <circle cx="-10.6" cy="-81.6" r="0.55"/>
 <circle cx="10.6" cy="-81.6" r="0.55"/>
 </g>
+<g clip-path="url(#face-cybereye-freckles-brim-masc-idle-helmet-brim-face-window)">
 <g data-acc="cybereye">
 <circle cx="3.2" cy="-81.7" r="1.2" fill="#00ffdd"/>
 <circle cx="3.2" cy="-81.7" r="0.5" fill="#ffffff"/>
+</g>
 </g>
 </g>
 </g>

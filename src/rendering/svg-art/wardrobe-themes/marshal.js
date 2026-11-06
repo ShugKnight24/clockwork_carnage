@@ -232,9 +232,11 @@ function brim(c, K) {
   const crown =
     "M-8.8,-90.4 C-9.6,-95.4 -9,-100.4 -6.4,-102.8 C-3.6,-101.4 -1.6,-101 0,-101.8 C1.6,-101 3.6,-101.4 6.4,-102.8 C9,-100.4 9.6,-95.4 8.8,-90.4 Z";
   const brimTop = "M-21.6,-91.8 C-18,-95.2 -9,-96 0,-96 C9,-96 18,-95.2 21.6,-91.8 C16,-89.4 -16,-89.4 -21.6,-91.8 Z";
-  const acc = K.faceAccessories();
   const brimLip =
     "M-22,-93 C-19.4,-89.8 -14,-89.2 0,-89.4 C14,-89.2 19.4,-89.8 22,-93 C22.4,-90.2 19.4,-86.8 0,-86.4 C-19.4,-86.8 -22.4,-90.2 -22,-93 Z";
+  // Eyewear shows under the brim: its items and light are kept below the
+  // brim's lower edge.
+  const acc = K.faceAccessories({ window: "M22,-93 C22.4,-90.2 19.4,-86.8 0,-86.4 C-19.4,-86.8 -22.4,-90.2 -22,-93 L-22,-60 L22,-60 Z" });
 
   const front =
     K.hairBack(c) +

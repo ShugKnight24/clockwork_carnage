@@ -103,6 +103,9 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="face-monocle-piercings-wide-fem-idle-helmet-wide-face-window">
+<path d="M4.8,-68.2 L4.8,-71.6 C6.8,-73.2 8,-75.8 8.2,-79 L8.4,-87 L-8.4,-87 L-8.2,-79 C-8,-75.8 -6.8,-73.2 -4.8,-71.6 L-4.8,-68.2 Z"/>
+</clipPath>
 <radialGradient id="face-monocle-piercings-wide-fem-idle-acc-eyes-monocle-glass" cx="0.35" cy="0.3" r="0.8">
 <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/>
 <stop offset="0.5" stop-color="#cfe6ff" stop-opacity="0.12"/>
@@ -526,6 +529,7 @@
 <path d="M-2,-74 C-0.9,-73.6 0.9,-73.6 2,-74" fill="none" stroke="#5d3b27" stroke-width="0.4" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 <ellipse cx="0.5" cy="-73.1" rx="1" ry="0.32" fill="#fff" opacity="0.22"/>
 <path d="M7.1,-87 C7.4,-84 7,-80 6,-77 M5.9,-76.4 C5.1,-74.8 4.4,-73.6 3.5,-72.8" fill="none" stroke="#0af8e7" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<g clip-path="url(#face-monocle-piercings-wide-fem-idle-helmet-wide-face-window)">
 <g data-acc="monocle">
 <circle cx="3.1" cy="-81.7" r="2.4" fill="url(#face-monocle-piercings-wide-fem-idle-acc-eyes-monocle-glass)" stroke="#c9a24a" stroke-width="0.6"/>
 <path d="M1.9,-83.2 C2.7,-83.6 3.7,-83.6 4.3,-83" fill="none" stroke="#ffffff" stroke-width="0.35" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -537,6 +541,7 @@
 <circle cx="5" cy="-84.2" r="0.45" fill="#d6dde5"/>
 <circle cx="1.6" cy="-73" r="0.9" fill="none" stroke="#0a0d12" stroke-width="0.7"/>
 <circle cx="1.6" cy="-73" r="0.9" fill="none" stroke="#d6dde5" stroke-width="0.35"/>
+</g>
 </g>
 <path d="M-6.8,-87.6 L6.8,-87.6 L6.6,-85.4 C4.8,-85.6 2.6,-86.2 0.8,-87.2 L-0.8,-87.2 C-2.6,-86.2 -4.8,-85.6 -6.6,-85.4 Z" fill="url(#face-monocle-piercings-wide-fem-idle-hair)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
 <path d="M0,-96.4 C9.6,-96.4 14.2,-90.6 14.2,-82.8 L14.4,-75.4 C14,-71.6 11.2,-69.2 7.4,-68.4 L4.8,-68.2 L4.8,-71.6 C6.8,-73.2 8,-75.8 8.2,-79 L8.4,-87 L-8.4,-87 L-8.2,-79 C-8,-75.8 -6.8,-73.2 -4.8,-71.6 L-4.8,-68.2 L-7.4,-68.4 C-11.2,-69.2 -14,-71.6 -14.4,-75.4 L-14.2,-82.8 C-14.2,-90.6 -9.6,-96.4 0,-96.4 Z" fill="url(#face-monocle-piercings-wide-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
