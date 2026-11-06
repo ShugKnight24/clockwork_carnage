@@ -58,7 +58,7 @@ test("locked preset shows a toast and leaves the character unchanged", async ({ 
   const snapshot = () =>
     page.evaluate(() => {
       const ch = window.ccDebug.game.character;
-      return JSON.stringify({ badge: ch.badge, accessories: ch.accessories, armorIndex: ch.armorIndex });
+      return JSON.stringify({ badge: ch.badge, accessories: ch.accessories, armor: ch.armor });
     });
   const before = await snapshot();
   // Juggernaut (preset 1) needs the tier-3 "heavy" armour, which a fresh save
@@ -292,16 +292,16 @@ test("saved looks restore an outfit; the cape comes off; locked presets fold awa
   expect(await room(page).locator(".preset[data-preset]:visible").count()).toBeGreaterThan(shown);
 
   await tab(page, "colors").click();
-  await opt(page, "colorIndex", 3).click();
+  await opt(page, "color", 3).click();
   await room(page).locator(".save-look").click();
-  await opt(page, "colorIndex", 1).click();
-  expect((await ch()).colorIndex).toBe(1);
+  await opt(page, "color", 1).click();
+  expect((await ch()).color).toBe("midnight_blue");
   await room(page).locator(".look .preset").first().click();
-  expect((await ch()).colorIndex).toBe(3);
+  expect((await ch()).color).toBe("void_purple");
 
   await tab(page, "gear").click();
-  await opt(page, "capeIndex", 1).click();
-  expect((await ch()).capeIndex).toBe(1);
+  await opt(page, "cape", 1).click();
+  expect((await ch()).cape).toBe("none");
   await expect(room(page).locator(".figure .ag-cape path")).toHaveCount(0);
 
   await room(page).locator(".look").first().hover();

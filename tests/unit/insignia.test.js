@@ -79,7 +79,7 @@ describe("insignia", () => {
 
   it("resolveTreatment reads the armour, and the variant when worn", () => {
     const i = ARMOR_STYLES.findIndex((a) => a.variant.badgeTreatment.metal !== a.badgeTreatment.metal);
-    const base = { ...DEFAULT_CHARACTER, armorIndex: i, armorVariant: 0 };
+    const base = { ...DEFAULT_CHARACTER, armor: ARMOR_STYLES[i].id, armorVariant: 0 };
     expect(resolveTreatment(base)).toEqual(ARMOR_STYLES[i].badgeTreatment);
     expect(resolveTreatment({ ...base, armorVariant: 1 })).toEqual(ARMOR_STYLES[i].variant.badgeTreatment);
   });

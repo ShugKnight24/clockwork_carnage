@@ -14,10 +14,9 @@
 
 import { buildAgentParts } from "../rendering/svg-art/agent-rig.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
-import { CHARACTER_COLORS, HELMET_STYLES } from "../data/cosmetics.js";
 import { COLOR } from "./design-tokens.js";
 import { isRealisticArt } from "../rendering/art-style.js";
-import { lookKey } from "../core/character-fields.js";
+import { lookKey, pieceOf } from "../core/character-fields.js";
 
 const INK = COLOR.ink;
 const BOX = [-24, -104.5, 48, 48];
@@ -48,8 +47,8 @@ export function characterLayers(character) {
     const k = Math.round(p.width * 100) / 100;
     const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
     const base = `<g${tf}>${p.back}${p.cape}${p.body}${p.glow}</g>${p.head}`;
-    const accent = (CHARACTER_COLORS[c.colorIndex | 0] || CHARACTER_COLORS[0]).accent;
-    const helmet = (HELMET_STYLES[c.helmetIndex | 0] || HELMET_STYLES[0]).id;
+    const accent = pieceOf(c, "color").accent;
+    const helmet = pieceOf(c, "helmet").id;
     _char = {
       key,
       accent,

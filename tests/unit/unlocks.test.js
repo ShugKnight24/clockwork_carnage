@@ -15,7 +15,9 @@ import {
   resetUnlockStore,
   withinReach,
   droppableItems,
+  migrateUnlockStore,
 } from "../../src/systems/unlocks.js";
+import { LEGACY_LOOK_INDICES } from "../../src/core/legacy-look-indices.js";
 import { LOADOUT_CLASSES, ARMOR_STYLES, HELMET_STYLES, DEFAULT_CHARACTER, TIER_UNLOCKS } from "../../src/data/cosmetics.js";
 import { SYMBOLS, FINISHES, BADGE_PRESETS, byId, indexOfId } from "../../src/data/badges.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
@@ -46,51 +48,51 @@ describe("unlock rules", () => {
 
   it("fresh agent: recruit and tier I only", () => {
     const ctx = unlockContext();
-    expect(unlockState("loadoutIndex", 0, ctx).unlocked).toBe(true);
-    for (const i of [GUN, ENF, PHA]) expect(unlockState("loadoutIndex", i, ctx).unlocked).toBe(false);
-    expect(unlockState("armorIndex", 0, ctx).unlocked).toBe(true);
-    expect(unlockState("armorIndex", MK2, ctx).unlocked).toBe(false);
-    expect(unlockState("armorIndex", MK3, ctx).unlocked).toBe(false);
+    expect(unlockState("loadout", 0, ctx).unlocked).toBe(true);
+    for (const i of [GUN, ENF, PHA]) expect(unlockState("loadout", i, ctx).unlocked).toBe(false);
+    expect(unlockState("armor", 0, ctx).unlocked).toBe(true);
+    expect(unlockState("armor", MK2, ctx).unlocked).toBe(false);
+    expect(unlockState("armor", MK3, ctx).unlocked).toBe(false);
     expect(earnedIds(ctx)).toEqual([]);
   });
 
   it("Gunslinger counts kills with both pistols", () => {
     const partial = unlockContext({ stats: { weaponKills: { 0: 25, 6: 3, 1: 99 } } });
-    const st = unlockState("loadoutIndex", GUN, partial);
+    const st = unlockState("loadout", GUN, partial);
     expect(st.unlocked).toBe(false);
     expect(st.value).toBe(28);
     expect(st.hint).toBe("Score 40 pistol kills · 28/40 kills");
-    expect(unlockState("loadoutIndex", GUN, unlockContext({ stats: { weaponKills: { 0: 30, 6: 10 } } })).unlocked).toBe(true);
+    expect(unlockState("loadout", GUN, unlockContext({ stats: { weaponKills: { 0: 30, 6: 10 } } })).unlocked).toBe(true);
   });
 
   it("Enforcer needs three campaign levels cleared, from stats, an in-progress save or a finished campaign", () => {
-    const st = unlockState("loadoutIndex", ENF, unlockContext({ stats: { campaignLevelsCleared: 2 } }));
+    const st = unlockState("loadout", ENF, unlockContext({ stats: { campaignLevelsCleared: 2 } }));
     expect(st.hint).toBe("Clear 3 campaign levels · 2/3 levels");
     expect(st.unlocked).toBe(false);
-    expect(unlockState("loadoutIndex", ENF, unlockContext({ campaignSaveLevel: 4 })).unlocked).toBe(true);
-    expect(unlockState("loadoutIndex", ENF, unlockContext({ stats: { campaignComplete: true } })).unlocked).toBe(true);
+    expect(unlockState("loadout", ENF, unlockContext({ campaignSaveLevel: 4 })).unlocked).toBe(true);
+    expect(unlockState("loadout", ENF, unlockContext({ stats: { campaignComplete: true } })).unlocked).toBe(true);
   });
 
   it("Phantom unlocks at 50 dashes and caps progress at the target", () => {
-    expect(unlockState("loadoutIndex", PHA, unlockContext({ stats: { totalDashes: 49 } })).unlocked).toBe(false);
-    const st = unlockState("loadoutIndex", PHA, unlockContext({ stats: { totalDashes: 80 } }));
+    expect(unlockState("loadout", PHA, unlockContext({ stats: { totalDashes: 49 } })).unlocked).toBe(false);
+    const st = unlockState("loadout", PHA, unlockContext({ stats: { totalDashes: 80 } }));
     expect(st.unlocked).toBe(true);
     expect(st.value).toBe(50);
   });
 
   it("tier II takes Act 1 or arena round 10; tier III takes Act 2 or arena round 15", () => {
     // The tutorial and most of Act I no longer open MK II.
-    expect(unlockState("helmetIndex", 1, unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(false);
-    expect(unlockState("helmetIndex", 1, unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 7 })).unlocked).toBe(false);
-    expect(unlockState("helmetIndex", 1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
-    expect(unlockState("armorIndex", MK2, unlockContext({ stats: { highestArenaRound: 10 } })).unlocked).toBe(true);
+    expect(unlockState("helmet", 1, unlockContext({ stats: { tutorialComplete: true } })).unlocked).toBe(false);
+    expect(unlockState("helmet", 1, unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 7 })).unlocked).toBe(false);
+    expect(unlockState("helmet", 1, unlockContext({ stats: { campaignActsCleared: 1 } })).unlocked).toBe(true);
+    expect(unlockState("armor", MK2, unlockContext({ stats: { highestArenaRound: 10 } })).unlocked).toBe(true);
     const actOne = unlockContext({ campaignSaveAct: 2 });
-    expect(unlockState("armorIndex", MK2, actOne).unlocked).toBe(true);
-    expect(unlockState("armorIndex", MK3, actOne).unlocked).toBe(false);
-    expect(unlockState("armorIndex", MK3, unlockContext({ stats: { campaignActsCleared: 2 } })).unlocked).toBe(true);
-    expect(unlockState("armorIndex", MK3, unlockContext({ stats: { highestArenaRound: 15 } })).unlocked).toBe(true);
+    expect(unlockState("armor", MK2, actOne).unlocked).toBe(true);
+    expect(unlockState("armor", MK3, actOne).unlocked).toBe(false);
+    expect(unlockState("armor", MK3, unlockContext({ stats: { campaignActsCleared: 2 } })).unlocked).toBe(true);
+    expect(unlockState("armor", MK3, unlockContext({ stats: { highestArenaRound: 15 } })).unlocked).toBe(true);
     const close = unlockContext({ stats: { highestArenaRound: 14 }, campaignSaveAct: 2 });
-    const st = unlockState("armorIndex", MK3, close);
+    const st = unlockState("armor", MK3, close);
     expect(st.unlocked).toBe(false);
     // Reports the branch closest to done (14/15 rounds beats 1/2 acts).
     expect(st.hint).toBe("Clear Act 2 or survive arena round 15 · 14/15 rounds");
@@ -99,32 +101,32 @@ describe("unlock rules", () => {
   it("Corpsman's rule is the act its label names", () => {
     const COR = idx(LOADOUT_CLASSES, "corpsman");
     expect(LOADOUT_CLASSES[COR].unlock).toMatchObject({ type: "campaignActs", count: 2, label: "Clear Act 2 of the campaign" });
-    expect(unlockState("loadoutIndex", COR, unlockContext({ campaignSaveAct: 2, campaignSaveLevel: 6 })).unlocked).toBe(false);
-    expect(unlockState("loadoutIndex", COR, unlockContext({ campaignSaveAct: 3 })).unlocked).toBe(true);
+    expect(unlockState("loadout", COR, unlockContext({ campaignSaveAct: 2, campaignSaveLevel: 6 })).unlocked).toBe(false);
+    expect(unlockState("loadout", COR, unlockContext({ campaignSaveAct: 3 })).unlocked).toBe(true);
   });
 
   it("grandfathered gear stays usable", () => {
-    const ctx = unlockContext({ owned: { [`loadoutIndex:${ENF}`]: true } });
-    expect(unlockState("loadoutIndex", ENF, ctx).unlocked).toBe(true);
+    const ctx = unlockContext({ owned: { [`loadout:#enforcer`]: true } });
+    expect(unlockState("loadout", ENF, ctx).unlocked).toBe(true);
     // but it is not "earned", so no toast
-    expect(earnedIds(ctx)).not.toContain(`loadoutIndex:${ENF}`);
+    expect(earnedIds(ctx)).not.toContain(`loadout:#enforcer`);
   });
 
   it("newlyEarned skips what was already announced", () => {
     const ctx = unlockContext({ stats: { campaignActsCleared: 1, totalDashes: 60 } });
     const all = earnedIds(ctx);
-    expect(all).toContain(`loadoutIndex:${PHA}`);
-    expect(all.some((id) => id.startsWith("armorIndex:"))).toBe(true);
-    const seen = Object.fromEntries(all.filter((id) => id !== `loadoutIndex:${PHA}`).map((id) => [id, true]));
-    expect(newlyEarned(ctx, seen)).toEqual([`loadoutIndex:${PHA}`]);
-    expect(describeId(`loadoutIndex:${PHA}`)).toEqual({ kind: "Loadout class", name: "Phantom", tier: 0 });
+    expect(all).toContain(`loadout:#phantom`);
+    expect(all.some((id) => id.startsWith("armor:#"))).toBe(true);
+    const seen = Object.fromEntries(all.filter((id) => id !== `loadout:#phantom`).map((id) => [id, true]));
+    expect(newlyEarned(ctx, seen)).toEqual([`loadout:#phantom`]);
+    expect(describeId(`loadout:#phantom`)).toEqual({ kind: "Loadout class", name: "Phantom", tier: 0 });
   });
 
   it("unknown rule types never unlock and bad stats are tolerated", () => {
     expect(evaluateRule({ type: "nope" }, unlockContext()).met).toBe(false);
     const ctx = unlockContext({ stats: { weaponKills: null, totalDashes: "x" } });
-    expect(unlockState("loadoutIndex", PHA, ctx).value).toBe(0);
-    expect(ruleFor("badgeIndex", 1)).toBe(null);
+    expect(unlockState("loadout", PHA, ctx).value).toBe(0);
+    expect(ruleFor("badge", 1)).toBe(null);
   });
 });
 
@@ -199,7 +201,7 @@ describe("badge and accessory unlocks", () => {
   it("ownership of id-based items survives table reordering", () => {
     const i = indexOfId(SYMBOLS, "lordslayer");
     expect(ownedKey("badge.symbol", i)).toBe("badge.symbol:#lordslayer");
-    expect(ownedKey("armorIndex", 2)).toBe("armorIndex:2");
+    expect(ownedKey("armor", 2)).toBe(`armor:#${ARMOR_STYLES[2].id}`);
     const ctx = unlockContext({ owned: { "badge.symbol:#lordslayer": true } });
     expect(unlockState("badge.symbol", i, ctx).unlocked).toBe(true);
   });
@@ -224,12 +226,12 @@ describe("badge and accessory unlocks", () => {
 
   it("sanitizeLocked resets a locked flat pick to the first earned one, and keeps an owned one", () => {
     const ctx = unlockContext();
-    const locked = ARMOR_STYLES.findIndex((_, i) => !unlockState("armorIndex", i, ctx).unlocked);
+    const locked = ARMOR_STYLES.findIndex((_, i) => !unlockState("armor", i, ctx).unlocked);
     expect(locked).toBeGreaterThan(0);
-    const ch = { ...cloneLook(DEFAULT_CHARACTER), armorIndex: locked };
-    expect(sanitizeLocked(ch, ctx).armorIndex).toBe(0);
-    const owned = unlockContext({ owned: { [ownedKey("armorIndex", locked)]: true } });
-    expect(sanitizeLocked(ch, owned).armorIndex).toBeUndefined();
+    const ch = { ...cloneLook(DEFAULT_CHARACTER), armor: ARMOR_STYLES[locked].id };
+    expect(sanitizeLocked(ch, ctx).armor).toBe(ARMOR_STYLES[0].id);
+    const owned = unlockContext({ owned: { [ownedKey("armor", locked)]: true } });
+    expect(sanitizeLocked(ch, owned).armor).toBeUndefined();
     expect(sanitizeLocked(cloneLook(DEFAULT_CHARACTER), ctx)).toEqual({});
   });
 
@@ -249,10 +251,10 @@ describe("gear drop reach", () => {
 
   it("drops only the act in progress's tier, never a later one", () => {
     const actOne = unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 2 });
-    expect(withinReach(ruleFor("helmetIndex", helm(2)), actOne)).toBe(true);
-    expect(withinReach(ruleFor("helmetIndex", helm(3)), actOne)).toBe(false);
+    expect(withinReach(ruleFor("helmet", helm(2)), actOne)).toBe(true);
+    expect(withinReach(ruleFor("helmet", helm(3)), actOne)).toBe(false);
     const actTwo = unlockContext({ campaignSaveAct: 2 });
-    expect(withinReach(ruleFor("helmetIndex", helm(3)), actTwo)).toBe(true);
+    expect(withinReach(ruleFor("helmet", helm(3)), actTwo)).toBe(true);
     // Act emblems follow the same reach: Act 3's waits for Act 3.
     expect(withinReach(ruleFor("badge.symbol", indexOfId(SYMBOLS, "act3")), actTwo)).toBe(false);
   });
@@ -263,7 +265,7 @@ describe("gear drop reach", () => {
     expect(withinReach({ type: "dashes", count: 50 }, ctx)).toBe(false);
     const pool = droppableItems(unlockContext({ campaignSaveAct: 1 }));
     expect(pool.length).toBeGreaterThan(0);
-    expect(pool.some(({ key, index }) => key === "helmetIndex" && HELMET_STYLES[index].id === "reaper")).toBe(false);
+    expect(pool.some(({ key, index }) => key === "helmet" && HELMET_STYLES[index].id === "reaper")).toBe(false);
     for (const { key, index } of pool) expect(ruleFor(key, index)).not.toBe(TIER_UNLOCKS[3]);
   });
 
@@ -288,15 +290,15 @@ describe("unlock store pacing migration", () => {
 
   it("keeps gear earned under the earlier tier rules", () => {
     // A tutorial graduate who had MK II announced under the old rules.
-    const id = ownedKey("armorIndex", MK2);
+    const id = ownedKey("armor", MK2);
     localStorage.setItem("cc_unlocks", JSON.stringify({ owned: { "acc.back:#antenna": true }, seen: { [id]: true }, v2: true }));
     const s = ensureUnlockStore(null, { tutorialComplete: true }, {});
     expect(s.paced).toBe(true);
     expect(s.owned[id]).toBe(true);
     expect(s.owned["acc.back:#antenna"]).toBe(true);
     const ctx = unlockContext({ stats: { tutorialComplete: true }, owned: s.owned });
-    expect(unlockState("armorIndex", MK2, ctx).unlocked).toBe(true);
-    expect(unlockState("armorIndex", MK3, ctx).unlocked).toBe(false);
+    expect(unlockState("armor", MK2, ctx).unlocked).toBe(true);
+    expect(unlockState("armor", MK3, ctx).unlocked).toBe(false);
     expect(JSON.parse(store.cc_unlocks).paced).toBe(true);
   });
 });
@@ -328,5 +330,89 @@ describe("unlock store v2 migration", () => {
     expect(earnedVirtual.length).toBeGreaterThan(0);
     for (const id of earnedVirtual) expect(store2.seen[id]).toBe(true);
     expect(newlyEarned(ctx, store2.seen)).toEqual([]);
+  });
+});
+
+describe("unlock store v3 migration (index keys to ids)", () => {
+  const store = {};
+  beforeEach(() => {
+    for (const k of Object.keys(store)) delete store[k];
+    vi.stubGlobal("localStorage", {
+      getItem: (k) => store[k] ?? null,
+      setItem: (k, v) => { store[k] = v; },
+      removeItem: (k) => { delete store[k]; },
+    });
+    resetUnlockStore();
+  });
+
+  // The shipped positions, spelled out: these keys are what real stores hold.
+  const legacy = (field, id) => `${field}Index:${LEGACY_LOOK_INDICES[`${field}Index`].indexOf(id)}`;
+
+  it("migrates owned and seen index keys to ids", () => {
+    const old = {
+      owned: { [legacy("helmet", "reaper")]: true, [legacy("loadout", "phantom")]: true, "acc.back:#antenna": true },
+      seen: { [legacy("armor", "howitzer")]: true, [legacy("camo", "urban")]: true, [legacy("color", "eclipse")]: true, "badge.symbol:#lordslayer": true },
+      v2: true,
+      paced: true,
+    };
+    const s = migrateUnlockStore(structuredClone(old));
+    expect(s.v3).toBe(true);
+    expect(s.owned).toEqual({ "helmet:#reaper": true, "loadout:#phantom": true, "acc.back:#antenna": true });
+    expect(s.seen).toEqual({ "armor:#howitzer": true, "camo:#urban": true, "color:#eclipse": true, "badge.symbol:#lordslayer": true });
+    expect(s.v2).toBe(true);
+    expect(s.paced).toBe(true);
+  });
+
+  it("runs once", () => {
+    const once = migrateUnlockStore({ owned: { [legacy("helmet", "reaper")]: true }, seen: {}, v2: true, paced: true });
+    expect(once.owned).toEqual({ "helmet:#reaper": true });
+    const twice = migrateUnlockStore(structuredClone(once));
+    expect(twice).toEqual(once);
+    // A v3 store is never read as positions, even if a key looks like one.
+    const v3 = { owned: { [legacy("helmet", "angular")]: true }, seen: {}, v2: true, paced: true, v3: true };
+    expect(migrateUnlockStore(structuredClone(v3))).toEqual(v3);
+  });
+
+  it("keeps id keys untouched", () => {
+    const s = migrateUnlockStore({ owned: { "badge.symbol:#x": true, "armorVariant:#ghost": true }, seen: { "acc.legs:#greaves": true } });
+    expect(s.owned).toEqual({ "badge.symbol:#x": true, "armorVariant:#ghost": true });
+    expect(s.seen).toEqual({ "acc.legs:#greaves": true });
+  });
+
+  it("drops an index key past the end of its shipped table", () => {
+    const past = `${legacy("helmet", "wide").split(":")[0]}:99`;
+    const s = migrateUnlockStore({ owned: { [past]: true, [legacy("helmet", "wide")]: true }, seen: {} });
+    expect(s.owned).toEqual({ "helmet:#wide": true });
+  });
+
+  // Review Focus 2: same pieces owned, and no unlock toast replays for them.
+  it("a player who owned gear by index owns the same pieces after, with nothing to announce", () => {
+    const stats = { tutorialComplete: true };
+    const ctx0 = unlockContext({ stats });
+    // What the old build wrote: grandfathered MK III gear, and every earned
+    // unlock (MK II from the tutorial) announced, all keyed by position.
+    const mk3 = ARMOR_STYLES.filter((a) => a.tier === 3).map((a) => a.id);
+    const owned = Object.fromEntries(mk3.map((id) => [legacy("armor", id), true]));
+    const seen = Object.fromEntries(
+      earnedIds(ctx0).map((id) => {
+        const [key, rest] = id.split(":");
+        return LOCK[key] && !key.includes(".") ? [`${key}Index:${LEGACY_LOOK_INDICES[`${key}Index`].indexOf(rest.slice(1))}`, true] : [id, true];
+      }),
+    );
+    expect(Object.keys(seen).some((k) => /Index:\d+$/.test(k))).toBe(true);
+    store.cc_unlocks = JSON.stringify({ owned, seen, v2: true, paced: true });
+
+    const s = ensureUnlockStore(null, stats, {});
+    expect(s.v3).toBe(true);
+    expect(JSON.parse(store.cc_unlocks).v3).toBe(true);
+    const ctx = unlockContext({ stats, owned: s.owned });
+    for (const id of mk3) expect(unlockState("armor", idx(ARMOR_STYLES, id), ctx).unlocked, id).toBe(true);
+    expect(unlockState("helmet", HELMET_STYLES.findIndex((h) => h.tier === 3), ctx).unlocked).toBe(false);
+    expect(newlyEarned(ctx, s.seen)).toEqual([]);
+    expect(Object.keys({ ...s.owned, ...s.seen }).filter((k) => /Index:/.test(k))).toEqual([]);
+  });
+
+  it("a fresh store starts as v3", () => {
+    expect(ensureUnlockStore(null, {}, {}).v3).toBe(true);
   });
 });

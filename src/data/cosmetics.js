@@ -2,6 +2,7 @@
 
 import { DEFAULT_BADGE } from "./badges.js";
 import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, accessoryItem } from "./accessories.js";
+import { RETIRED_PIECES } from "./retired-pieces.js";
 
 export const CHARACTER_COLORS = [
   {
@@ -328,9 +329,9 @@ export const HELMET_STYLES = [
   { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false },
 ];
 
-/** Whether the helmet at this index wears the visor pick (HELMET_STYLES[].visor). */
-export function takesVisor(helmetIndex) {
-  return (HELMET_STYLES[helmetIndex || 0] || HELMET_STYLES[0]).visor !== false;
+/** Whether this helmet wears the visor pick (HELMET_STYLES[].visor). */
+export function takesVisor(helmetId) {
+  return pieceIn(HELMET_STYLES, "helmet", helmetId).visor !== false;
 }
 
 export const VISOR_STYLES = [
@@ -509,6 +510,26 @@ export const VOICE_PROFILES = [
   { id: "synthetic", name: "Synthetic", desc: "Vocoder edge, chrono-modulated", pitch: 1.45 },
 ];
 
+const ID_MAPS = new WeakMap();
+
+/**
+ * The entry a stored id names in a look table: the id itself, else the piece
+ * that replaced it (RETIRED_PIECES), else the table's first entry, so an id
+ * the tables do not know (a cut piece, a newer build's save) draws the
+ * default rather than nothing. Prefer `pieceOf(ch, field)` in
+ * src/core/character-fields.js; this is the same lookup for code that holds a
+ * table rather than a character.
+ * @param {object[]} table
+ * @param {string} field look field name, for the retired map
+ * @param {unknown} id
+ */
+export function pieceIn(table, field, id) {
+  let map = ID_MAPS.get(table);
+  if (!map) ID_MAPS.set(table, (map = new Map(table.map((e) => [e.id, e]))));
+  if (typeof id !== "string") return table[0];
+  return map.get(id) ?? map.get(RETIRED_PIECES[field]?.[id]) ?? table[0];
+}
+
 /**
  * The starting look. `badge` and `accessories` are the shared singletons from
  * badges.js / accessories.js, so a spread of this record aliases them — build a
@@ -516,26 +537,25 @@ export const VOICE_PROFILES = [
  */
 export const DEFAULT_CHARACTER = {
   name: "Agent",
-  colorIndex: 0,
-  skinToneIndex: 0,
-  hairIndex: 0,
-  eyeIndex: 0,
-  armorIndex: 0,
-  frameIndex: 0,
-  bodyIndex: 0,
-  camoIndex: 0,
-  capeIndex: 0,
-  helmetIndex: 0,
-  visorIndex: 0,
-  shoulderIndex: 0,
-  badgeIndex: 0,
-  weaponSkinIndex: 0,
+  color: CHARACTER_COLORS[0].id,
+  skinTone: SKIN_TONES[0].id,
+  hair: HAIR_STYLES[0].id,
+  eye: EYE_COLORS[0].id,
+  armor: ARMOR_STYLES[0].id,
+  frame: BODY_FRAMES[0].id,
+  body: BODY_TYPES[0].id,
+  camo: CAMO_STYLES[0].id,
+  cape: CAPE_STYLES[0].id,
+  helmet: HELMET_STYLES[0].id,
+  visor: VISOR_STYLES[0].id,
+  shoulder: SHOULDER_STYLES[0].id,
+  weaponSkin: WEAPON_SKINS[0].id,
   // Per-weapon finishes and the player's own (src/data/weapon-skins.js).
   weaponFinishes: {},
   customSkins: [],
-  loadoutIndex: 0,
-  backstoryIndex: 0,
-  voiceIndex: 0,
+  loadout: LOADOUT_CLASSES[0].id,
+  backstory: BACKSTORIES[0].id,
+  voice: VOICE_PROFILES[0].id,
   badge: DEFAULT_BADGE,
   accessories: DEFAULT_ACCESSORIES,
   armorVariant: 0,
@@ -546,10 +566,10 @@ export const DEFAULT_CHARACTER = {
  * summed. Gear uses the same bonus vocabulary as origins (see BACKSTORIES).
  */
 export const GEAR_SLOTS = [
-  ["armorIndex", () => ARMOR_STYLES],
-  ["helmetIndex", () => HELMET_STYLES],
-  ["visorIndex", () => VISOR_STYLES],
-  ["shoulderIndex", () => SHOULDER_STYLES],
+  ["armor", () => ARMOR_STYLES],
+  ["helmet", () => HELMET_STYLES],
+  ["visor", () => VISOR_STYLES],
+  ["shoulder", () => SHOULDER_STYLES],
 ];
 
 /**
@@ -566,9 +586,9 @@ export function gearBonuses(character) {
     if (!bonuses) return;
     for (const [stat, value] of Object.entries(bonuses)) out[stat] = (out[stat] || 0) + value;
   };
-  for (const [key, table] of GEAR_SLOTS) {
-    if (key === "visorIndex" && !takesVisor(character.helmetIndex)) continue;
-    add(table()[character[key] || 0]?.bonuses);
+  for (const [field, table] of GEAR_SLOTS) {
+    if (field === "visor" && !takesVisor(character.helmet)) continue;
+    add(pieceIn(table(), field, character[field]).bonuses);
   }
   const acc = character.accessories || {};
   for (const { id } of ACCESSORY_SLOTS) add(accessoryItem(id, acc[id])?.bonuses);

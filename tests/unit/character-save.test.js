@@ -1,25 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { saveCharacter, loadCharacter } from "../../src/core/save-system.js";
-import {
-  DEFAULT_CHARACTER,
-  CHARACTER_COLORS,
-  SKIN_TONES,
-  HAIR_STYLES,
-  EYE_COLORS,
-  ARMOR_STYLES,
-  HELMET_STYLES,
-  VISOR_STYLES,
-  SHOULDER_STYLES,
-  BADGES,
-  WEAPON_SKINS,
-  LOADOUT_CLASSES,
-  BACKSTORIES,
-  VOICE_PROFILES,
-  BODY_FRAMES,
-  CAPE_STYLES,
-  BODY_TYPES,
-  CAMO_STYLES,
-} from "../../src/data/cosmetics.js";
+import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
+import { LOOK_TABLES } from "../../src/core/character-fields.js";
 
 const store = {};
 const mockStorage = {
@@ -34,44 +16,29 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-/** The option list each index field picks from. */
-const OPTION_LISTS = {
-  colorIndex: CHARACTER_COLORS,
-  skinToneIndex: SKIN_TONES,
-  hairIndex: HAIR_STYLES,
-  eyeIndex: EYE_COLORS,
-  armorIndex: ARMOR_STYLES,
-  helmetIndex: HELMET_STYLES,
-  visorIndex: VISOR_STYLES,
-  shoulderIndex: SHOULDER_STYLES,
-  badgeIndex: BADGES,
-  weaponSkinIndex: WEAPON_SKINS,
-  loadoutIndex: LOADOUT_CLASSES,
-  backstoryIndex: BACKSTORIES,
-  voiceIndex: VOICE_PROFILES,
-  frameIndex: BODY_FRAMES,
-  capeIndex: CAPE_STYLES,
-  bodyIndex: BODY_TYPES,
-  camoIndex: CAMO_STYLES,
-};
+const lookFields = Object.keys(LOOK_TABLES);
+const last = (field) => LOOK_TABLES[field].at(-1).id;
 
-const indexFields = Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"));
-
-/** A character with every index pushed to the last valid option. */
+/** A character with every look field on the last option of its table. */
 function maxedCharacter() {
   const ch = { ...DEFAULT_CHARACTER, name: "Vex" };
-  for (const key of indexFields) ch[key] = OPTION_LISTS[key].length - 1;
+  for (const field of lookFields) ch[field] = last(field);
   return ch;
 }
 
 describe("character save/load", () => {
-  it("every index field has an option list and a clamp bound", () => {
-    // A field added to DEFAULT_CHARACTER without a bound in loadCharacter lets a
-    // corrupt save hand the renderer an out-of-range index.
-    for (const key of indexFields) {
-      expect(OPTION_LISTS[key], `no option list for ${key}`).toBeDefined();
-      expect(OPTION_LISTS[key].length).toBeGreaterThan(0);
-    }
+  it("every look field has a table and a default from it", () => {
+    // A field added to DEFAULT_CHARACTER without a table lets a corrupt save
+    // hand the renderer an id nothing checked.
+    const stringFields = Object.keys(DEFAULT_CHARACTER).filter((k) => typeof DEFAULT_CHARACTER[k] === "string" && k !== "name");
+    expect(stringFields.sort()).toEqual([...lookFields].sort());
+    for (const field of lookFields) expect(DEFAULT_CHARACTER[field]).toBe(LOOK_TABLES[field][0].id);
+    expect(Object.keys(DEFAULT_CHARACTER).filter((k) => k.endsWith("Index"))).toEqual([]);
+  });
+
+  it("writes version 2", () => {
+    saveCharacter(DEFAULT_CHARACTER);
+    expect(JSON.parse(store.cc_character).version).toBe(2);
   });
 
   it("round-trips every field, including face, hair, eyes, origin and voice", () => {
@@ -83,38 +50,32 @@ describe("character save/load", () => {
     expect(loaded).toEqual(saved);
   });
 
-  it.each(indexFields)("clamps %s above the last option", (key) => {
-    saveCharacter({ ...DEFAULT_CHARACTER, [key]: 9999 });
+  it.each(lookFields)("loads an unknown %s id as the default", (field) => {
+    saveCharacter({ ...maxedCharacter(), [field]: "no_such_piece" });
     const loaded = { ...DEFAULT_CHARACTER };
     loadCharacter(loaded);
-    expect(loaded[key]).toBe(OPTION_LISTS[key].length - 1);
-  });
-
-  it.each(indexFields)("clamps a negative %s to the first option", (key) => {
-    saveCharacter({ ...DEFAULT_CHARACTER, [key]: -5 });
-    const loaded = { ...DEFAULT_CHARACTER };
-    loadCharacter(loaded);
-    expect(loaded[key]).toBe(0);
+    expect(loaded[field]).toBe(DEFAULT_CHARACTER[field]);
+    for (const other of lookFields) if (other !== field) expect(loaded[other]).toBe(last(other));
   });
 
   it("keeps the default for a field the save is missing", () => {
     const partial = maxedCharacter();
-    delete partial.voiceIndex;
-    delete partial.hairIndex;
+    delete partial.voice;
+    delete partial.hair;
     saveCharacter(partial);
 
     const loaded = { ...DEFAULT_CHARACTER };
     loadCharacter(loaded);
-    expect(loaded.voiceIndex).toBe(DEFAULT_CHARACTER.voiceIndex);
-    expect(loaded.hairIndex).toBe(DEFAULT_CHARACTER.hairIndex);
-    expect(loaded.eyeIndex).toBe(EYE_COLORS.length - 1);
+    expect(loaded.voice).toBe(DEFAULT_CHARACTER.voice);
+    expect(loaded.hair).toBe(DEFAULT_CHARACTER.hair);
+    expect(loaded.eye).toBe(last("eye"));
   });
 
   it("ignores a field saved with the wrong type", () => {
-    saveCharacter({ ...DEFAULT_CHARACTER, voiceIndex: "synthetic", name: 42 });
+    saveCharacter({ ...DEFAULT_CHARACTER, voice: 3, name: 42 });
     const loaded = { ...DEFAULT_CHARACTER };
     loadCharacter(loaded);
-    expect(loaded.voiceIndex).toBe(DEFAULT_CHARACTER.voiceIndex);
+    expect(loaded.voice).toBe(DEFAULT_CHARACTER.voice);
     expect(loaded.name).toBe(DEFAULT_CHARACTER.name);
   });
 
@@ -140,15 +101,6 @@ describe("character save/load", () => {
 });
 
 describe("badge and accessory persistence", () => {
-  it("migrates a pre-badge-object save", () => {
-    store.cc_character = JSON.stringify({ ...DEFAULT_CHARACTER, badge: undefined, accessories: undefined, badgeIndex: 5 });
-    const ch = structuredClone(DEFAULT_CHARACTER);
-    loadCharacter(ch);
-    expect(ch.badge.layers[0].symbol).toBe(BADGES[5].icon);
-    expect(ch.badge.placements).toContain("chest");
-    expect(ch.accessories.back).toBe("none");
-  });
-
   it("round-trips a full custom badge and accessories", () => {
     const ch = structuredClone(DEFAULT_CHARACTER);
     ch.badge = { layers: [{ frame: "cog", symbol: "guard", enamel: "oxblood", metal: "gold", x: 0, y: 0, scale: 1, rot: 0 }], finish: "patch", placements: ["chest", "helmet"] };
@@ -160,14 +112,6 @@ describe("badge and accessory persistence", () => {
     expect(loaded.badge).toEqual(ch.badge);
     expect(loaded.accessories).toEqual(ch.accessories);
     expect(loaded.armorVariant).toBe(1);
-  });
-
-  it("a saved badge object wins over a stale badgeIndex", () => {
-    const badge = { layers: [{ frame: "hex", symbol: "rift", enamel: "violet", metal: "steel", x: 0, y: 0, scale: 1, rot: 0 }], finish: "insignia", placements: ["forearm"] };
-    store.cc_character = JSON.stringify({ ...DEFAULT_CHARACTER, badgeIndex: 2, badge });
-    const ch = structuredClone(DEFAULT_CHARACTER);
-    loadCharacter(ch);
-    expect(ch.badge).toEqual(badge);
   });
 
   it("clamps armorVariant to 0..1", () => {

@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "../../src/core/character-normalize.js";
 import { DEFAULT_BADGE } from "../../src/data/badges.js";
-import { BADGES, SHOULDER_STYLES } from "../../src/data/cosmetics.js";
-
-const sh = (id) => SHOULDER_STYLES.findIndex((s) => s.id === id);
+import { BADGES } from "../../src/data/cosmetics.js";
 
 describe("normalizeBadge", () => {
   it("returns a fresh default for junk", () => {
@@ -41,13 +39,13 @@ describe("normalizeAccessories", () => {
 
 describe("migrateLegacyBadge", () => {
   it("None becomes a hidden badge", () => {
-    expect(migrateLegacyBadge(0, 0).placements).toEqual([]);
+    expect(migrateLegacyBadge("none", "none").placements).toEqual([]);
   });
 
   it("every old icon becomes its symbol on a brass disc on the chest", () => {
-    BADGES.forEach((old, i) => {
+    BADGES.forEach((old) => {
       if (!old.icon) return;
-      const b = migrateLegacyBadge(i, sh("pads"));
+      const b = migrateLegacyBadge(old.id, "pads");
       expect(b.layers[0]).toMatchObject({ symbol: old.icon, frame: "disc", metal: "brass" });
       expect(b.finish).toBe("insignia");
       expect(b.placements).toEqual(["chest"]);
@@ -55,11 +53,12 @@ describe("migrateLegacyBadge", () => {
   });
 
   it("keeps the shoulder copy for pauldrons and armored shoulders", () => {
-    expect(migrateLegacyBadge(3, sh("pauldrons")).placements).toEqual(["chest", "shoulder"]);
-    expect(migrateLegacyBadge(3, sh("armored")).placements).toEqual(["chest", "shoulder"]);
+    expect(migrateLegacyBadge(BADGES[3].id, "pauldrons").placements).toEqual(["chest", "shoulder"]);
+    expect(migrateLegacyBadge(BADGES[3].id, "armored").placements).toEqual(["chest", "shoulder"]);
   });
 
-  it("out-of-range index is treated as None", () => {
-    expect(migrateLegacyBadge(99, 0).placements).toEqual([]);
+  it("an unknown badge is treated as None", () => {
+    expect(migrateLegacyBadge(undefined, "none").placements).toEqual([]);
+    expect(migrateLegacyBadge("nope", "pauldrons").placements).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@
  * caller's job; see agent-rig.js.
  */
 import { ENAMELS, METALS, byId } from "../../../data/badges.js";
-import { ARMOR_STYLES } from "../../../data/cosmetics.js";
+import { pieceOf } from "../../../core/character-fields.js";
 import { renderFinish } from "./finishes.js";
 
 const DEFAULT_TREATMENT = { finish: "insignia", metal: "brass" };
@@ -12,7 +12,7 @@ const cache = new Map();
 const MAX = 256;
 
 export function resolveTreatment(ch) {
-  const a = ARMOR_STYLES[(ch && ch.armorIndex) | 0] || ARMOR_STYLES[0];
+  const a = pieceOf(ch, "armor");
   const t = ch?.armorVariant ? a.variant?.badgeTreatment : a.badgeTreatment;
   return t || DEFAULT_TREATMENT;
 }

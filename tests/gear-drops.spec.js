@@ -34,7 +34,7 @@ test("a dropped piece is granted, announced and kept", async ({ page }) => {
     const pick = m.lockedItems(m.gameUnlockContext(g, { fresh: true }))[0];
     const entry = m.LOCKABLE[pick.key];
     g.entities.push(new Pickup(g.player.x + 0.3, g.player.y, "gear", {
-      slot: pick.key, slotIndex: pick.index,
+      slot: pick.key, pieceId: entry.table[pick.index].id,
       label: entry.table[pick.index].name, kind: entry.kind,
     }));
     await new Promise((r) => setTimeout(r, 700));

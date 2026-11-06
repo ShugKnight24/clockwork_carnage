@@ -15,7 +15,7 @@ import {
 import { takesVisor } from "../data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
-import { getIndex, withIndex, lookKey } from "../core/character-fields.js";
+import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.js";
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
@@ -36,15 +36,15 @@ export const CREATOR_CATEGORIES = [
     name: "COLOR",
     shortLabel: "CLR",
     data: CHARACTER_COLORS,
-    key: "colorIndex",
+    key: "color",
   },
-  { name: "FACE", shortLabel: "FACE", data: SKIN_TONES, key: "skinToneIndex" },
-  { name: "HAIR", shortLabel: "HAIR", data: HAIR_STYLES, key: "hairIndex" },
-  { name: "EYES", shortLabel: "EYES", data: EYE_COLORS, key: "eyeIndex" },
-  { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armorIndex" },
-  { name: "HELMET", shortLabel: "HELM", data: HELMET_STYLES, key: "helmetIndex" },
-  { name: "VISOR", shortLabel: "VSR", data: VISOR_STYLES, key: "visorIndex" },
-  { name: "SHOULDER", shortLabel: "SHLD", data: SHOULDER_STYLES, key: "shoulderIndex" },
+  { name: "FACE", shortLabel: "FACE", data: SKIN_TONES, key: "skinTone" },
+  { name: "HAIR", shortLabel: "HAIR", data: HAIR_STYLES, key: "hair" },
+  { name: "EYES", shortLabel: "EYES", data: EYE_COLORS, key: "eye" },
+  { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armor" },
+  { name: "HELMET", shortLabel: "HELM", data: HELMET_STYLES, key: "helmet" },
+  { name: "VISOR", shortLabel: "VSR", data: VISOR_STYLES, key: "visor" },
+  { name: "SHOULDER", shortLabel: "SHLD", data: SHOULDER_STYLES, key: "shoulder" },
   { name: "BADGE", shortLabel: "BDGE", data: SYMBOLS, key: "badge.symbol" },
   { name: "FRAME", shortLabel: "FRM", data: FRAMES, key: "badge.frame" },
   { name: "ENAMEL", shortLabel: "ENML", data: ENAMELS, key: "badge.enamel" },
@@ -62,16 +62,16 @@ export const CREATOR_CATEGORIES = [
     name: "SKIN",
     shortLabel: "SKIN",
     data: WEAPON_SKINS,
-    key: "weaponSkinIndex",
+    key: "weaponSkin",
   },
   {
     name: "LOADOUT",
     shortLabel: "LOAD",
     data: LOADOUT_CLASSES,
-    key: "loadoutIndex",
+    key: "loadout",
   },
-  { name: "ORIGIN", shortLabel: "ORGN", data: BACKSTORIES, key: "backstoryIndex" },
-  { name: "VOICE", shortLabel: "VOX", data: VOICE_PROFILES, key: "voiceIndex" },
+  { name: "ORIGIN", shortLabel: "ORGN", data: BACKSTORIES, key: "backstory" },
+  { name: "VOICE", shortLabel: "VOX", data: VOICE_PROFILES, key: "voice" },
 ];
 
 /** Switch tab, resetting the placement highlight so PLACE always opens on row 0. */
@@ -193,12 +193,12 @@ function badgeLayer(ch, detail = "high") {
 // How the preview stands for the field being edited — the same rules the
 // showroom uses (js/components/agent-showroom.js): the rifle only exists in the
 // armed pose, and the face is only drawn under a closed helmet when asked for.
-const ARMED_KEYS = new Set(["loadoutIndex", "weaponSkinIndex"]);
-const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
+const ARMED_KEYS = new Set(["loadout", "weaponSkin"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "eye"]);
 const IDLE_STAGE = { pose: "idle", peek: false };
 
 function stageFor(key, ch) {
-  const helmet = HELMET_STYLES[ch.helmetIndex | 0]?.id;
+  const helmet = pieceOf(ch, "helmet").id;
   return {
     pose: ARMED_KEYS.has(key) ? "hero" : "idle",
     peek: FACE_KEYS.has(key) && !OPEN_HELMETS.has(helmet),
@@ -810,18 +810,18 @@ export function renderCharacterCreator(
   const now = performance.now();
   const cat = creatorCategory;
   const char = character;
-  const palette = CHARACTER_COLORS[char.colorIndex];
-  const skinTone = SKIN_TONES[char.skinToneIndex || 0];
-  const hairStyle = HAIR_STYLES[char.hairIndex || 0];
-  const eyeColor = EYE_COLORS[char.eyeIndex || 0];
-  const armor = ARMOR_STYLES[char.armorIndex];
-  const skin = WEAPON_SKINS[char.weaponSkinIndex];
-  const loadout = LOADOUT_CLASSES[char.loadoutIndex];
-  const origin = BACKSTORIES[char.backstoryIndex || 0];
-  const voice = VOICE_PROFILES[char.voiceIndex || 0];
-  const helmet = HELMET_STYLES[char.helmetIndex || 0];
-  const visor = VISOR_STYLES[char.visorIndex || 0];
-  const shoulder = SHOULDER_STYLES[char.shoulderIndex || 0];
+  const palette = pieceOf(char, "color");
+  const skinTone = pieceOf(char, "skinTone");
+  const hairStyle = pieceOf(char, "hair");
+  const eyeColor = pieceOf(char, "eye");
+  const armor = pieceOf(char, "armor");
+  const skin = pieceOf(char, "weaponSkin");
+  const loadout = pieceOf(char, "loadout");
+  const origin = pieceOf(char, "backstory");
+  const voice = pieceOf(char, "voice");
+  const helmet = pieceOf(char, "helmet");
+  const visor = pieceOf(char, "visor");
+  const shoulder = pieceOf(char, "shoulder");
   const categories = CREATOR_CATEGORIES;
 
   // Full-screen dark backdrop
@@ -1079,7 +1079,7 @@ export function renderCharacterCreator(
 
     // Color swatches for visual categories
     const swatch = item.primary || item.color;
-    const hasSwatch = curCat.key === "colorIndex" || curCat.key === "skinToneIndex" || curCat.key === "hairIndex" || curCat.key === "eyeIndex";
+    const hasSwatch = curCat.key === "color" || curCat.key === "skinTone" || curCat.key === "hair" || curCat.key === "eye";
     if (hasSwatch && swatch) {
       ctx.fillStyle = swatch;
       ctx.beginPath();
@@ -1209,7 +1209,7 @@ export function renderCharacterCreator(
     ctx.fillText(selectedItem.name, infoX + 12, L.contentY + 28);
 
     // Armor tier pips (Sprint H 8.2: starter → mid → elite visual)
-    if (curCat.key === "armorIndex" && selectedItem.tier) {
+    if (curCat.key === "armor" && selectedItem.tier) {
       const pipX = infoX + 12;
       const pipY = L.contentY + 38;
       const tierColors = ["#6a8cff", "#ffcc44", "#ff4488"];
@@ -1256,10 +1256,10 @@ export function renderCharacterCreator(
       ctx.fillText(selectedItem.perk.toUpperCase(), infoX + 12, L.contentY + 96);
     }
     // A helmet with no visor (takesVisor): the pick is not drawn and its perk not counted.
-    if (curCat.key === "visorIndex" && !takesVisor(char.helmetIndex)) {
+    if (curCat.key === "visor" && !takesVisor(char.helmet)) {
       ctx.fillStyle = "rgba(255, 200, 90, 0.8)";
       ctx.font = "bold 10px monospace";
-      ctx.fillText(`${(HELMET_STYLES[char.helmetIndex | 0]?.name || "").toUpperCase()}: NO VISOR`, infoX + 12, L.contentY + 96);
+      ctx.fillText(`${helmet.name.toUpperCase()}: NO VISOR`, infoX + 12, L.contentY + 96);
       ctx.fillStyle = "rgba(180,200,220,0.55)";
       ctx.font = "9px monospace";
       ctx.fillText("Pick and perk don't apply", infoX + 12, L.contentY + 110);
@@ -1272,7 +1272,7 @@ export function renderCharacterCreator(
       ctx.fillText("SPACE / click toggles", infoX + 12, L.contentY + 72);
     }
 
-    if (curCat.key === "backstoryIndex" && selectedItem.perk) {
+    if (curCat.key === "backstory" && selectedItem.perk) {
       ctx.fillStyle = "rgba(0,255,200,0.18)";
       ctx.beginPath();
       ctx.roundRect(infoX + 12, L.contentY + 116, L.infoW - 24, 34, 6);
@@ -1285,7 +1285,7 @@ export function renderCharacterCreator(
       ctx.fillText(selectedItem.perk, infoX + 20, L.contentY + 145);
     }
 
-    if (curCat.key === "voiceIndex") {
+    if (curCat.key === "voice") {
       const waveY = L.contentY + 120;
       ctx.strokeStyle = palette.accent + "88";
       ctx.lineWidth = 1.5;
@@ -1303,7 +1303,7 @@ export function renderCharacterCreator(
     }
 
     // Loadout bonuses — visual stat bars (LOADOUT category only)
-    if (curCat.key === "loadoutIndex" && loadout.bonuses) {
+    if (curCat.key === "loadout" && loadout.bonuses) {
       let by = L.contentY + 90;
       const b = loadout.bonuses;
       const barW = L.infoW - 24;
@@ -1353,7 +1353,7 @@ export function renderCharacterCreator(
       if (b.maxStamina != null) {
         drawStatBar("MAX STAMINA", b.maxStamina, 150, "#4488ff");
       }
-      if (unlockCtx && !unlockState("loadoutIndex", char.loadoutIndex, unlockCtx).unlocked) {
+      if (unlockCtx && !unlockState("loadout", getIndex(char, "loadout"), unlockCtx).unlocked) {
         ctx.fillStyle = "rgba(255, 100, 100, 0.7)";
         ctx.font = "bold 12px monospace";
         ctx.fillText("LOCKED", infoX + 12, by + 10);
@@ -1361,7 +1361,7 @@ export function renderCharacterCreator(
     }
 
     // Color swatches in info panel
-    if (curCat.key === "colorIndex") {
+    if (curCat.key === "color") {
       let sy = L.contentY + 80;
       ctx.fillStyle = "rgba(170, 200, 220, 0.4)";
       ctx.font = "10px monospace";

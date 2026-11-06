@@ -26,7 +26,7 @@ class FakeGame {
       audio: { stopMusic: vi.fn(), startTrack: vi.fn(), setTimeScale: vi.fn(), musicSting: vi.fn() },
       achievementStats: { totalShotsFired: 3, totalKills: 2, totalGamesPlayed: 4, weaponKills: { 0: 2 } },
       chronoPowers: new ChronoPowers(),
-      character: { ...structuredClone({ ...DEFAULT_CHARACTER }), name: "Vex", colorIndex: 5 },
+      character: { ...structuredClone({ ...DEFAULT_CHARACTER }), name: "Vex", color: "arctic_white" },
       saveSettings: vi.fn(),
     });
   }
@@ -186,7 +186,7 @@ describe("creator shots", () => {
     expect(st.looks[0]).toEqual(own);
     expect(st.looks[0]).not.toBe(g.character);
     expect(st.looks[1].name).toBe("Vex"); // a look is a suit, not a new agent
-    expect(st.looks[1].helmetIndex).toBe(LOOKS[0].helmetIndex);
+    expect(st.looks[1].helmet).toBe(LOOKS[0].helmet);
     creator.event(g, { type: "look" }, handle);
     expect(st.index).toBe(1);
     creator.event(g, { type: "look", index: 3 }, handle);
@@ -197,7 +197,7 @@ describe("creator shots", () => {
     expect(st.visorAt).toBe(2);
     expect(st.visorLen).toBe(1);
     // Editing a shot's look never reaches the player's.
-    st.looks[2].colorIndex = 7;
+    st.looks[2].color = "rust_orange";
     creator.teardown(g, handle);
     expect(g.character).toEqual(own);
     expect(storage.setItem).not.toHaveBeenCalled();

@@ -3,7 +3,8 @@ import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
-import { cloneLook, getIndex, lookKey, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
+import { LOOK_TABLES, cloneLook, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
+import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, indexOfId, layer } from "../../src/data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/data/accessories.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
@@ -45,26 +46,14 @@ import { clamp } from "../../src/utils/math.js";
  * is exactly one input path.
  */
 
-const APPEARANCE = [
-  "colorIndex",
-  "skinToneIndex",
-  "hairIndex",
-  "eyeIndex",
-  "armorIndex",
-  "helmetIndex",
-  "visorIndex",
-  "shoulderIndex",
-  "badgeIndex",
-  "weaponSkinIndex",
-  "armorVariant",
-];
+const APPEARANCE = ["color", "skinTone", "hair", "eye", "armor", "helmet", "visor", "shoulder", "weaponSkin", "armorVariant"];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 /** Saved looks: storage key, how many, and the appearance fields they keep. */
 const LOOKS_KEY = "cc_saved_looks";
 const MAX_LOOKS = 5;
-const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voiceIndex", "backstoryIndex", "loadoutIndex", "weaponFinishes", "customSkins"].includes(k));
+const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voice", "backstory", "loadout", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
-const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "eye"]);
 /** Camera toggle order (the C key cycles through them). */
 const CAMERAS = ["full", "bust", "face"];
 
@@ -73,23 +62,23 @@ const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS
 const gear = (items) => ({ ...DEFAULT_ACCESSORIES, ...items });
 
 const PRESETS = [
-  { name: "Regulation", ch: { colorIndex: 0, skinToneIndex: 0, hairIndex: 1, eyeIndex: 1, armorIndex: 0, helmetIndex: 0, visorIndex: 0, shoulderIndex: 1, weaponSkinIndex: 0,
+  { name: "Regulation", ch: { color: "chrono_teal", skinTone: "warm_light", hair: "short", eye: "blue", armor: "standard", helmet: "standard", visor: "standard", shoulder: "pads", weaponSkin: "default",
     badge: presetBadge("p_clock", ["chest", "shoulder"]), accessories: gear({ waist: "belt", neck: "tags" }) } },
-  { name: "Juggernaut", ch: { colorIndex: 2, skinToneIndex: 2, hairIndex: 2, eyeIndex: 4, armorIndex: 2, helmetIndex: 3, visorIndex: 4, shoulderIndex: 3, weaponSkinIndex: 3,
+  { name: "Juggernaut", ch: { color: "paradox_red", skinTone: "deep_brown", hair: "coil", eye: "red", armor: "heavy", helmet: "mohawk", visor: "glow", shoulder: "pauldrons", weaponSkin: "ember",
     badge: presetBadge("p_skull", ["chest"]), accessories: gear({ back: "backpack", legs: "kneepads" }) } },
-  { name: "Ghost", ch: { colorIndex: 3, skinToneIndex: 3, hairIndex: 0, eyeIndex: 3, armorIndex: 3, helmetIndex: 2, visorIndex: 2, shoulderIndex: 0, weaponSkinIndex: 1,
+  { name: "Ghost", ch: { color: "void_purple", skinTone: "cool_fair", hair: "buzz", eye: "violet", armor: "stealth", helmet: "angular", visor: "fullface", shoulder: "none", weaponSkin: "carbon",
     badge: presetBadge("p_eye", ["chest"]), accessories: gear({ helmet: "nvg", waist: "holster" }) } },
-  { name: "Engineer", ch: { colorIndex: 4, skinToneIndex: 4, hairIndex: 3, eyeIndex: 0, armorIndex: 4, helmetIndex: 1, visorIndex: 3, shoulderIndex: 4, weaponSkinIndex: 2,
+  { name: "Engineer", ch: { color: "solar_gold", skinTone: "olive", hair: "braid", eye: "amber", armor: "tech", helmet: "wide", visor: "split", shoulder: "armored", weaponSkin: "chrome",
     badge: presetBadge("p_bolt", ["chest", "forearm"]), accessories: gear({ arms: "screen", waist: "belt" }) } },
   // Full looks: each of these only reads right with its own helmet and
   // pauldrons, so the preset is how a player gets the intended silhouette.
-  { name: "Howitzer", ch: { colorIndex: 7, skinToneIndex: 1, hairIndex: 0, eyeIndex: 2, armorIndex: 5, helmetIndex: 5, visorIndex: 1, shoulderIndex: 7, weaponSkinIndex: 3,
+  { name: "Howitzer", ch: { color: "rust_orange", skinTone: "golden", hair: "buzz", eye: "green", armor: "howitzer", helmet: "ordnance", visor: "slit", shoulder: "ordnance", weaponSkin: "ember",
     badge: presetBadge("p_skull", ["chest", "shoulder"]), accessories: gear({ back: "backpack", neck: "bandolier" }) } },
-  { name: "Breaker", ch: { colorIndex: 6, skinToneIndex: 2, hairIndex: 1, eyeIndex: 1, armorIndex: 6, helmetIndex: 6, visorIndex: 1, shoulderIndex: 5, weaponSkinIndex: 5,
+  { name: "Breaker", ch: { color: "neon_green", skinTone: "deep_brown", hair: "short", eye: "blue", armor: "trencher", helmet: "bucket", visor: "slit", shoulder: "slab", weaponSkin: "toxic",
     badge: presetBadge("p_star", ["chest"]), accessories: gear({ legs: "shins", arms: "gauntlets" }) } },
-  { name: "Reliquary", ch: { colorIndex: 2, skinToneIndex: 3, hairIndex: 0, eyeIndex: 4, armorIndex: 7, helmetIndex: 7, visorIndex: 2, shoulderIndex: 6, weaponSkinIndex: 1,
+  { name: "Reliquary", ch: { color: "paradox_red", skinTone: "cool_fair", hair: "buzz", eye: "red", armor: "reliquary", helmet: "crusader", visor: "fullface", shoulder: "dome", weaponSkin: "carbon",
     badge: presetBadge("p_shield", ["chest", "helmet"]), accessories: gear({ back: "cloak", helmet: "plume" }) } },
-  { name: "Pathfinder", ch: { colorIndex: 5, skinToneIndex: 0, hairIndex: 2, eyeIndex: 3, armorIndex: 8, helmetIndex: 8, visorIndex: 2, shoulderIndex: 8, weaponSkinIndex: 2,
+  { name: "Pathfinder", ch: { color: "arctic_white", skinTone: "warm_light", hair: "coil", eye: "violet", armor: "pathfinder", helmet: "sealed", visor: "fullface", shoulder: "layered", weaponSkin: "chrome",
     badge: presetBadge("p_rift", ["chest"]), accessories: gear({ back: "antenna", neck: "scarf" }) } },
 ];
 
@@ -136,19 +125,19 @@ const CATEGORIES = [
     short: "Agent",
     sections: [
       { type: "name", title: "Callsign" },
-      { key: "bodyIndex", title: "Body", data: BODY_TYPES, kind: "bodyFrame" },
-      { key: "backstoryIndex", title: "Origin", data: BACKSTORIES, kind: "origin" },
-      { key: "voiceIndex", title: "Voice", data: VOICE_PROFILES, kind: "voice" },
+      { key: "body", title: "Body", data: BODY_TYPES, kind: "bodyFrame" },
+      { key: "backstory", title: "Origin", data: BACKSTORIES, kind: "origin" },
+      { key: "voice", title: "Voice", data: VOICE_PROFILES, kind: "voice" },
     ],
   },
   {
     id: "suit",
     label: "Suit",
     sections: [
-      { key: "frameIndex", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
-      { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
-      { key: "camoIndex", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
-      { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
+      { key: "frame", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
+      { key: "armor", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
+      { key: "camo", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
+      { key: "shoulder", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
     ],
   },
   {
@@ -156,8 +145,8 @@ const CATEGORIES = [
     label: "Helmet",
     camera: "bust",
     sections: [
-      { key: "helmetIndex", title: "Helmet", data: HELMET_STYLES, kind: "head" },
-      { key: "visorIndex", title: "Visor", data: VISOR_STYLES, kind: "head" },
+      { key: "helmet", title: "Helmet", data: HELMET_STYLES, kind: "head" },
+      { key: "visor", title: "Visor", data: VISOR_STYLES, kind: "head" },
     ],
   },
   {
@@ -168,16 +157,16 @@ const CATEGORIES = [
     camera: "face",
     bareHead: true,
     sections: [
-      { key: "skinToneIndex", title: "Skin", data: SKIN_TONES, kind: "skin" },
-      { key: "eyeIndex", title: "Eyes", data: EYE_COLORS, kind: "eye" },
-      { key: "hairIndex", title: "Hair", data: HAIR_STYLES, kind: "hair" },
+      { key: "skinTone", title: "Skin", data: SKIN_TONES, kind: "skin" },
+      { key: "eye", title: "Eyes", data: EYE_COLORS, kind: "eye" },
+      { key: "hair", title: "Hair", data: HAIR_STYLES, kind: "hair" },
     ],
   },
   {
     id: "gear",
     label: "Gear",
     sections: [
-      { key: "capeIndex", title: "Cape", data: CAPE_STYLES, kind: "bodyFrame" },
+      { key: "cape", title: "Cape", data: CAPE_STYLES, kind: "bodyFrame" },
       ...ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
     ],
   },
@@ -204,7 +193,7 @@ const CATEGORIES = [
     id: "colors",
     label: "Colors",
     short: "Color",
-    sections: [{ key: "colorIndex", title: "Palette", data: CHARACTER_COLORS, kind: "palette" }],
+    sections: [{ key: "color", title: "Palette", data: CHARACTER_COLORS, kind: "palette" }],
   },
   {
     id: "loadout",
@@ -212,7 +201,7 @@ const CATEGORIES = [
     short: "Kit",
     pose: "hero",
     sections: [
-      { key: "loadoutIndex", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
+      { key: "loadout", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
       // Per-weapon finishes and the finish maker (src/data/weapon-skins.js).
       { type: "armory", title: "Weapon finishes" },
     ],
@@ -233,13 +222,29 @@ const TIER = ["", "I", "II", "III"];
 const SECTION_NOTES = {
   "badge.metal": `<p class="snote" data-note="auto-metal" hidden>Auto finish takes its metal from the armour. Pick a finish below to use your own.</p>`,
   // Text filled in too: both depend on what else is worn.
-  visorIndex: `<p class="snote" data-note="no-visor" hidden></p>`,
-  shoulderIndex: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
+  visor: `<p class="snote" data-note="no-visor" hidden></p>`,
+  shoulder: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
 };
+
+/**
+ * A stored look as the appearance fields it restores. Looks are stamped with
+ * the cc_character version they were written in; one saved before the look
+ * moved to ids holds table positions and goes through the same migration as
+ * the character save. Any id its table no longer knows reads as the default.
+ */
+function readLook(raw) {
+  const m = migrateCharacterSave(raw);
+  const look = {};
+  for (const k of LOOK_FIELDS) {
+    if (!(k in m)) continue;
+    look[k] = k in LOOK_TABLES ? pieceOf(m, k).id : m[k];
+  }
+  return look;
+}
 
 /** Why the frame overrides the shoulder pick (its FRAME_SHAPE flags), or "". */
 function shoulderNote(ch) {
-  const frame = BODY_FRAMES[ch.frameIndex | 0] || BODY_FRAMES[0];
+  const frame = pieceOf(ch, "frame");
   const shape = FRAME_SHAPE[frame.id] || {};
   if (shape.noShoulders) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
   if (shape.bareRight) return `${frame.name} keeps the right shoulder bare: this pick fits the left.`;
@@ -1702,19 +1707,19 @@ class AgentShowroom extends HTMLElement {
   chooseVariant(v, el) {
     const ch = this.character;
     if (v) {
-      const st = variantState(ch.armorIndex | 0, this.unlockCtx());
+      const st = variantState(getIndex(ch, "armor"), this.unlockCtx());
       if (!st.unlocked) {
         el?.classList.remove("shake");
         void el?.offsetWidth;
         el?.classList.add("shake");
-        this.toast(`${ARMOR_STYLES[ch.armorIndex | 0].variant.name} locked · ${st.hint}`);
+        this.toast(`${pieceOf(ch, "armor").variant.name} locked · ${st.hint}`);
         this.sfx("menuNav");
         return;
       }
     }
     if (!this.commit({ armorVariant: v })) return;
     this.sfx("menuSelect");
-    const a = ARMOR_STYLES[ch.armorIndex | 0];
+    const a = pieceOf(ch, "armor");
     this.announce(`Armour: ${v ? a.variant.name : "Standard"}`);
   }
 
@@ -1741,33 +1746,35 @@ class AgentShowroom extends HTMLElement {
 
   randomize() {
     const r = (n) => Math.floor(Math.random() * n);
+    const any = (table) => table[r(table.length)].id;
     const next = {
-      colorIndex: r(CHARACTER_COLORS.length),
-      skinToneIndex: r(SKIN_TONES.length),
-      hairIndex: r(HAIR_STYLES.length),
-      eyeIndex: r(EYE_COLORS.length),
-      armorIndex: r(ARMOR_STYLES.length),
-      helmetIndex: r(HELMET_STYLES.length),
-      visorIndex: r(VISOR_STYLES.length),
-      shoulderIndex: r(SHOULDER_STYLES.length),
-      weaponSkinIndex: r(WEAPON_SKINS.length),
+      color: any(CHARACTER_COLORS),
+      skinTone: any(SKIN_TONES),
+      hair: any(HAIR_STYLES),
+      eye: any(EYE_COLORS),
+      armor: any(ARMOR_STYLES),
+      helmet: any(HELMET_STYLES),
+      visor: any(VISOR_STYLES),
+      shoulder: any(SHOULDER_STYLES),
+      weaponSkin: any(WEAPON_SKINS),
     };
     // Keep it tasteful: Ghost plating reads best with dark optics and finishes,
     // synthetic skin with cool eyes.
-    if (ARMOR_STYLES[next.armorIndex].id === "stealth") {
-      if (Math.random() < 0.6) next.visorIndex = Math.random() < 0.5 ? 1 : 2;
-      if (Math.random() < 0.6) next.weaponSkinIndex = 1;
+    if (next.armor === "stealth") {
+      if (Math.random() < 0.6) next.visor = Math.random() < 0.5 ? "slit" : "fullface";
+      if (Math.random() < 0.6) next.weaponSkin = "carbon";
     }
-    if (SKIN_TONES[next.skinToneIndex].id === "synthetic" && Math.random() < 0.7) next.eyeIndex = Math.random() < 0.5 ? 5 : 1;
+    if (next.skinTone === "synthetic" && Math.random() < 0.7) next.eye = Math.random() < 0.5 ? "silver" : "blue";
     // Only what the agent has earned: re-roll locked picks from the unlocked set.
-    // Badge and gear keys are id-based virtual fields, rolled separately below.
+    // Badge and gear keys are virtual fields, rolled separately below.
     const ctx = this.unlockCtx();
     const unlocked = (key, table) => table.map((_, i) => i).filter((i) => unlockState(key, i, ctx).unlocked);
     for (const key of Object.keys(LOCKABLE)) {
-      if (LOCKABLE[key].byId) continue;
-      const open = unlocked(key, LOCKABLE[key].table);
-      if (key === "loadoutIndex") next.loadoutIndex = open[r(open.length)] ?? this.character.loadoutIndex;
-      else if (!open.includes(next[key])) next[key] = open[r(open.length)] ?? 0;
+      if (LOCKABLE[key].virtual) continue;
+      const table = LOCKABLE[key].table;
+      const open = unlocked(key, table);
+      if (key === "loadout") next.loadout = open.length ? table[open[r(open.length)]].id : this.character.loadout;
+      else if (!open.includes(key in next ? getIndex(next, key) : -1)) next[key] = table[open.length ? open[r(open.length)] : 0].id;
     }
     const roll = (key, table, skip = -1) => {
       const open = unlocked(key, table).filter((i) => i !== skip);
@@ -1803,7 +1810,7 @@ class AgentShowroom extends HTMLElement {
       ...Object.entries(accessories).filter(([, id]) => id !== "none").map(([slot, id]) => [`acc.${slot}`, id]),
     ];
     const picks = [
-      ...Object.entries(flat).filter(([key]) => LOCKABLE[key] && !LOCKABLE[key].byId),
+      ...Object.keys(flat).filter((key) => LOCKABLE[key] && !LOCKABLE[key].virtual).map((key) => [key, getIndex(flat, key)]),
       ...byIdPicks.map(([key, id]) => [key, indexOfId(LOCKABLE[key].table, id)]),
     ];
     for (const [key, idx] of picks) {
@@ -1823,7 +1830,7 @@ class AgentShowroom extends HTMLElement {
       return;
     }
     // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
-    const armorVariant = p.ch.armorIndex === this.character.armorIndex ? this.character.armorVariant : 0;
+    const armorVariant = pieceOf(p.ch, "armor") === pieceOf(this.character, "armor") ? this.character.armorVariant : 0;
     const next = { ...cloneLook(p.ch), armorVariant };
     // Belt and braces: anything the agent has not earned falls back instead of equipping.
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
@@ -2137,7 +2144,7 @@ class AgentShowroom extends HTMLElement {
 
   renderAll(rebuildContent = true, swapDir = 0) {
     if (!this.isOpen) return;
-    const pal = CHARACTER_COLORS[this.character.colorIndex] || CHARACTER_COLORS[0];
+    const pal = pieceOf(this.character, "color");
     this.style.setProperty("--accent", pal.accent);
     this.style.setProperty("--primary", pal.primary);
     this.el.tabs.forEach((t, i) => {
@@ -2158,17 +2165,17 @@ class AgentShowroom extends HTMLElement {
     const ch = this.effective();
     this.el.callsign.textContent = ch.name || "Agent";
     this.el.callsign.dataset.text = ch.name || "Agent";
-    const cls = LOADOUT_CLASSES[ch.loadoutIndex] || LOADOUT_CLASSES[0];
-    const org = BACKSTORIES[ch.backstoryIndex || 0];
-    const armor = ARMOR_STYLES[ch.armorIndex] || ARMOR_STYLES[0];
+    const cls = pieceOf(ch, "loadout");
+    const org = pieceOf(ch, "backstory");
+    const armor = pieceOf(ch, "armor");
     this.el.sub.innerHTML = `<b>${esc(cls.name)}</b> · ${esc(org.name)} · ${esc(armor.name)}`;
-    const pal = CHARACTER_COLORS[ch.colorIndex] || CHARACTER_COLORS[0];
+    const pal = pieceOf(ch, "color");
     this.style.setProperty("--accent", pal.accent);
   }
 
   stagePeek(ch) {
     if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
-    const helm = HELMET_STYLES[ch.helmetIndex]?.id;
+    const helm = pieceOf(ch, "helmet").id;
     if (OPEN_HELMETS.has(helm)) return false;
     // Face edits show the face even under a closed helmet.
     const key = this.preview?.key || this.previewSection;
@@ -2242,7 +2249,7 @@ class AgentShowroom extends HTMLElement {
   get looks() {
     try {
       const v = JSON.parse(localStorage.getItem(LOOKS_KEY) || "[]");
-      return Array.isArray(v) ? v.slice(0, MAX_LOOKS) : [];
+      return Array.isArray(v) ? v.slice(0, MAX_LOOKS).map((l) => ({ ...l, look: readLook(l?.look) })) : [];
     } catch (_) {
       return [];
     }
@@ -2250,7 +2257,8 @@ class AgentShowroom extends HTMLElement {
 
   set looks(list) {
     try {
-      localStorage.setItem(LOOKS_KEY, JSON.stringify(list.slice(0, MAX_LOOKS)));
+      const stored = list.slice(0, MAX_LOOKS).map((l) => ({ ...l, look: { ...l.look, version: CHARACTER_SAVE_VERSION } }));
+      localStorage.setItem(LOOKS_KEY, JSON.stringify(stored));
     } catch (_) {}
   }
 
@@ -2275,8 +2283,8 @@ class AgentShowroom extends HTMLElement {
     if (list.length >= MAX_LOOKS) return this.toast(`${MAX_LOOKS} looks max: delete one first`);
     const ch = this.character;
     const look = Object.fromEntries(LOOK_FIELDS.map((k) => [k, ch[k]]));
-    const armor = ARMOR_STYLES[ch.armorIndex | 0]?.name || "Look";
-    const color = CHARACTER_COLORS[ch.colorIndex | 0]?.name || "";
+    const armor = pieceOf(ch, "armor").name;
+    const color = pieceOf(ch, "color").name;
     this.looks = [...list, { name: `${armor} · ${color}`.slice(0, 28), look: cloneLook(look) }];
     this.renderLooks();
     this.sfx("menuConfirm");
@@ -2316,7 +2324,7 @@ class AgentShowroom extends HTMLElement {
       const st = previewing && LOCKABLE[s.key] ? unlockState(s.key, idx, this.unlockCtx()) : null;
       const locked = !!st && !st.unlocked;
       const ch = previewing ? this.effective() : this.character;
-      const variant = s.key === "armorIndex" && ch.armorVariant ? ` · ${ARMOR_STYLES[idx]?.variant?.name || ""}` : "";
+      const variant = s.key === "armor" && ch.armorVariant ? ` · ${ARMOR_STYLES[idx]?.variant?.name || ""}` : "";
       cur.textContent = `${s.data[idx]?.name || ""}${variant}${locked ? ` · ${st.hint}` : ""}`;
       cur.classList.toggle("preview", previewing && !locked);
       cur.classList.toggle("locked", locked);
@@ -2373,7 +2381,7 @@ class AgentShowroom extends HTMLElement {
     } else {
       body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);
     }
-    const variant = s.key === "armorIndex" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
+    const variant = s.key === "armor" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
     const note = SECTION_NOTES[s.key] || "";
     // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
     const locks = s.groupBy ? "" : this.lockInfoHtml(s);
@@ -2386,7 +2394,7 @@ class AgentShowroom extends HTMLElement {
 
   armoryHtml(s) {
     const ch = this.character;
-    this.armoryWeapon ??= LOADOUT_CLASSES[ch.loadoutIndex]?.startWeapons?.[0] ?? 0;
+    this.armoryWeapon ??= pieceOf(ch, "loadout").startWeapons?.[0] ?? 0;
     this.skinDraft ??= { name: "", primary: "#c8102e", secondary: "#1a1a1a", energy: "#ffd23a", pattern: "camo" };
     const weapons = WEAPONS.map(
       (w) => `<button class="chip arm-w${w.id === this.armoryWeapon ? " on" : ""}" data-arm-weapon="${w.id}" aria-pressed="${w.id === this.armoryWeapon}" tabindex="-1">${esc(w.name)}</button>`,
@@ -2474,8 +2482,7 @@ class AgentShowroom extends HTMLElement {
     this.skinPreviewing = false;
     const changes = { weaponFinishes: { ...ch.weaponFinishes, [wid]: id } };
     // The agent carries the Phase Rifle in the showroom: keep that finish in step.
-    const legacy = WEAPON_SKINS.findIndex((s) => s.id === id);
-    if (wid === 2 && legacy >= 0) changes.weaponSkinIndex = legacy;
+    if (wid === 2 && WEAPON_SKINS.some((s) => s.id === id)) changes.weaponSkin = id;
     this.commit(changes);
     this.sfx("menuSelect");
     this.announce(`${WEAPONS[wid].name}: ${f.name}`);
@@ -2591,9 +2598,9 @@ class AgentShowroom extends HTMLElement {
   /** Standard / variant choice under the armour grid. */
   variantHtml() {
     const ch = this.character;
-    const v = ARMOR_STYLES[ch.armorIndex | 0]?.variant;
+    const v = pieceOf(ch, "armor").variant;
     if (!v) return "";
-    const st = variantState(ch.armorIndex | 0, this.unlockCtx());
+    const st = variantState(getIndex(ch, "armor"), this.unlockCtx());
     const lock = st.unlocked
       ? `<span class="vdesc">${esc(v.desc)}</span>`
       : `<span class="vlock"><span class="lock caption amber">${I.lock}${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></span>`;
@@ -2749,9 +2756,9 @@ class AgentShowroom extends HTMLElement {
     // under them every tile would look the same, and the perk doesn't count.
     const noVisor = this.shadowRoot.querySelector('.content [data-note="no-visor"]');
     if (noVisor) {
-      const off = !takesVisor(ch.helmetIndex);
+      const off = !takesVisor(ch.helmet);
       noVisor.hidden = !off;
-      noVisor.textContent = off ? `The ${HELMET_STYLES[ch.helmetIndex | 0].name} has no visor, so this pick and its perk don't apply.` : "";
+      noVisor.textContent = off ? `The ${pieceOf(ch, "helmet").name} has no visor, so this pick and its perk don't apply.` : "";
       noVisor.closest(".section").classList.toggle("off", off);
     }
     const frameNote = this.shadowRoot.querySelector('.content [data-note="frame-shoulders"]');

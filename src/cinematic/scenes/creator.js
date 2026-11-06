@@ -17,7 +17,8 @@
  *         { type: "visor", len = 2 } the visor lights up over `len` beats and stays lit
  */
 import { beatsToSec } from "../timeline.js";
-import { DEFAULT_CHARACTER, CHARACTER_COLORS } from "../../data/cosmetics.js";
+import { DEFAULT_CHARACTER } from "../../data/cosmetics.js";
+import { pieceOf } from "../../core/character-fields.js";
 import { layer } from "../../data/badges.js";
 import { AGENT_VIEW, buildAgentSvg, buildAgentParts } from "../../rendering/svg-art/agent-rig.js";
 import { getLayerImage } from "../../rendering/svg-art/raster.js";
@@ -41,9 +42,9 @@ const badge = (l, placements) => ({ layers: [l], finish: "auto", placements });
  * and from the default. Open helmets (Bastion, Centurion) show the hair.
  */
 export const LOOKS = [
-  { colorIndex: 2, armorIndex: 2, helmetIndex: 3, hairIndex: 7, shoulderIndex: 3, badge: badge(layer("skull", "shield", "crimson", "steel"), ["chest"]) },
-  { colorIndex: 4, armorIndex: 7, helmetIndex: 1, hairIndex: 8, visorIndex: 4, shoulderIndex: 5, badge: badge(layer("star", "cog", "amber", "gold"), ["chest", "shoulder"]) },
-  { colorIndex: 3, armorIndex: 3, helmetIndex: 8, visorIndex: 2, shoulderIndex: 1, badge: badge(layer("rift", "hex", "violet", "blackened"), ["chest"]) },
+  { color: "paradox_red", armor: "heavy", helmet: "mohawk", hair: "hawk", shoulder: "pauldrons", badge: badge(layer("skull", "shield", "crimson", "steel"), ["chest"]) },
+  { color: "solar_gold", armor: "reliquary", helmet: "wide", hair: "afro", visor: "glow", shoulder: "slab", badge: badge(layer("star", "cog", "amber", "gold"), ["chest", "shoulder"]) },
+  { color: "void_purple", armor: "stealth", helmet: "sealed", visor: "fullface", shoulder: "pads", badge: badge(layer("rift", "hex", "violet", "blackened"), ["chest"]) },
 ];
 
 /** The shot's looks: whole characters, the player's own first. */
@@ -150,7 +151,7 @@ export const creator = {
     const st = handle.creator;
     if (!st) return;
     const ch = st.looks[st.index];
-    const accent = (CHARACTER_COLORS[ch.colorIndex | 0] ?? CHARACTER_COLORS[0]).accent;
+    const accent = pieceOf(ch, "color").accent;
     ctx.fillStyle = "#04060b";
     ctx.fillRect(0, 0, w, h);
     // Lit from behind the figure, wherever the crop stands it.

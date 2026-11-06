@@ -36,15 +36,15 @@ describe("unlock toast announcements", () => {
 
   it("names a loadout class on its own", () => {
     const i = LOADOUT_CLASSES.findIndex((c) => c.unlock);
-    expect(announcements([ownedKey("loadoutIndex", i)])).toEqual([
+    expect(announcements([ownedKey("loadout", i)])).toEqual([
       { kind: "Loadout class", name: LOADOUT_CLASSES[i].name },
     ]);
   });
 
   it("collapses the tier-gated armour slots into one plate per tier", () => {
     const ids = [
-      ownedKey("armorIndex", ARMOR_STYLES.findIndex((x) => x.tier === 2)),
-      ownedKey("helmetIndex", HELMET_STYLES.findIndex((x) => x.tier === 2)),
+      ownedKey("armor", ARMOR_STYLES.findIndex((x) => x.tier === 2)),
+      ownedKey("helmet", HELMET_STYLES.findIndex((x) => x.tier === 2)),
     ];
     expect(announcements(ids)).toEqual([
       { kind: "Gear tier", name: "MK II armor, helmets, visors & shoulders" },

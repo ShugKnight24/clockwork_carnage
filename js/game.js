@@ -33,12 +33,6 @@ import {
   ENEMY_TYPES,
   ARENA_MAPS,
   UPGRADES,
-  CHARACTER_COLORS,
-  SKIN_TONES,
-  WEAPON_SKINS,
-  LOADOUT_CLASSES,
-  BACKSTORIES,
-  VOICE_PROFILES,
   DEFAULT_CHARACTER,
   gearBonuses,
 } from "../src/data/index.js";
@@ -60,7 +54,8 @@ import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController, getPresentSquad } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
-import { cloneLook, getIndex, withIndex } from "../src/core/character-fields.js";
+import { cloneLook, getIndex, withIndex, pieceOf } from "../src/core/character-fields.js";
+import { indexOfId } from "../src/data/badges.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
@@ -1771,7 +1766,7 @@ export class Game {
   }
 
   applyLoadoutBonuses() {
-    const cls = LOADOUT_CLASSES[this.character.loadoutIndex];
+    const cls = pieceOf(this.character, "loadout");
     // Only the class block depends on class bonuses. Returning early here also
     // skipped the origin and gear bonuses below.
     const b = (cls && cls.bonuses) || {};
@@ -1812,7 +1807,7 @@ export class Game {
       this.player.maxChronoEnergy = 95;
     }
 
-    const origin = BACKSTORIES[this.character.backstoryIndex || 0];
+    const origin = pieceOf(this.character, "backstory");
     const ob = origin?.bonuses || {};
     if (ob.maxHealthAdd) {
       this.player.maxHealth += ob.maxHealthAdd;
@@ -1865,15 +1860,15 @@ export class Game {
   }
 
   getCharacterColor() {
-    return CHARACTER_COLORS[this.character.colorIndex] || CHARACTER_COLORS[0];
+    return pieceOf(this.character, "color");
   }
 
   getWeaponSkin() {
-    return WEAPON_SKINS[this.character.weaponSkinIndex] || WEAPON_SKINS[0];
+    return pieceOf(this.character, "weaponSkin");
   }
 
   getVoiceProfile() {
-    return VOICE_PROFILES[this.character.voiceIndex || 0] || VOICE_PROFILES[0];
+    return pieceOf(this.character, "voice");
   }
 
   renderCharacterCreator(ctx, w, h) {
@@ -3350,14 +3345,15 @@ export class Game {
         // A battlefield drop grants the piece outright: it shows up unlocked
         // in both creators, and is put on at once when its slot is free of
         // stats, so its bonuses work this run (_equipDroppedGear).
-        const granted = grantOwned(e.slot, e.slotIndex);
+        const index = indexOfId(LOCKABLE[e.slot]?.table || [], e.pieceId);
+        const granted = grantOwned(e.slot, index);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this.audio.pickup();
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
           _spawnEnergyBurst(ps, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 }));
         if (granted) {
-          const worn = this._equipDroppedGear(e.slot, e.slotIndex);
+          const worn = this._equipDroppedGear(e.slot, index);
           this.showGearToast?.(e.kind, worn ? `${e.label} · equipped` : e.label);
           this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
           this._levelLog?.gear.push({ kind: e.kind || "Gear", name: e.label || "Salvage" });
@@ -3471,7 +3467,7 @@ export class Game {
 
   // TODO: Improve weapon art and animations / Reloading / Idle / Skins / Upgraded versions with visual changes?
   drawWeapon(ctx, w, h) {
-    const charColor = CHARACTER_COLORS[this.character.colorIndex];
+    const charColor = pieceOf(this.character, "color");
     const wep = this.player.getWeaponDef();
     renderWeapon(ctx, w, h, {
       wep,
@@ -3486,7 +3482,7 @@ export class Game {
       weaponKick: this.player.weaponKick,
       weaponSwayX: this.settings.weaponBob ? this.player.weaponSwayX : 0,
       weaponSwayY: this.settings.weaponBob ? this.player.weaponSwayY : 0,
-      skinTone: (SKIN_TONES[this.character.skinToneIndex] || SKIN_TONES[0])?.color,
+      skinTone: pieceOf(this.character, "skinTone").color,
       weaponAnimFrame: this.weaponAnimFrame,
       time: this.time,
       lastFireTime: this.player.lastFireTime || 0,

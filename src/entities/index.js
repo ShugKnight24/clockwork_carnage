@@ -362,7 +362,7 @@ export class Pickup {
    * @param {number} y - Spawn Y position
    * @param {string} type - Pickup type ("health", "ammo", "weapon", "gear")
    * @param {Object} extra - Additional properties: weaponId for weapons, or
-   *   slot/index/name/kind for a gear drop.
+   *   slot/pieceId/label/kind for a gear drop.
    */
   constructor(x, y, type, extra = {}) {
     this.x = x;
@@ -370,9 +370,9 @@ export class Pickup {
     this.type = type;
     this.active = true;
     this.weaponId = extra.weaponId;
-    // Gear drops carry which cosmetic slot and option they hand over.
+    // Gear drops carry which cosmetic slot and piece (by id) they hand over.
     this.slot = extra.slot;
-    this.slotIndex = extra.slotIndex;
+    this.pieceId = extra.pieceId;
     this.label = extra.label;
     this.kind = extra.kind;
   }

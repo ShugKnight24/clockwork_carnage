@@ -16,6 +16,7 @@ import {
   unlockContext,
   resetUnlockStore,
   LOCKABLE,
+  ownedKey,
 } from "../../src/systems/unlocks.js";
 import { ACCESSORY_SLOTS } from "../../src/data/accessories.js";
 import { DEFAULT_BADGE } from "../../src/data/badges.js";
@@ -40,7 +41,7 @@ describe("gearBonuses", () => {
 
   it("sums across every slot", () => {
     // Juggernaut armour + Centurion helm + Blackout visor + Bulwark shoulders.
-    const b = gearBonuses({ armorIndex: 2, helmetIndex: 3, visorIndex: 2, shoulderIndex: 4 });
+    const b = gearBonuses({ armor: "heavy", helmet: "mohawk", visor: "fullface", shoulder: "armored" });
     expect(b.maxHealthAdd).toBe(40);
     expect(b.armorAdd).toBe(20);
     // The heavy set pays for it in speed.
@@ -48,21 +49,21 @@ describe("gearBonuses", () => {
   });
 
   it("gives the light set speed instead of bulk", () => {
-    const b = gearBonuses({ armorIndex: 3, helmetIndex: 4, visorIndex: 1, shoulderIndex: 0 });
+    const b = gearBonuses({ armor: "stealth", helmet: "crested", visor: "slit", shoulder: "none" });
     expect(b.moveSpeedAdd).toBeGreaterThan(0);
     expect(b.maxHealthAdd ?? 0).toBe(0);
   });
 
   it("skips the visor under a helmet that has none", () => {
-    const beacon = VISOR_STYLES.findIndex((v) => v.id === "glow");
-    const helm = (id) => HELMET_STYLES.findIndex((h) => h.id === id);
-    expect(gearBonuses({ helmetIndex: helm("bandana"), visorIndex: beacon }).maxChronoEnergyAdd ?? 0).toBe(0);
-    expect(gearBonuses({ helmetIndex: helm("reaper"), visorIndex: beacon }).maxChronoEnergyAdd ?? 0).toBe(0);
+    const beacon = "glow";
+    expect(gearBonuses({ helmet: "bandana", visor: beacon }).maxChronoEnergyAdd ?? 0).toBe(0);
+    expect(gearBonuses({ helmet: "reaper", visor: beacon }).maxChronoEnergyAdd ?? 0).toBe(0);
     // Pilot's lenses take the visor.
-    expect(gearBonuses({ helmetIndex: helm("pilot"), visorIndex: beacon }).maxChronoEnergyAdd).toBe(25);
-    expect(takesVisor(helm("pilot"))).toBe(true);
-    expect(takesVisor(helm("bandana"))).toBe(false);
+    expect(gearBonuses({ helmet: "pilot", visor: beacon }).maxChronoEnergyAdd).toBe(25);
+    expect(takesVisor("pilot")).toBe(true);
+    expect(takesVisor("bandana")).toBe(false);
     expect(takesVisor(undefined)).toBe(true);
+    expect(takesVisor("no_such_helmet")).toBe(true);
   });
 
   it("survives a missing or partial character", () => {
@@ -73,8 +74,8 @@ describe("gearBonuses", () => {
   it("covers every lockable cosmetic slot", () => {
     const slots = GEAR_SLOTS.map(([k]) => k);
     for (const [key, entry] of Object.entries(LOCKABLE)) {
-      if (key === "loadoutIndex" || key === "colorIndex" || key === "camoIndex") continue; // class, palette and camo: not gear
-      if (entry.byId) continue; // badge/accessory virtual keys: bonuses summed separately, via ACCESSORY_SLOTS
+      if (key === "loadout" || key === "color" || key === "camo") continue; // class, palette and camo: not gear
+      if (entry.virtual) continue; // badge/accessory virtual keys: bonuses summed separately, via ACCESSORY_SLOTS
       expect(slots).toContain(key);
     }
   });
@@ -104,7 +105,7 @@ describe("gear drops", () => {
   it("grants an item and records it as owned", () => {
     const { key, index } = lockedItems(ctx())[0];
     expect(grantOwned(key, index)).toBe(true);
-    expect(JSON.parse(store.cc_unlocks).owned[`${key}:${index}`]).toBe(true);
+    expect(JSON.parse(store.cc_unlocks).owned[ownedKey(key, index)]).toBe(true);
   });
 
   it("reports a duplicate so the pickup can stay quiet", () => {
@@ -116,11 +117,11 @@ describe("gear drops", () => {
   it("marks a drop as already seen, so it is not re-announced as an unlock", () => {
     const { key, index } = lockedItems(ctx())[0];
     grantOwned(key, index);
-    expect(JSON.parse(store.cc_unlocks).seen[`${key}:${index}`]).toBe(true);
+    expect(JSON.parse(store.cc_unlocks).seen[ownedKey(key, index)]).toBe(true);
   });
 
   it("refuses an index that is not a real option", () => {
-    expect(grantOwned("armorIndex", 999)).toBe(false);
+    expect(grantOwned("armor", 999)).toBe(false);
     expect(grantOwned("notASlot", 0)).toBe(false);
   });
 });
@@ -133,7 +134,7 @@ describe("armour catalogue", () => {
     const svg = rig.buildAgentSvg ?? null;
     expect(svg, "buildAgentSvg export").toBeTruthy();
     for (let i = 0; i < ARMOR_STYLES.length; i++) {
-      const markup = svg({ ...DEFAULT_CHARACTER, armorIndex: i });
+      const markup = svg({ ...DEFAULT_CHARACTER, armor: ARMOR_STYLES[i].id });
       expect(markup.length, ARMOR_STYLES[i].id).toBeGreaterThan(1000);
       expect(markup).not.toContain("undefined");
       expect(markup).not.toContain("NaN");

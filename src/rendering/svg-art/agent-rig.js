@@ -47,25 +47,9 @@ import {
   fallenDamage,
   debris,
 } from "./models/hero.js";
-import {
-  CHARACTER_COLORS,
-  SKIN_TONES,
-  HAIR_STYLES,
-  EYE_COLORS,
-  ARMOR_STYLES,
-  BODY_FRAMES,
-  CAPE_STYLES,
-  BODY_TYPES,
-  CAMO_STYLES,
-  HELMET_STYLES,
-  VISOR_STYLES,
-  SHOULDER_STYLES,
-  WEAPON_SKINS,
-  LOADOUT_CLASSES,
-  BACKSTORIES,
-} from "../../data/cosmetics.js";
 import { renderBadge, resolveTreatment } from "./insignia/compose.js";
-import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "../../core/character-normalize.js";
+import { normalizeBadge, normalizeAccessories } from "../../core/character-normalize.js";
+import { pieceOf } from "../../core/character-fields.js";
 import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { FRAME_SHAPE, frameLayers } from "./frames.js";
@@ -87,8 +71,6 @@ const desat = (h, t) => {
 
 /** Swap every hard-coded hex in `markup` found in `map` (keys lower-case). */
 const recolor = (markup, map) => markup.replace(/#[0-9a-fA-F]{6}\b/g, (h) => map[h.toLowerCase()] || h);
-
-const pick = (list, i) => list[clamp(i | 0, 0, list.length - 1)] || list[0];
 
 // ---------------------------------------------------------------------------
 // Style tables (visual only; names/tiers live in data/cosmetics.js)
@@ -142,32 +124,34 @@ const AMBER = "#ffae3a";
 // ---------------------------------------------------------------------------
 
 function resolve(ch) {
-  const pal = pick(CHARACTER_COLORS, ch.colorIndex);
-  const armor = pick(ARMOR_STYLES, ch.armorIndex).id;
-  const weapon = pick(WEAPON_SKINS, ch.weaponSkinIndex).id;
+  const pal = pieceOf(ch, "color");
+  const armorPiece = pieceOf(ch, "armor");
+  const armor = armorPiece.id;
+  const weapon = pieceOf(ch, "weaponSkin").id;
+  const camo = pieceOf(ch, "camo");
   const finish = WEAPON_FINISH[weapon] || WEAPON_FINISH.default;
   const capeBase = mix(desat(pal.primary, 0.22), "#000000", 0.22);
   const c = {
     pal,
     armor,
-    frame: pick(BODY_FRAMES, ch.frameIndex).id,
-    capeOff: pick(CAPE_STYLES, ch.capeIndex).id === "none",
-    fem: pick(BODY_TYPES, ch.bodyIndex).id === "fem",
-    camo: ch.camoIndex ? CAMO_STYLES[ch.camoIndex] || null : null,
-    helmet: pick(HELMET_STYLES, ch.helmetIndex).id,
-    visor: pick(VISOR_STYLES, ch.visorIndex).id,
-    shoulder: pick(SHOULDER_STYLES, ch.shoulderIndex).id,
-    badge: ch.badge ? normalizeBadge(ch.badge) : migrateLegacyBadge(ch.badgeIndex | 0, ch.shoulderIndex | 0),
+    frame: pieceOf(ch, "frame").id,
+    capeOff: pieceOf(ch, "cape").id === "none",
+    fem: pieceOf(ch, "body").id === "fem",
+    camo: camo.id === "none" ? null : camo,
+    helmet: pieceOf(ch, "helmet").id,
+    visor: pieceOf(ch, "visor").id,
+    shoulder: pieceOf(ch, "shoulder").id,
+    badge: normalizeBadge(ch.badge),
     treatment: resolveTreatment(ch),
     accessories: normalizeAccessories(ch.accessories),
     weapon,
     finish,
-    loadout: pick(LOADOUT_CLASSES, ch.loadoutIndex).id,
-    origin: pick(BACKSTORIES, ch.backstoryIndex).id,
-    skin: pick(SKIN_TONES, ch.skinToneIndex),
-    hair: pick(HAIR_STYLES, ch.hairIndex),
-    eyes: pick(EYE_COLORS, ch.eyeIndex).color,
-    variant: ch.armorVariant ? pick(ARMOR_STYLES, ch.armorIndex).variant || null : null,
+    loadout: pieceOf(ch, "loadout").id,
+    origin: pieceOf(ch, "backstory").id,
+    skin: pieceOf(ch, "skinTone"),
+    hair: pieceOf(ch, "hair"),
+    eyes: pieceOf(ch, "eye").color,
+    variant: ch.armorVariant ? armorPiece.variant || null : null,
     energy: pal.accent,
     core: mix(pal.accent, "#ffffff", 0.72),
     hot: mix(pal.accent, "#ffffff", 0.88),
@@ -2127,7 +2111,7 @@ export function buildAgentSvg(character, { pose = "idle", lighting = "showroom",
     lighting === "showroom"
       ? `<ellipse cx="0" cy="-24" rx="52" ry="86" fill="url(#aura)" class="ag-aura"/>`
       : "";
-  const accent = pick(CHARACTER_COLORS, (character || {}).colorIndex).accent;
+  const accent = pieceOf(character, "color").accent;
   const aura = `<radialGradient id="aura"><stop offset="0" stop-color="${accent}" stop-opacity=".16"/><stop offset=".6" stop-color="${accent}" stop-opacity=".05"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>`;
   const markup =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${view.join(" ")}" class="${className}" role="img" aria-label="Agent preview">` +
@@ -2151,7 +2135,7 @@ export function buildRifleSvg(character, { idPrefix = "", realistic = false } = 
   const r = chronoRifle();
   const extra = finishExtras(c);
   const inv = `transform="rotate(${-RIFLE_ROT}) translate(${f(-RIFLE_AT[0])},${f(-RIFLE_AT[1])})"`;
-  const label = `Chrono rifle, ${pick(WEAPON_SKINS, character.weaponSkinIndex).name} finish`;
+  const label = `Chrono rifle, ${pieceOf(character, "weaponSkin").name} finish`;
   const body = recolor(r.body, gm) + `<g ${RIFLE_TF}>${extra.body}</g>`;
   const glow = recolor(r.glow, gm) + (extra.glow ? `<g ${RIFLE_TF}>${extra.glow}</g>` : "");
   if (realistic) {

@@ -5,16 +5,14 @@
 
 import { normalizeCustomSkins, normalizeWeaponFinishes } from "../data/weapon-skins.js";
 import {
-  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
-  ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
-  BADGES, WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES,
   DEFAULT_CHARACTER,
   ACHIEVEMENTS,
   WEAPONS,
 } from "../data/index.js";
 import { PLAYER_AIM_LIMIT_X, PLAYER_AIM_LIMIT_Y } from "../constants.js";
 import { SETTINGS_REGISTRY } from "../settings/registry.js";
-import { normalizeBadge, normalizeAccessories, migrateLegacyBadge } from "./character-normalize.js";
+import { normalizeBadge, normalizeAccessories, normalizeLook, migrateLegacyBadge } from "./character-normalize.js";
+import { LEGACY_LOOK_INDICES, LEGACY_FIELD_NAMES } from "./legacy-look-indices.js";
 
 const SAVE_VERSION = 1;
 /**
@@ -154,49 +152,59 @@ export function setAlwaysTutorial(on) {
 
 // ── Character ────────────────────────────────────────────
 
+/** `cc_character` format: 2 stores piece ids; 1 (no `version`) stored table positions. */
+export const CHARACTER_SAVE_VERSION = 2;
+
 export function saveCharacter(character) {
-  try { localStorage.setItem("cc_character", JSON.stringify(character)); }
+  try { localStorage.setItem("cc_character", JSON.stringify({ ...character, version: CHARACTER_SAVE_VERSION })); }
   catch (_) {}
+}
+
+/**
+ * A parsed `cc_character` in the version 2 shape. A version 1 save (no
+ * `version`) stored each pick as its table position (`helmetIndex: 3`): each
+ * one is clamped to the range of its table as it shipped, then read through
+ * that frozen order (LEGACY_LOOK_INDICES) to its id, never through today's
+ * tables. A non-number position is dropped, so the field loads as its default.
+ * A save older than the badge editor gets its one legacy badge pick as a badge
+ * stack. No `*Index` key survives. Version 2 passes through as it is; ids are
+ * checked by normalizeLook. Does not touch its input.
+ * @param {object} raw
+ * @returns {object}
+ */
+export function migrateCharacterSave(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  if (Number(src.version) >= CHARACTER_SAVE_VERSION) return { ...src };
+  const out = {};
+  for (const [key, val] of Object.entries(src)) if (!(key in LEGACY_LOOK_INDICES)) out[key] = val;
+  for (const [legacy, ids] of Object.entries(LEGACY_LOOK_INDICES)) {
+    const pos = src[legacy];
+    if (legacy === "badgeIndex" || typeof pos !== "number" || !Number.isFinite(pos)) continue;
+    out[LEGACY_FIELD_NAMES[legacy]] = ids[Math.max(0, Math.min(ids.length - 1, Math.floor(pos)))];
+  }
+  // The badge read its pick unclamped: a position past the shipped list was
+  // no badge at all, and still is.
+  if (!src.badge) {
+    const pos = Number(src.badgeIndex) || 0;
+    out.badge = migrateLegacyBadge(LEGACY_LOOK_INDICES.badgeIndex[pos], out.shoulder);
+  }
+  out.version = CHARACTER_SAVE_VERSION;
+  return out;
 }
 
 export function loadCharacter(character) {
   try {
     const raw = localStorage.getItem("cc_character");
     if (!raw) return;
-    const saved = JSON.parse(raw);
-    const maxIndices = {
-      colorIndex: CHARACTER_COLORS.length - 1,
-      skinToneIndex: SKIN_TONES.length - 1,
-      hairIndex: HAIR_STYLES.length - 1,
-      eyeIndex: EYE_COLORS.length - 1,
-      armorIndex: ARMOR_STYLES.length - 1,
-      helmetIndex: HELMET_STYLES.length - 1,
-      visorIndex: VISOR_STYLES.length - 1,
-      shoulderIndex: SHOULDER_STYLES.length - 1,
-      badgeIndex: BADGES.length - 1,
-      weaponSkinIndex: WEAPON_SKINS.length - 1,
-      loadoutIndex: LOADOUT_CLASSES.length - 1,
-      backstoryIndex: BACKSTORIES.length - 1,
-      voiceIndex: VOICE_PROFILES.length - 1,
-      armorVariant: 1,
-      frameIndex: BODY_FRAMES.length - 1,
-      capeIndex: CAPE_STYLES.length - 1,
-      bodyIndex: BODY_TYPES.length - 1,
-      camoIndex: CAMO_STYLES.length - 1,
-    };
+    const saved = normalizeLook(migrateCharacterSave(JSON.parse(raw)));
     const OBJECT_FIELDS = new Set(["badge", "accessories", "weaponFinishes", "customSkins"]);
     for (const key of Object.keys(DEFAULT_CHARACTER)) {
       if (OBJECT_FIELDS.has(key)) continue;
-      if (Object.prototype.hasOwnProperty.call(saved, key)) {
-        let val = saved[key];
-        if (typeof val !== typeof DEFAULT_CHARACTER[key]) continue;
-        if (key in maxIndices) val = Math.max(0, Math.min(val, maxIndices[key]));
-        character[key] = val;
+      if (Object.prototype.hasOwnProperty.call(saved, key) && typeof saved[key] === typeof DEFAULT_CHARACTER[key]) {
+        character[key] = saved[key];
       }
     }
-    character.badge = saved.badge
-      ? normalizeBadge(saved.badge)
-      : migrateLegacyBadge(Number(saved.badgeIndex) || 0, Number(saved.shoulderIndex) || 0);
+    character.badge = normalizeBadge(saved.badge);
     character.accessories = normalizeAccessories(saved.accessories);
     character.customSkins = normalizeCustomSkins(saved.customSkins);
     character.weaponFinishes = normalizeWeaponFinishes(saved.weaponFinishes, character.customSkins);

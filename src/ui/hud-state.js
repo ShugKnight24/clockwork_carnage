@@ -11,7 +11,7 @@
 
 import { effectiveAimFov } from "../systems/aim.js";
 import { isCompactPhone } from "./layout.js";
-import { CHARACTER_COLORS, HELMET_STYLES, VISOR_STYLES } from "../data/index.js";
+import { pieceOf } from "../core/character-fields.js";
 import { isModernArt } from "../rendering/art-style.js";
 import { ammoTint } from "./reload-hud.js";
 
@@ -34,9 +34,9 @@ export function portraitState(game) {
     maxHealth: game.player.maxHealth,
     alive: game.player.alive,
     time: game.time,
-    palette: CHARACTER_COLORS[c.colorIndex || 0],
-    helmet: HELMET_STYLES[c.helmetIndex || 0],
-    visor: VISOR_STYLES[c.visorIndex || 0],
+    palette: pieceOf(c, "color"),
+    helmet: pieceOf(c, "helmet"),
+    visor: pieceOf(c, "visor"),
     shield: game.player.shield || 0,
     character: game.character,
   };

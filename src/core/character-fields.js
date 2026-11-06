@@ -1,13 +1,51 @@
 /**
  * Index-shaped access to every character field, so the showroom and the
  * Legacy creator can keep treating each option list as "key + index" while
- * the record stores nested ids (badge stack, accessories).
+ * the record stores ids (flat look fields, badge stack, accessories).
  *
- * Virtual keys: badge.preset, badge.symbol, badge.frame, badge.enamel,
- * badge.metal, badge.finish, acc.<slot>. Everything else is a flat index key.
+ * Flat keys are the look fields of LOOK_TABLES (`helmet`, `frame`, ...); the
+ * record holds the piece id, and a position is asked of the table only when
+ * a caller needs one. Virtual keys: badge.preset, badge.symbol, badge.frame,
+ * badge.enamel, badge.metal, badge.finish, acc.<slot>.
  */
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, BADGE_PRESETS, indexOfId } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
+import {
+  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS, ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
+  WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
+  pieceIn,
+} from "../data/cosmetics.js";
+
+/** Look field -> the table its id picks from. The one map of them. */
+export const LOOK_TABLES = Object.freeze({
+  color: CHARACTER_COLORS,
+  skinTone: SKIN_TONES,
+  hair: HAIR_STYLES,
+  eye: EYE_COLORS,
+  armor: ARMOR_STYLES,
+  helmet: HELMET_STYLES,
+  visor: VISOR_STYLES,
+  shoulder: SHOULDER_STYLES,
+  weaponSkin: WEAPON_SKINS,
+  loadout: LOADOUT_CLASSES,
+  backstory: BACKSTORIES,
+  voice: VOICE_PROFILES,
+  frame: BODY_FRAMES,
+  cape: CAPE_STYLES,
+  body: BODY_TYPES,
+  camo: CAMO_STYLES,
+});
+
+/**
+ * The table entry a character wears in a look field: its id, else the piece
+ * that replaced it (RETIRED_PIECES), else the table's first entry. Never
+ * undefined, whatever the record holds.
+ * @param {object|null|undefined} ch
+ * @param {string} field a key of LOOK_TABLES
+ */
+export function pieceOf(ch, field) {
+  return pieceIn(LOOK_TABLES[field], field, ch?.[field]);
+}
 
 const LAYER_FIELD = { "badge.symbol": ["symbol", SYMBOLS], "badge.frame": ["frame", FRAMES], "badge.enamel": ["enamel", ENAMELS], "badge.metal": ["metal", METALS] };
 
@@ -41,7 +79,8 @@ export function getIndex(ch, key) {
     const slot = key.slice(4);
     return Math.max(0, indexOfId(ACCESSORIES[slot] || [], ch.accessories?.[slot]));
   }
-  return ch[key] | 0;
+  const table = LOOK_TABLES[key];
+  return table ? table.indexOf(pieceOf(ch, key)) : ch[key] | 0;
 }
 
 const shown = (placements) => (placements.length ? [...placements] : ["chest"]);
@@ -64,8 +103,11 @@ export function withIndex(ch, key, idx) {
     const slot = key.slice(4);
     return { accessories: { ...ch.accessories, [slot]: ACCESSORIES[slot][idx].id } };
   }
-  if (key === "armorIndex" && ch.armorVariant) return { armorIndex: idx, armorVariant: 0 };
-  return { [key]: idx };
+  const table = LOOK_TABLES[key];
+  if (!table) return { [key]: idx };
+  const id = table[idx]?.id;
+  if (key === "armor" && ch.armorVariant) return { armor: id, armorVariant: 0 };
+  return { [key]: id };
 }
 
 export function togglePlacement(ch, placementId) {
@@ -83,16 +125,16 @@ export function cloneLook(ch) {
   return out;
 }
 
-/** Index fields that change the drawn agent (name and voice do not). */
+/** Look fields that change the drawn agent (name and voice do not). */
 const DRAWN = [
-  "colorIndex", "skinToneIndex", "hairIndex", "eyeIndex", "armorIndex", "helmetIndex",
-  "visorIndex", "shoulderIndex", "weaponSkinIndex", "loadoutIndex", "backstoryIndex", "armorVariant",
-  "frameIndex", "capeIndex", "bodyIndex", "camoIndex",
+  "color", "skinTone", "hair", "eye", "armor", "helmet",
+  "visor", "shoulder", "weaponSkin", "loadout", "backstory",
+  "frame", "cape", "body", "camo",
 ];
 
 export function lookKey(ch) {
   const c = ch || {};
-  const flat = DRAWN.map((k) => c[k] | 0).join(".");
+  const flat = `${DRAWN.map((k) => pieceOf(c, k).id).join(".")}.${c.armorVariant | 0}`;
   const b = c.badge;
   const badge = b
     ? `${b.finish}|${(b.placements || []).join(",")}|${(b.layers || []).map((l) => `${l.frame}:${l.symbol}:${l.enamel}:${l.metal}:${l.x}:${l.y}:${l.scale}:${l.rot}`).join(";")}`

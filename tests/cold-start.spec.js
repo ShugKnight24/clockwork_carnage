@@ -15,7 +15,7 @@ const RETURNING_PLAYER = () => {
   localStorage.setItem("cc_analytics_consent", "declined");
   localStorage.setItem("cc_seen_intro_flipbook", "1");
   localStorage.setItem("cc_seen_creator_intro", "1");
-  localStorage.setItem("cc_character", JSON.stringify({ name: "Agent", colorIndex: 0 }));
+  localStorage.setItem("cc_character", JSON.stringify({ version: 2, name: "Agent", color: "chrono_teal" }));
   localStorage.setItem(
     "cc_achievements",
     JSON.stringify({ unlocked: [], stats: { tutorialComplete: true } }),

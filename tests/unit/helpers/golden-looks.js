@@ -13,38 +13,14 @@ import {
   VISOR_STYLES,
   SHOULDER_STYLES,
   WEAPON_SKINS,
-  LOADOUT_CLASSES,
-  BACKSTORIES,
-  VOICE_PROFILES,
   BODY_FRAMES,
-  CAPE_STYLES,
   BODY_TYPES,
   CAMO_STYLES,
 } from "../../../src/data/cosmetics.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, layer } from "../../../src/data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../../../src/data/accessories.js";
-import { cloneLook } from "../../../src/core/character-fields.js";
+import { cloneLook, LOOK_TABLES } from "../../../src/core/character-fields.js";
 import { CAST_KEYS } from "../../../src/rendering/svg-art/agent-rig.js";
-
-/** Look field → [index field the record stores today, its table]. */
-const FIELDS = {
-  color: ["colorIndex", CHARACTER_COLORS],
-  skinTone: ["skinToneIndex", SKIN_TONES],
-  hair: ["hairIndex", HAIR_STYLES],
-  eye: ["eyeIndex", EYE_COLORS],
-  armor: ["armorIndex", ARMOR_STYLES],
-  helmet: ["helmetIndex", HELMET_STYLES],
-  visor: ["visorIndex", VISOR_STYLES],
-  shoulder: ["shoulderIndex", SHOULDER_STYLES],
-  weaponSkin: ["weaponSkinIndex", WEAPON_SKINS],
-  loadout: ["loadoutIndex", LOADOUT_CLASSES],
-  backstory: ["backstoryIndex", BACKSTORIES],
-  voice: ["voiceIndex", VOICE_PROFILES],
-  frame: ["frameIndex", BODY_FRAMES],
-  cape: ["capeIndex", CAPE_STYLES],
-  body: ["bodyIndex", BODY_TYPES],
-  camo: ["camoIndex", CAMO_STYLES],
-};
 
 /**
  * A full character from look fields named by piece id
@@ -56,16 +32,14 @@ const FIELDS = {
 export function lookFromIds(ids) {
   const ch = cloneLook(DEFAULT_CHARACTER);
   for (const [field, value] of Object.entries(ids)) {
-    const spec = FIELDS[field];
-    if (!spec) {
+    const table = LOOK_TABLES[field];
+    if (!table) {
       if (!(field in DEFAULT_CHARACTER)) throw new Error(`lookFromIds: unknown field "${field}"`);
       ch[field] = structuredClone(value);
       continue;
     }
-    const [indexField, table] = spec;
-    const idx = table.findIndex((e) => e.id === value);
-    if (idx < 0) throw new Error(`lookFromIds: unknown ${field} id "${value}"`);
-    ch[indexField] = idx;
+    if (!table.some((e) => e.id === value)) throw new Error(`lookFromIds: unknown ${field} id "${value}"`);
+    ch[field] = value;
   }
   return ch;
 }

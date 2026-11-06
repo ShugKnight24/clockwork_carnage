@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FIELD_TABLES, isVirtualKey, getIndex, withIndex, togglePlacement, cloneLook, lookKey } from "../../src/core/character-fields.js";
-import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
+import { FIELD_TABLES, LOOK_TABLES, isVirtualKey, getIndex, withIndex, togglePlacement, cloneLook, lookKey, pieceOf } from "../../src/core/character-fields.js";
+import { DEFAULT_CHARACTER, ARMOR_STYLES, HELMET_STYLES } from "../../src/data/cosmetics.js";
 import { SYMBOLS, FRAMES, FINISHES, BADGE_PRESETS, indexOfId } from "../../src/data/badges.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
 
@@ -10,15 +10,15 @@ describe("character fields", () => {
   it("knows its virtual keys", () => {
     expect(isVirtualKey("badge.symbol")).toBe(true);
     expect(isVirtualKey("acc.back")).toBe(true);
-    expect(isVirtualKey("armorIndex")).toBe(false);
+    expect(isVirtualKey("armor")).toBe(false);
     expect(FIELD_TABLES["acc.back"]).toBe(ACCESSORIES.back);
   });
 
   it("getIndex reads flat and nested fields", () => {
     const ch = fresh();
-    ch.armorIndex = 3;
+    ch.armor = ARMOR_STYLES[3].id;
     ch.accessories.back = "cloak";
-    expect(getIndex(ch, "armorIndex")).toBe(3);
+    expect(getIndex(ch, "armor")).toBe(3);
     expect(getIndex(ch, "badge.symbol")).toBe(indexOfId(SYMBOLS, "clock"));
     expect(getIndex(ch, "acc.back")).toBe(indexOfId(ACCESSORIES.back, "cloak"));
   });
@@ -58,14 +58,27 @@ describe("character fields", () => {
     expect(getIndex(ch, "badge.preset")).toBe(-1);
   });
 
-  it("withIndex on a flat key is a plain assignment", () => {
-    expect(withIndex(fresh(), "armorIndex", 2)).toEqual({ armorIndex: 2 });
+  it("withIndex on a flat key stores the id at that position", () => {
+    expect(withIndex(fresh(), "armor", 2)).toEqual({ armor: ARMOR_STYLES[2].id });
+  });
+
+  it("getIndex on an unknown or missing id is the first position", () => {
+    expect(getIndex({ ...fresh(), helmet: "nope" }, "helmet")).toBe(0);
+    expect(getIndex({}, "helmet")).toBe(0);
+  });
+
+  it("pieceOf resolves an id to its entry, and anything else to the default", () => {
+    const ch = { ...fresh(), helmet: "reaper" };
+    expect(pieceOf(ch, "helmet")).toBe(HELMET_STYLES.find((h) => h.id === "reaper"));
+    expect(pieceOf({ helmet: "nope" }, "helmet")).toBe(HELMET_STYLES[0]);
+    expect(pieceOf({ helmet: 3 }, "helmet")).toBe(HELMET_STYLES[0]);
+    expect(pieceOf(null, "frame")).toBe(LOOK_TABLES.frame[0]);
   });
 
   it("changing armour resets the variant to standard", () => {
     const ch = fresh();
     ch.armorVariant = 1;
-    expect(withIndex(ch, "armorIndex", 2)).toEqual({ armorIndex: 2, armorVariant: 0 });
+    expect(withIndex(ch, "armor", 2)).toEqual({ armor: ARMOR_STYLES[2].id, armorVariant: 0 });
   });
 
   it("togglePlacement adds and removes", () => {
@@ -88,9 +101,11 @@ describe("character fields", () => {
   it("lookKey changes with every drawn field and ignores name and voice", () => {
     const a = fresh();
     const k = lookKey(a);
-    expect(lookKey({ ...cloneLook(a), name: "Zed", voiceIndex: 3 })).toBe(k);
+    expect(lookKey({ ...cloneLook(a), name: "Zed", voice: "synthetic" })).toBe(k);
     for (const mutate of [
-      (c) => { c.colorIndex = 1; },
+      (c) => { c.color = "midnight_blue"; },
+      (c) => { c.frame = "strider"; },
+      (c) => { c.camo = "urban"; },
       (c) => { c.armorVariant = 1; },
       (c) => { c.accessories.neck = "scarf"; },
       (c) => { c.badge.placements = ["chest"]; },

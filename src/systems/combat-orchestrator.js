@@ -624,10 +624,11 @@ export function maybeDropGear(game, enemy, { chance = GEAR_DROP_CHANCE } = {}) {
   if (!pool.length) return null;
   const pick = pool[(Math.random() * pool.length) | 0];
   const entry = LOCKABLE[pick.key];
+  const piece = entry.table[pick.index];
   const drop = new Pickup(enemy.x, enemy.y, "gear", {
     slot: pick.key,
-    slotIndex: pick.index,
-    label: entry.table[pick.index]?.name || "Gear",
+    pieceId: piece?.id,
+    label: piece?.name || "Gear",
     kind: entry.kind,
   });
   game.entities.push(drop);
