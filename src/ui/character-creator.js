@@ -19,7 +19,8 @@ import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
-import { buildAgentParts, AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS } from "../rendering/svg-art/agent-rig.js";
+import { buildAgentParts, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
+import { FACE_HELMETS } from "../data/wardrobe-themes/index.js";
 
 // ── Shared category definitions (used by render + click handler) ──
 
@@ -201,7 +202,7 @@ function stageFor(key, ch) {
   const helmet = pieceOf(ch, "helmet").id;
   return {
     pose: ARMED_KEYS.has(key) ? "hero" : "idle",
-    peek: FACE_KEYS.has(key) && !OPEN_HELMETS.has(helmet),
+    peek: FACE_KEYS.has(key) && !FACE_HELMETS.has(helmet),
   };
 }
 

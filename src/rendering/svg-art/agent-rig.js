@@ -53,7 +53,8 @@ import { pieceOf } from "../../core/character-fields.js";
 import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { frameShape, frameLayers } from "./frames.js";
-import { frameHides } from "./wardrobe-themes/index.js";
+import { frameHides, helmetArt } from "./wardrobe-themes/index.js";
+import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 import { clamp } from "../../utils/math.js";
 import { hexRgb, rgbHex, mixHexClamped } from "../../utils/color.js";
@@ -747,93 +748,8 @@ function braid(c) {
 }
 
 // ---------------------------------------------------------------------------
-// Helmets and visors
+// Visors and the helmet kit (helmets: wardrobe-themes/)
 // ---------------------------------------------------------------------------
-
-/** Helmets that leave the face visible without `peek`. */
-export const OPEN_HELMETS = new Set(["wide", "mohawk"]);
-
-const SHELLS = {
-  standard:
-    "M0,-95 C7.6,-95 11.4,-89.8 11.4,-82.5 L11,-77 C10.6,-73.4 8.6,-70.6 5,-69 C3,-68.2 1.5,-68 0,-68 " +
-    "C-1.5,-68 -3,-68.2 -5,-69 C-8.6,-70.6 -10.6,-73.4 -11,-77 L-11.4,-82.5 C-11.4,-89.8 -7.6,-95 0,-95 Z",
-  angular: "M0,-96 L7.8,-94.4 L12,-88.4 L12.3,-79 L9.8,-72 L4.6,-68.2 L0,-67.6 L-4.6,-68.2 L-9.8,-72 L-12.3,-79 L-12,-88.4 L-7.8,-94.4 Z",
-  crested:
-    "M0,-95.6 C7.8,-95 11.6,-89.8 11.6,-82.5 L11.2,-77 C10.8,-73 8.6,-70.4 5,-68.8 L0,-67.6 L-5,-68.8 " +
-    "C-8.6,-70.4 -10.8,-73 -11.2,-77 L-11.6,-82.5 C-11.6,-89.8 -7.8,-95 0,-95.6 Z",
-  wide:
-    "M0,-96.4 C9.6,-96.4 14.2,-90.6 14.2,-82.8 L14.4,-75.4 C14,-71.6 11.2,-69.2 7.4,-68.4 L4.8,-68.2 L4.8,-71.6 " +
-    "C6.8,-73.2 8,-75.8 8.2,-79 L8.4,-87 L-8.4,-87 L-8.2,-79 C-8,-75.8 -6.8,-73.2 -4.8,-71.6 L-4.8,-68.2 L-7.4,-68.4 " +
-    "C-11.2,-69.2 -14,-71.6 -14.4,-75.4 L-14.2,-82.8 C-14.2,-90.6 -9.6,-96.4 0,-96.4 Z",
-  mohawk:
-    "M0,-95 C7.8,-95 11.8,-89.8 11.8,-82.5 L11.6,-76 C11.4,-72 9.8,-69.6 6.8,-68.6 L4.2,-68.4 C3.8,-71.4 3.6,-74 4.6,-76.6 " +
-    "L6.6,-80 L6.8,-86.6 L-6.8,-86.6 L-6.6,-80 L-4.6,-76.6 C-3.6,-74 -3.8,-71.4 -4.2,-68.4 L-6.8,-68.6 " +
-    "C-9.8,-69.6 -11.4,-72 -11.6,-76 L-11.8,-82.5 C-11.8,-89.8 -7.8,-95 0,-95 Z",
-  // Ordnance: hard faceted brow over a narrow jaw, built around a raised
-  // centre ridge that carries the targeting spine.
-  ordnance:
-    "M0,-97.4 L6.4,-95.6 L11.8,-90.4 L12.6,-82 L11.4,-76.6 L7.2,-71.2 L3.2,-68.2 L0,-67.8 " +
-    "L-3.2,-68.2 L-7.2,-71.2 L-11.4,-76.6 L-12.6,-82 L-11.8,-90.4 L-6.4,-95.6 Z",
-  // Bucket: low, wide and round, sunk deep so the collar swallows the neck.
-  bucket:
-    "M0,-93.2 C9,-93.2 13.6,-88.4 13.8,-81.6 L13.6,-75.4 C13.2,-71.6 10.4,-69 6.2,-68.2 " +
-    "L0,-67.6 L-6.2,-68.2 C-10.4,-69 -13.2,-71.6 -13.6,-75.4 L-13.8,-81.6 C-13.6,-88.4 -9,-93.2 0,-93.2 Z",
-  // Crusader: a beaked snout under a domed skull, cut for a vertical slit.
-  crusader:
-    "M0,-97 C8,-96.4 11.8,-90.8 11.8,-83.4 L11.4,-79 C11,-76.2 9.6,-74.2 7.4,-73 " +
-    "L5.6,-68.2 C3.6,-66.6 -3.6,-66.6 -5.6,-68.2 L-7.4,-73 C-9.6,-74.2 -11,-76.2 -11.4,-79 " +
-    "L-11.8,-83.4 C-11.8,-90.8 -8,-96.4 0,-97 Z",
-  // Sealed: one continuous teardrop shell, no ear cups, no seams.
-  sealed:
-    "M0,-95.8 C8.2,-95.8 12,-90.2 11.8,-82.6 L11.2,-76.2 C10.6,-72.4 8,-69.6 4.4,-68.4 " +
-    "L0,-67.8 L-4.4,-68.4 C-8,-69.6 -10.6,-72.4 -11.2,-76.2 L-11.8,-82.6 C-12,-90.2 -8.2,-95.8 0,-95.8 Z",
-};
-const SHELL_HALF = {
-  standard: 11.2, angular: 12.2, crested: 11.4, wide: 14.2, mohawk: 11.7,
-  ordnance: 12.5, bucket: 13.7, crusader: 11.7, sealed: 11.7,
-};
-
-/** Helmets that are one sealed shell — no bolted-on ear cups. */
-const EARLESS_HELMETS = new Set(["sealed", "crusader"]);
-
-/** Extra shell detail per helmet, drawn over the shell and under the visor. */
-function helmetDetail(c, style, w) {
-  switch (style) {
-    case "ordnance":
-      // Targeting spine down the centre ridge, plus a stubby sensor stalk.
-      return (
-        line("M0,-96.4 L0,-69", INK, 1.5, 0.75) +
-        line("M0,-95.6 L0,-70", "#c9d6e2", 0.6, 0.6) +
-        shape("M-12.4,-88.6 L-16.8,-90.6 L-17.4,-86.2 L-12.6,-84.6 Z", "url(#steelDk)", 0.7) +
-        line("M-5.4,-93.6 L-9.6,-89.4 M5.4,-93.6 L9.6,-89.4", INK, 0.55, 0.6)
-      );
-    case "bucket":
-      // Riveted brow band and a chin vent — utilitarian, not sculpted.
-      return (
-        line(`M${f(-w + 1.4)},-85.6 C-6,-88.4 6,-88.4 ${f(w - 1.4)},-85.6`, INK, 0.7, 0.75) +
-        `<g fill="#0a0f16">` +
-        [-9.4, -4.8, 4.8, 9.4].map((x) => `<circle cx="${f(x)}" cy="-84.2" r=".75"/>`).join("") +
-        `</g>` +
-        line("M-5.6,-72 L5.6,-72 M-4.8,-70.2 L4.8,-70.2", INK, 0.55, 0.65)
-      );
-    case "crusader":
-      // Beak ridge and a rim of rivets around the dome, monastic rather than
-      // military: the shell reads as cast, not assembled.
-      return (
-        line("M0,-96 L0,-73.4", INK, 1.2, 0.7) +
-        shape("M-2.4,-74.8 L2.4,-74.8 L1.8,-67.2 L-1.8,-67.2 Z", "url(#steelDk)", 0.7) +
-        `<g fill="#c8102e">` +
-        [-8.6, 0, 8.6].map((x) => `<circle cx="${f(x)}" cy="-91.4" r=".9"/>`).join("") +
-        `</g>` +
-        line("M-9.8,-88.4 C-5,-91 5,-91 9.8,-88.4", "#c8102e", 0.7, 0.85)
-      );
-    case "sealed":
-      // Almost nothing: one soft crown highlight is the whole point.
-      return line("M-6.6,-92.4 C-2.6,-94.2 2.6,-94.2 6.6,-92.4", "#f4fbfa", 0.8, 0.5);
-    default:
-      return "";
-  }
-}
 
 /** Closed visor per style: recess + glass markup and its glow. */
 function closedVisor(c) {
@@ -938,10 +854,6 @@ function raisedVisor(c, y) {
 }
 
 /**
- * Head assembly. Returns { back, front, glow }: `back` goes behind the body
- * (hoods, tool arms), `front` is the head itself, `glow` the lit parts.
- */
-/**
  * Body-type reshape: scale every x by a factor that depends on height, so
  * shoulders, waist and hips change width and everything at that height —
  * plates, arms, gear, badges — follows the silhouette. Works on any markup
@@ -1016,118 +928,11 @@ const FEM_PLATE =
   line("M-12.8,-50.8 C-11.2,-46.4 -5.8,-45.8 -2.2,-48", "#eaf4ff", 0.45, 0.3);
 
 /**
- * Reaper: a knit balaclava with a painted skull, the agent's own eyes looking
- * out of the sockets, a comms headset and a field scarf bunched at the neck.
+ * Round optics glazed per visor pick, the same glass and light as
+ * closedVisor; `lenses` are [x, y, r]. `glass` fills each lens, `glint` is
+ * its highlight, `glow` the lens light.
  */
-function reaperHood(c) {
-  const knit = "#141513";
-  const bone = "#cfc8b6";
-  const boneLo = "#8f8776";
-  const hood =
-    "M0,-95.6 C6.9,-95.6 10.1,-90.8 10.1,-84 C10.1,-78 9.4,-72.6 7,-68.6 L8.4,-64.8 L-8.4,-64.8 L-7,-68.6 " +
-    "C-9.4,-72.6 -10.1,-78 -10.1,-84 C-10.1,-90.8 -6.9,-95.6 0,-95.6 Z";
-  // Gaunt, angular skull: sharp temples, a brow that cuts down toward the
-  // nose (a scowl), hollow cheeks, a long grimace from cheek to cheek.
-  const cranium =
-    "M-7,-85.6 C-7.2,-90.6 -4.2,-93.6 0,-93.6 C4.2,-93.6 7.2,-90.6 7,-85.6 L6.4,-81.6 C5.2,-82.6 3.4,-83.4 1.2,-82 " +
-    "L0,-80.6 L-1.2,-82 C-3.4,-83.4 -5.2,-82.6 -6.4,-81.6 Z";
-  const jaw =
-    "M-6.2,-81 L-6.8,-77.6 L-5.4,-74.8 L-4,-72.4 L-2.6,-69.8 L2.6,-69.8 L4,-72.4 L5.4,-74.8 L6.8,-77.6 L6.2,-81 " +
-    "C5,-79.8 3.6,-79.2 2.4,-79 L-2.4,-79 C-3.6,-79.2 -5,-79.8 -6.2,-81 Z";
-  // Sockets slant down toward the nose; the top edge is the scowl.
-  const socket = "M-6.2,-84.6 C-4.6,-84.4 -2.6,-83.4 -1.1,-81.8 C-1.2,-80.2 -2.4,-79.2 -3.8,-79.2 C-5.6,-79.4 -6.6,-81.4 -6.2,-84.6 Z";
-  // Eyes behind the mask: black eye paint, only a cold glint shows.
-  const eye = (x) =>
-    `<ellipse cx="${x}" cy="-81.4" rx="1.05" ry=".42" fill="#2a2620" opacity=".9"/>` +
-    `<circle cx="${x}" cy="-81.4" r=".42" fill="${mix(c.eyes, "#000000", 0.35)}"/><circle cx="${x}" cy="-81.4" r=".2" fill="#020202"/>` +
-    `<circle cx="${f(x - 0.16)}" cy="-81.6" r=".11" fill="#fff"/>`;
-  let teeth = "";
-  // A long grimace: narrow teeth across the whole jaw, dark gaps between.
-  for (let i = -4; i <= 4; i++) {
-    const x = i * 0.78;
-    const h = 1.9 - Math.abs(i) * 0.14;
-    const y = -75.6 + Math.abs(i) * Math.abs(i) * 0.05;
-    teeth +=
-      `<rect x="${f(x - 0.3)}" y="${f(y)}" width=".6" height="${f(h)}" rx=".22" fill="${bone}"/>` +
-      `<rect x="${f(x - 0.28)}" y="${f(y + h + 0.35)}" width=".56" height="${f(h * 0.85)}" rx=".22" fill="${boneLo}"/>`;
-  }
-  const mouth = "M-3.9,-75.8 C-2,-76.4 2,-76.4 3.9,-75.8 L3.4,-72.2 C1.6,-71.4 -1.6,-71.4 -3.4,-72.2 Z";
-  const scarf =
-    "M-9.8,-70.2 C-6,-67 6,-67 9.8,-70.2 C11.6,-68.4 12.8,-66.4 12.6,-64.6 C10.4,-63.4 8.6,-63.6 7,-62.4 " +
-    "C4.6,-61 2.4,-62.2 0,-61 C-2.4,-62.2 -4.6,-61 -7,-62.4 C-8.6,-63.6 -10.4,-63.4 -12.6,-64.6 C-12.8,-66.4 -11.6,-68.4 -9.8,-70.2 Z";
-  const front =
-    shape(hood, knit, 1) +
-    `<path d="${hood}" fill="url(#weave)" opacity=".6"/>` +
-    `<ellipse cx="-4.4" cy="-90.6" rx="4" ry="2.4" fill="#fff" opacity=".05"/>` +
-    // The print, worn into the knit.
-    `<path d="${cranium}" fill="${bone}"/>` +
-    `<path d="${jaw}" fill="${bone}"/>` +
-    `<path d="M-6.6,-85.6 C-6.4,-89.8 -3.6,-92.4 0,-92.8" fill="none" stroke="#fff" stroke-width=".55" stroke-opacity=".35"/>` +
-    // Temple and cheek hollows.
-    `<path d="M6.8,-87.6 C6.2,-85.6 5.8,-84.4 5.2,-83.6 L6.6,-82.4 Z" fill="#141513" opacity=".55"/>` +
-    `<path d="M-6.8,-87.6 C-6.2,-85.6 -5.8,-84.4 -5.2,-83.6 L-6.6,-82.4 Z" fill="#141513" opacity=".55"/>` +
-    `<path d="M-6.4,-79.6 C-5.6,-78.4 -4.6,-77.4 -3.4,-76.8 L-5.2,-75.4 C-5.8,-76.6 -6.4,-78 -6.4,-79.6 Z" fill="#141513" opacity=".7"/>` +
-    `<path d="M6.4,-79.6 C5.6,-78.4 4.6,-77.4 3.4,-76.8 L5.2,-75.4 C5.8,-76.6 6.4,-78 6.4,-79.6 Z" fill="#141513" opacity=".7"/>` +
-    `<path d="${socket}" fill="#070707"/><path d="${mirror(socket)}" fill="#070707"/>` +
-    eye(-3.4) +
-    eye(3.4) +
-    // Grime running down from the sockets.
-    line("M-4.6,-79.2 C-4.8,-77.6 -4.6,-76.6 -4.9,-75.6 M-3.2,-79.2 L-3.3,-77.8 M4.4,-79.2 C4.6,-77.8 4.4,-77 4.6,-76.2", "#3a352a", 0.45, 0.55) +
-    `<path d="M-0.75,-79.2 L0,-81 L0.75,-79.2 L0.45,-77 L-0.45,-77 Z" fill="#070707"/>` +
-    `<path d="${mouth}" fill="#070707"/>` +
-    teeth +
-    `<g opacity=".25"><path d="${cranium}" fill="url(#weave)"/><path d="${jaw}" fill="url(#weave)"/></g>` +
-    `<g fill="#2e2a22" opacity=".3"><ellipse cx="4.8" cy="-89.4" rx="1.6" ry=".8"/><ellipse cx="-5.4" cy="-73.6" rx="1.1" ry=".6"/><ellipse cx="1.4" cy="-92" rx=".9" ry=".45"/></g>` +
-    // Comms headset.
-    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", INK, 1.8, 1) +
-    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", "#25282a", 1.1, 1) +
-    shape("M-12,-84.6 C-12,-86.2 -10.8,-86.8 -9.6,-86.8 L-8.8,-86.8 L-8.8,-76.6 L-9.6,-76.6 C-10.8,-76.6 -12,-77.2 -12,-78.8 Z", "#202326", 0.8) +
-    shape("M12,-84.6 C12,-86.2 10.8,-86.8 9.6,-86.8 L8.8,-86.8 L8.8,-76.6 L9.6,-76.6 C10.8,-76.6 12,-77.2 12,-78.8 Z", "#202326", 0.8) +
-    line("M-11.4,-85 L-11.4,-78.4 M11.4,-85 L11.4,-78.4", "#3a3f44", 0.5, 0.8) +
-    line("M-9.2,-79.6 C-8.6,-76.6 -7.4,-74.8 -5,-74.2", INK, 1, 1) +
-    line("M-9.2,-79.6 C-8.6,-76.6 -7.4,-74.8 -5,-74.2", "#30353a", 0.55, 1) +
-    `<ellipse cx="-4.8" cy="-74.2" rx=".8" ry=".65" fill="#111" stroke="${INK}" stroke-width=".35"/>` +
-    // Field scarf, drab and worn.
-    shape(scarf, "#34392a", 1) +
-    `<path d="${scarf}" fill="url(#weave)"/>` +
-    line("M-8.8,-67.8 C-5,-65 5,-65 8.8,-67.8 M-10.6,-66 C-7.4,-63.8 -4,-64.4 -1.6,-63 M10.6,-66 C7.4,-63.8 4,-64.4 1.6,-63", "#1c1f16", 0.6, 0.8) +
-    line("M-10.4,-69.4 C-6,-66.2 -2,-65.6 1,-65.6", "#5c624a", 0.5, 0.55);
-  return { front, glow: eyeGlow(c, 0.12) };
-}
-
-/** Do-rag: a tied head wrap over the skull, the face bare. */
-function bandanaHead(c) {
-  const cloth = "#2c3036";
-  const wrap =
-    "M-7.8,-84.4 C-8.2,-91.2 -4.6,-94.6 0,-94.6 C4.6,-94.6 8.2,-91.2 7.8,-84.4 C6.6,-86.8 4,-87.8 0,-87.9 C-4,-87.8 -6.6,-86.8 -7.8,-84.4 Z";
-  const knot = "M7.2,-89.6 C9.6,-90.6 11,-89.4 10.4,-87.6 C9.8,-86.4 8.4,-86.6 7.6,-87.4 Z";
-  const tails = "M9.6,-87.6 C11.4,-85 12.4,-81 12,-77.4 L10.6,-77.8 C10.8,-81 10.2,-84.4 8.8,-86.8 Z M10.2,-88 C12.6,-86.8 14.2,-84 14.4,-81.2 L13.2,-81 C12.8,-83.4 11.6,-85.6 9.6,-86.8 Z";
-  let dots = "";
-  for (let i = 0; i < 16; i++) {
-    const x = -6.4 + (i % 8) * 1.8 + (i > 7 ? 0.9 : 0);
-    const y = i > 7 ? -89.6 : -92.2;
-    dots += `<circle cx="${f(x)}" cy="${f(y + Math.abs(x) * 0.08)}" r=".32" fill="#5a6068"/>`;
-  }
-  return {
-    front:
-      face(c) +
-      shape(tails, cloth, 0.7) +
-      shape(wrap, cloth, 0.8) +
-      `<path d="${wrap}" fill="url(#weave)" opacity=".5"/>` +
-      dots +
-      line("M-6.8,-86.6 C-3.6,-88.6 3.6,-88.6 6.8,-86.6", "#4a5058", 0.5, 0.8) +
-      line("M-6,-91 C-3.6,-93 0,-93.4 2.6,-93", "#ffffff", 0.5, 0.18) +
-      shape(knot, cloth, 0.7),
-    glow: eyeGlow(c, 0.3),
-  };
-}
-
-/**
- * Pilot optics per visor pick, the same glass and light as closedVisor:
- * `glass` fills each lens, `glint` is its highlight, `lit` the lens glow
- * (null = unlit glass), `core` the inner light per lens.
- */
-function pilotLenses(c, lenses) {
+function visorLenses(c, lenses) {
   const e = c.energy;
   const each = (fn) => lenses.map(([x, y, r]) => fn(x, y, r)).join("");
   const glint = (color, op) => line(each((x, y, r) => `M${f(x - r * 0.55)},${f(y - r * 0.35)} Q${f(x - r * 0.2)},${f(y - r * 0.75)} ${f(x + r * 0.2)},${f(y - r * 0.7)} `), color, 0.4, op);
@@ -1183,107 +988,44 @@ function pilotLenses(c, lenses) {
   }
 }
 
-/** Pilot: a sealed shell with a dark face plate and three round optics, glazed per the visor pick. */
-function pilotHelmet(c) {
-  const shell = SHELLS.standard;
-  const plate = "M-9.6,-87.2 C-4.6,-88.8 4.6,-88.8 9.6,-87.2 L9.4,-77.8 C8,-74 5,-71.6 0,-70.8 C-5,-71.6 -8,-74 -9.4,-77.8 Z";
-  const lenses = [[0, -82.6, 2.5], [-5, -83.2, 1.9], [5, -83.2, 1.9]];
-  const optics = pilotLenses(c, lenses);
-  const ring = lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r + 0.7)}" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${r}" fill="${optics.glass}" stroke="${INK}" stroke-width=".35"/>`).join("");
+/**
+ * A helmet shell from its outline (kit for helmet painters): the steel
+ * shell, the dome's sheen and rim light, and bolted ear cups at ±half with
+ * their light (`ears: false` for a one-piece shell).
+ * @param {object} c resolved look
+ * @param {{ path: string, half: number, ears?: boolean }} style
+ * @returns {{ shell: string, dome: string, ears: string, earGlow: string }}
+ */
+function helmetShell(c, { path, half: w, ears = true }) {
+  const earX = w - 0.3;
   return {
-    front:
-      shape(shell, "url(#steel)") +
+    shell: shape(path, "url(#steel)"),
+    dome:
       `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
-      shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-88.6 L-1.5,-88.6 Z", "url(#steelDk)", 0.5) +
-      shape(plate, "#0c0f13", 0.8) +
-      ring +
-      optics.glint +
-      line("M-2.6,-75.4 L2.6,-75.4 M-3,-73.8 L3,-73.8", "#2a3038", 0.6, 1) +
-      line("M-1.2,-84.2 C-0.6,-84.8 0.4,-84.9 1,-84.6", "#ffffff", 0.45, 0.8) +
-      `<circle cx="-11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`,
-    glow: optics.glow,
+      line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, MATTE.has(c.armor) ? 0.3 : 0.8) +
+      line(`M${f(w - 0.6)},-90 C${f(w + 0.4)},-87 ${f(w + 0.4)},-83 ${f(w - 0.2)},-78.6`, c.rim, 0.8, 0.85),
+    ears: ears
+      ? `<circle cx="${f(-earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>` +
+        `<circle cx="${f(earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`
+      : "",
+    earGlow: ears ? glowOf(`<circle cx="${f(-earX)}" cy="-80.6" r=".6"/><circle cx="${f(earX)}" cy="-80.6" r=".6"/>`, c.energy, c.core) : "",
   };
 }
 
+/**
+ * The kit helmet painters draw with (wardrobe-themes/index.js documents
+ * each). Generic: none of it knows a helmet id; a helmet's own shape comes
+ * in as arguments.
+ */
+const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix });
+
+/**
+ * Head assembly: the helmet's painter, or for a face peek the bare head.
+ * @returns {{ front: string, glow: string }}
+ */
 function head(c, peek) {
-  const style = c.helmet;
-  if (style === "reaper" && !peek) return reaperHood(c);
-  if (style === "bandana" && !peek) return bandanaHead(c);
-  if (style === "pilot" && !peek) return pilotHelmet(c);
-  const w = SHELL_HALF[style] || 11.2;
-  const earX = w - 0.3;
-  if (peek) {
-    return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
-  }
-  const shell = SHELLS[style] || SHELLS.standard;
-  const ears = EARLESS_HELMETS.has(style)
-    ? ""
-    : `<circle cx="${f(-earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>` +
-      `<circle cx="${f(earX)}" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`;
-  const earGlow = EARLESS_HELMETS.has(style)
-    ? ""
-    : glowOf(`<circle cx="${f(-earX)}" cy="-80.6" r=".6"/><circle cx="${f(earX)}" cy="-80.6" r=".6"/>`, c.energy, c.core);
-  const dome =
-    `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
-    line(`M${f(-w + 3.2)},-91 C-6.4,-93.4 -3.8,-94.4 -2.3,-94.4`, "#f4faff", 0.8, MATTE.has(c.armor) ? 0.3 : 0.8) +
-    line(`M${f(w - 0.6)},-90 C${f(w + 0.4)},-87 ${f(w + 0.4)},-83 ${f(w - 0.2)},-78.6`, c.rim, 0.8, 0.85);
-
-  if (OPEN_HELMETS.has(style)) {
-    const liner = `<path d="M${f(-w + 1.2)},-86 C${f(-w + 1.2)},-92 -5,-94.4 0,-94.4 C5,-94.4 ${f(w - 1.2)},-92 ${f(w - 1.2)},-86 L${f(w - 1.6)},-70 L${f(-w + 1.6)},-70 Z" fill="#070a10"/>`;
-    const visorUp = raisedVisor(c, style === "wide" ? -86.6 : -86.4);
-    let extra = "";
-    if (style === "wide") {
-      extra =
-        line("M-14.2,-82.8 C-10,-84.6 -8.8,-86 -8.4,-87", INK, 0.5, 0.6) +
-        line("M14.2,-82.8 C10,-84.6 8.8,-86 8.4,-87", INK, 0.5, 0.6) +
-        line("M-12.8,-76 L-8.8,-76.6 M12.8,-76 L8.8,-76.6", INK, 0.45, 0.55) +
-        shape("M-4.8,-96 L4.8,-96 L4.2,-92.6 L-4.2,-92.6 Z", "url(#paint)", 0.5);
-    } else {
-      // Centurion: painted bristle crest front-to-back, cheek guard rivets
-      extra =
-        shape("M-2.9,-94.6 C-3.6,-100.6 -2.6,-105.6 0,-107.4 C2.6,-105.6 3.6,-100.6 2.9,-94.6 Z", "url(#paint)", 0.8) +
-        line("M-1.4,-95 L-1.6,-104.4 M0,-95 L0,-106.6 M1.4,-95 L1.6,-104.4", mix(c.pal.dark, "#000000", 0.4), 0.35, 0.8) +
-        line("M-2,-96 C-2.6,-100 -2,-103.6 -0.4,-105.8", mix(c.pal.primary, "#ffffff", 0.5), 0.45, 0.7) +
-        `<g fill="#9fb2c4"><circle cx="-8.4" cy="-74" r=".55"/><circle cx="8.4" cy="-74" r=".55"/><circle cx="-9.2" cy="-78.2" r=".55"/><circle cx="9.2" cy="-78.2" r=".55"/></g>`;
-    }
-    return {
-      front: hairBack(c) + liner + face(c) + hair(c, true) + shape(shell, "url(#steel)") + dome + extra + ears + visorUp.body,
-      glow: earGlow + visorUp.glow + eyeGlow(c, 0.35),
-    };
-  }
-
-  const visor = closedVisor(c);
-  let details = line(`M${f(-w + 0.3)},-86 C-6,-88.4 6,-88.4 ${f(w - 0.3)},-86`, INK, 0.6, 0.7);
-  if (visor.jaw) {
-    const jaw =
-      style === "angular"
-        ? "M-6.8,-76.4 L0,-75.2 L6.8,-76.4 L5,-70 L0,-68.4 L-5,-70 Z"
-        : "M-6.6,-76.1 L-3.3,-76.8 L0,-75.7 L3.3,-76.8 L6.6,-76.1 L5.3,-71 C3.6,-69.5 1.8,-68.9 0,-68.8 C-1.8,-68.9 -3.6,-69.5 -5.3,-71 Z";
-    details +=
-      line(`M${f(-w + 0.4)},-78 C-8.8,-75 -7.6,-72.6 -5.2,-70.6`, INK, 0.5, 0.6) +
-      line(`M${f(w - 0.4)},-78 C8.8,-75 7.6,-72.6 5.2,-70.6`, INK, 0.5, 0.6) +
-      shape(jaw, "url(#steelDk)", 0.6) +
-      line("M-2.2,-74 L2.2,-74 M-2.4,-72.5 L2.4,-72.5 M-2,-71 L2,-71", "#020306", 0.55, 0.9);
-  }
-  if (style === "standard") details = shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-86.6 L-1.5,-86.6 Z", "url(#steelDk)", 0.5) + details;
-  if (style === "angular")
-    details += line("M-12,-88.4 L0,-90.6 L12,-88.4 M-7.8,-94.4 L0,-90.6 L7.8,-94.4 M0,-96 L0,-90.6", INK, 0.45, 0.55) + line("M-11.4,-88.8 L-1,-90.6", "#f4faff", 0.45, 0.5);
-  let fins = "";
-  if (style === "crested") {
-    const cheek = "M-11,-85 L-17.6,-93.4 L-16.2,-86.4 L-11.4,-78.6 Z";
-    fins =
-      shape(cheek, "url(#steelDk)", 0.7) +
-      shape(mirror(cheek), "url(#steelDk)", 0.7) +
-      line("M-16.8,-91.6 L-12,-84.6", c.pal.accent, 0.4, 0.55);
-    details +=
-      shape("M-1.6,-94.8 L-1,-103 L0,-105.2 L1,-103 L1.6,-94.8 Z", "url(#steel)", 0.7) +
-      shape("M-0.8,-95 L-0.5,-102 L0,-103.4 L0.5,-102 L0.8,-95 Z", "url(#paint)", 0.3) +
-      line("M-1.6,-94.8 L-1.5,-88.6 M1.6,-94.8 L1.5,-88.6", INK, 0.4, 0.5);
-  }
-  return {
-    front: fins + shape(shell, "url(#steel)") + dome + details + helmetDetail(c, style, w) + ears + visor.body,
-    glow: earGlow + visor.glow + (visor.eyeGlints ? eyeGlow(c, 0.9, true) : ""),
-  };
+  if (peek) return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
+  return helmetArt(c.helmet).paint(c, HELMET_KIT);
 }
 
 /** Eye glow: chrono-augmented irises, visible faintly through a visor. */
@@ -1916,27 +1658,17 @@ function forearmAxis({ el, wr }) {
   return { x: (el[0] + wr[0]) / 2, y: (el[1] + wr[1]) / 2, rot: turnOf(el, wr), len: Math.hypot(wr[0] - el[0], wr[1] - el[1]), size: 0 };
 }
 
-/** Height of the side rail where lamps and whips mount; Ordnance's sensor stalk sits there, so it drops to the ear cup. */
-const SIDE_RAIL = { ordnance: -79.4 };
-
-/** Top of each helmet shell (SHELLS), where crown gear seats. */
-const SHELL_TOP = {
-  standard: -95, angular: -96, crested: -95.6, wide: -96.4, mohawk: -95,
-  ordnance: -97.4, bucket: -93.2, crusader: -97, sealed: -95.8,
-};
-
 /**
  * Attachment points on the rig, in rig units: badges (Task 8) and
  * accessories (Task 9) are placed from here, never from their own offsets.
  * `size` is the badge diameter at that point. Helmet mounts (crown, browL,
- * sideL) are seated on the given helmet's shell.
+ * sideL) are seated on the given helmet's shell (its art's anchors).
  */
 export function rigAnchors(P, tilt, pose, helmet = "standard") {
   const [armL, armR] = P.arms.map((a, i) => armJoints(a, i === 0 ? -1 : 1));
   const [hipL, hipR] = P.legs.map((l) => l.hip);
   const [kneeL, kneeR] = P.legs.map((l) => l.kn);
-  const top = SHELL_TOP[helmet] ?? SHELL_TOP.standard;
-  const half = SHELL_HALF[helmet] || SHELL_HALF.standard;
+  const { top, half, rail } = helmetArt(helmet).anchors;
   const [legL, legR] = P.legs;
   const thigh = lerp(legL.hip, legL.kn, 0.36);
   return {
@@ -1957,7 +1689,7 @@ export function rigAnchors(P, tilt, pose, helmet = "standard") {
     kneeR: { x: kneeR[0], y: kneeR[1], rot: turnOf(legR.kn, legR.an), size: 0 },
     crown: { x: 0, y: top + 0.8, rot: 0, size: 0 },
     browL: { x: 0, y: top + 7.6, rot: 0, size: 0 },
-    sideL: { x: -half + 0.2, y: SIDE_RAIL[helmet] ?? -86.4, rot: 0, size: 0 },
+    sideL: { x: -half + 0.2, y: rail, rot: 0, size: 0 },
     pose,
   };
 }
@@ -1998,7 +1730,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const acc = paintAccessories(c.accessories, A, c);
   const shoulderAO = P.arms.map((arm) => `<ellipse cx="${f(arm.sh[0])}" cy="${f(arm.sh[1] + 9)}" rx="7" ry="3.4" fill="url(#shade)"/>`).join("");
   const kit = gear(c, P);
-  const showFace = peek || OPEN_HELMETS.has(c.helmet);
+  const showFace = peek || FACE_HELMETS.has(c.helmet);
 
   let rifle = { body: "", hands: "", glow: "" };
   if (armed) {
@@ -2055,7 +1787,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
   const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
-  const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
+  const helmBadge = wears(c, "helmet") && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
     cape = `<g clip-path="url(#capeCut)">${cape}</g>` + line(capeHemLine(CAPE_HEM[c.armor]), mix(c.cape[3], "#000000", 0.4), 1.1, 0.8);
@@ -2288,7 +2020,7 @@ function fallenParts(c) {
   const [upperArm, trappedArm] = [armoredArm(P.arms[0], -1, true), armoredArm(P.arms[1], 1, false)];
   const [upperLeg, lowerLeg] = [armoredLeg(P.legs[0], -1), armoredLeg(P.legs[1], 1)];
   const kit = gear(c, P);
-  const showFace = OPEN_HELMETS.has(c.helmet);
+  const showFace = FACE_HELMETS.has(c.helmet);
   const h = head(c, false);
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
@@ -2410,7 +2142,7 @@ function castFallen(c, realistic) {
   const o = realOpts(c);
   const R = (m) => realizeMarkup(m, o);
   // Filters wrap the rotated rig so the key light stays screen-space.
-  const headFx = OPEN_HELMETS.has(c.helmet) ? "rcloth" : "rmat";
+  const headFx = FACE_HELMETS.has(c.helmet) ? "rcloth" : "rmat";
   return {
     box,
     defs: realAgentDefs(c) + realizeDefs(p.capeIn, {}, 0.45) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.5, grime: 0.32, seed: 9 }),

@@ -1,4 +1,4 @@
-import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg, camoPattern } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, buildAgentSvg, buildRifleSvg, camoPattern } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
@@ -7,6 +7,7 @@ import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, to
 import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/data/accessories.js";
+import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
   ARMOR_STYLES,
@@ -2180,7 +2181,7 @@ class AgentShowroom extends HTMLElement {
   stagePeek(ch) {
     if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
     const helm = pieceOf(ch, "helmet").id;
-    if (OPEN_HELMETS.has(helm)) return false;
+    if (FACE_HELMETS.has(helm)) return false;
     // Face edits show the face even under a closed helmet.
     const key = this.preview?.key || this.previewSection;
     return FACE_KEYS.has(key);

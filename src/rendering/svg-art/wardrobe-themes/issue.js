@@ -9,11 +9,159 @@
  *   operator  — soft kit: fabric sleeves and trousers, chest rig, elbow pads
  *   wraith    — hooded long coat over wrapped forearms and shins
  *   breacher  — ballistic chest, riot vambrace, grenade belt, heavy boots
+ *
+ * Helmets: standard, wide (Bastion, open), angular, mohawk (Centurion,
+ * open), crested (Vanguard), ordnance, bucket, crusader, sealed, reaper
+ * (balaclava), pilot (tri-lens), bandana (do-rag).
  */
 import { INK, RIM, f, pt, lerp, mirror, shape, line, part, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
 import { STEEL, STEEL_DK, SUIT, plateAt, lineAt, mirrorIf, k, T, S } from "../frame-kit.js";
 
 const NONE = { under: "", legs: "", torso: "", arms: "", glow: "" };
+
+// ── Helmets: outlines and table (painters at the end) ──────────────────────
+
+/** Shell outlines, by helmet id. */
+const SHELLS = {
+  standard:
+    "M0,-95 C7.6,-95 11.4,-89.8 11.4,-82.5 L11,-77 C10.6,-73.4 8.6,-70.6 5,-69 C3,-68.2 1.5,-68 0,-68 " +
+    "C-1.5,-68 -3,-68.2 -5,-69 C-8.6,-70.6 -10.6,-73.4 -11,-77 L-11.4,-82.5 C-11.4,-89.8 -7.6,-95 0,-95 Z",
+  angular: "M0,-96 L7.8,-94.4 L12,-88.4 L12.3,-79 L9.8,-72 L4.6,-68.2 L0,-67.6 L-4.6,-68.2 L-9.8,-72 L-12.3,-79 L-12,-88.4 L-7.8,-94.4 Z",
+  crested:
+    "M0,-95.6 C7.8,-95 11.6,-89.8 11.6,-82.5 L11.2,-77 C10.8,-73 8.6,-70.4 5,-68.8 L0,-67.6 L-5,-68.8 " +
+    "C-8.6,-70.4 -10.8,-73 -11.2,-77 L-11.6,-82.5 C-11.6,-89.8 -7.8,-95 0,-95.6 Z",
+  wide:
+    "M0,-96.4 C9.6,-96.4 14.2,-90.6 14.2,-82.8 L14.4,-75.4 C14,-71.6 11.2,-69.2 7.4,-68.4 L4.8,-68.2 L4.8,-71.6 " +
+    "C6.8,-73.2 8,-75.8 8.2,-79 L8.4,-87 L-8.4,-87 L-8.2,-79 C-8,-75.8 -6.8,-73.2 -4.8,-71.6 L-4.8,-68.2 L-7.4,-68.4 " +
+    "C-11.2,-69.2 -14,-71.6 -14.4,-75.4 L-14.2,-82.8 C-14.2,-90.6 -9.6,-96.4 0,-96.4 Z",
+  mohawk:
+    "M0,-95 C7.8,-95 11.8,-89.8 11.8,-82.5 L11.6,-76 C11.4,-72 9.8,-69.6 6.8,-68.6 L4.2,-68.4 C3.8,-71.4 3.6,-74 4.6,-76.6 " +
+    "L6.6,-80 L6.8,-86.6 L-6.8,-86.6 L-6.6,-80 L-4.6,-76.6 C-3.6,-74 -3.8,-71.4 -4.2,-68.4 L-6.8,-68.6 " +
+    "C-9.8,-69.6 -11.4,-72 -11.6,-76 L-11.8,-82.5 C-11.8,-89.8 -7.8,-95 0,-95 Z",
+  // Ordnance: hard faceted brow over a narrow jaw, built around a raised
+  // centre ridge that carries the targeting spine.
+  ordnance:
+    "M0,-97.4 L6.4,-95.6 L11.8,-90.4 L12.6,-82 L11.4,-76.6 L7.2,-71.2 L3.2,-68.2 L0,-67.8 " +
+    "L-3.2,-68.2 L-7.2,-71.2 L-11.4,-76.6 L-12.6,-82 L-11.8,-90.4 L-6.4,-95.6 Z",
+  // Bucket: low, wide and round, sunk deep so the collar swallows the neck.
+  bucket:
+    "M0,-93.2 C9,-93.2 13.6,-88.4 13.8,-81.6 L13.6,-75.4 C13.2,-71.6 10.4,-69 6.2,-68.2 " +
+    "L0,-67.6 L-6.2,-68.2 C-10.4,-69 -13.2,-71.6 -13.6,-75.4 L-13.8,-81.6 C-13.6,-88.4 -9,-93.2 0,-93.2 Z",
+  // Crusader: a beaked snout under a domed skull, cut for a vertical slit.
+  crusader:
+    "M0,-97 C8,-96.4 11.8,-90.8 11.8,-83.4 L11.4,-79 C11,-76.2 9.6,-74.2 7.4,-73 " +
+    "L5.6,-68.2 C3.6,-66.6 -3.6,-66.6 -5.6,-68.2 L-7.4,-73 C-9.6,-74.2 -11,-76.2 -11.4,-79 " +
+    "L-11.8,-83.4 C-11.8,-90.8 -8,-96.4 0,-97 Z",
+  // Sealed: one continuous teardrop shell, no ear cups, no seams.
+  sealed:
+    "M0,-95.8 C8.2,-95.8 12,-90.2 11.8,-82.6 L11.2,-76.2 C10.6,-72.4 8,-69.6 4.4,-68.4 " +
+    "L0,-67.8 L-4.4,-68.4 C-8,-69.6 -10.6,-72.4 -11.2,-76.2 L-11.8,-82.6 C-12,-90.2 -8.2,-95.8 0,-95.8 Z",
+};
+/** A helmet's art: its anchors, and a painter that is given them. */
+const helmet = (anchors, draw) => ({ anchors, paint: (c, K) => draw(c, K, anchors) });
+/** Anchors for a shell `top`, `half` wide, with the side rail at `rail`. */
+const at = (top, half, rail = -86.4) => ({ top, half, rail });
+
+/** The plated jaw under a visor that leaves one (closedVisor's `jaw`). */
+const JAW = "M-6.6,-76.1 L-3.3,-76.8 L0,-75.7 L3.3,-76.8 L6.6,-76.1 L5.3,-71 C3.6,-69.5 1.8,-68.9 0,-68.8 C-1.8,-68.9 -3.6,-69.5 -5.3,-71 Z";
+
+const HELMETS = {
+  // Standard: a raised ridge down the crown.
+  standard: helmet(at(-95, 11.2), closedHelm(SHELLS.standard, { crown: shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-86.6 L-1.5,-86.6 Z", "url(#steelDk)", 0.5) })),
+  // Bastion: wide, open-faced, a painted crown plate.
+  wide: helmet(
+    at(-96.4, 14.2),
+    openHelm(
+      SHELLS.wide,
+      -86.6,
+      () =>
+        line("M-14.2,-82.8 C-10,-84.6 -8.8,-86 -8.4,-87", INK, 0.5, 0.6) +
+        line("M14.2,-82.8 C10,-84.6 8.8,-86 8.4,-87", INK, 0.5, 0.6) +
+        line("M-12.8,-76 L-8.8,-76.6 M12.8,-76 L8.8,-76.6", INK, 0.45, 0.55) +
+        shape("M-4.8,-96 L4.8,-96 L4.2,-92.6 L-4.2,-92.6 Z", "url(#paint)", 0.5),
+    ),
+  ),
+  // Angular: faceted, a sharper jaw.
+  angular: helmet(
+    at(-96, 12.2),
+    closedHelm(SHELLS.angular, {
+      jaw: "M-6.8,-76.4 L0,-75.2 L6.8,-76.4 L5,-70 L0,-68.4 L-5,-70 Z",
+      detail: () => line("M-12,-88.4 L0,-90.6 L12,-88.4 M-7.8,-94.4 L0,-90.6 L7.8,-94.4 M0,-96 L0,-90.6", INK, 0.45, 0.55) + line("M-11.4,-88.8 L-1,-90.6", "#f4faff", 0.45, 0.5),
+    }),
+  ),
+  // Centurion: painted bristle crest front-to-back, cheek guard rivets.
+  mohawk: helmet(
+    at(-95, 11.7),
+    openHelm(
+      SHELLS.mohawk,
+      -86.4,
+      (c, K) =>
+        shape("M-2.9,-94.6 C-3.6,-100.6 -2.6,-105.6 0,-107.4 C2.6,-105.6 3.6,-100.6 2.9,-94.6 Z", "url(#paint)", 0.8) +
+        line("M-1.4,-95 L-1.6,-104.4 M0,-95 L0,-106.6 M1.4,-95 L1.6,-104.4", K.mix(c.pal.dark, "#000000", 0.4), 0.35, 0.8) +
+        line("M-2,-96 C-2.6,-100 -2,-103.6 -0.4,-105.8", K.mix(c.pal.primary, "#ffffff", 0.5), 0.45, 0.7) +
+        `<g fill="#9fb2c4"><circle cx="-8.4" cy="-74" r=".55"/><circle cx="8.4" cy="-74" r=".55"/><circle cx="-9.2" cy="-78.2" r=".55"/><circle cx="9.2" cy="-78.2" r=".55"/></g>`,
+    ),
+  ),
+  // Vanguard: swept cheek fins and a forward crest blade.
+  crested: helmet(
+    at(-95.6, 11.4),
+    closedHelm(SHELLS.crested, {
+      fins: (c) => {
+        const cheek = "M-11,-85 L-17.6,-93.4 L-16.2,-86.4 L-11.4,-78.6 Z";
+        return shape(cheek, "url(#steelDk)", 0.7) + shape(mirror(cheek), "url(#steelDk)", 0.7) + line("M-16.8,-91.6 L-12,-84.6", c.pal.accent, 0.4, 0.55);
+      },
+      detail: () =>
+        shape("M-1.6,-94.8 L-1,-103 L0,-105.2 L1,-103 L1.6,-94.8 Z", "url(#steel)", 0.7) +
+        shape("M-0.8,-95 L-0.5,-102 L0,-103.4 L0.5,-102 L0.8,-95 Z", "url(#paint)", 0.3) +
+        line("M-1.6,-94.8 L-1.5,-88.6 M1.6,-94.8 L1.5,-88.6", INK, 0.4, 0.5),
+    }),
+  ),
+  // Ordnance: targeting spine down the centre ridge, plus a stubby sensor
+  // stalk on the side rail, so side gear drops to the ear cup.
+  ordnance: helmet(
+    at(-97.4, 12.5, -79.4),
+    closedHelm(SHELLS.ordnance, {
+      detail: () =>
+        line("M0,-96.4 L0,-69", INK, 1.5, 0.75) +
+        line("M0,-95.6 L0,-70", "#c9d6e2", 0.6, 0.6) +
+        shape("M-12.4,-88.6 L-16.8,-90.6 L-17.4,-86.2 L-12.6,-84.6 Z", "url(#steelDk)", 0.7) +
+        line("M-5.4,-93.6 L-9.6,-89.4 M5.4,-93.6 L9.6,-89.4", INK, 0.55, 0.6),
+    }),
+  ),
+  // Bucket: riveted brow band and a chin vent — utilitarian, not sculpted.
+  bucket: helmet(
+    at(-93.2, 13.7),
+    closedHelm(SHELLS.bucket, {
+      detail: (c, w) =>
+        line(`M${f(-w + 1.4)},-85.6 C-6,-88.4 6,-88.4 ${f(w - 1.4)},-85.6`, INK, 0.7, 0.75) +
+        `<g fill="#0a0f16">` +
+        [-9.4, -4.8, 4.8, 9.4].map((x) => `<circle cx="${f(x)}" cy="-84.2" r=".75"/>`).join("") +
+        `</g>` +
+        line("M-5.6,-72 L5.6,-72 M-4.8,-70.2 L4.8,-70.2", INK, 0.55, 0.65),
+    }),
+  ),
+  // Crusader: one cast shell (no ear cups). Beak ridge and a rim of rivets
+  // around the dome, monastic rather than military.
+  crusader: helmet(
+    at(-97, 11.7),
+    closedHelm(SHELLS.crusader, {
+      ears: false,
+      detail: () =>
+        line("M0,-96 L0,-73.4", INK, 1.2, 0.7) +
+        shape("M-2.4,-74.8 L2.4,-74.8 L1.8,-67.2 L-1.8,-67.2 Z", "url(#steelDk)", 0.7) +
+        `<g fill="#c8102e">` +
+        [-8.6, 0, 8.6].map((x) => `<circle cx="${f(x)}" cy="-91.4" r=".9"/>`).join("") +
+        `</g>` +
+        line("M-9.8,-88.4 C-5,-91 5,-91 9.8,-88.4", "#c8102e", 0.7, 0.85),
+    }),
+  ),
+  // Sealed: one continuous shell, no ear cups; one soft crown highlight is
+  // the whole point.
+  sealed: helmet(at(-95.8, 11.7), closedHelm(SHELLS.sealed, { ears: false, detail: () => line("M-6.6,-92.4 C-2.6,-94.2 2.6,-94.2 6.6,-92.4", "#f4fbfa", 0.8, 0.5) })),
+  reaper: helmet(at(-95, 11.2), reaper),
+  pilot: helmet(at(-95, 11.2), pilot),
+  bandana: helmet(at(-95, 11.2), bandana),
+};
 
 export default {
   id: "issue",
@@ -27,6 +175,7 @@ export default {
     wraith: { shape: { width: 1, shoulder: 0.96, hides: ["cape", "limbGlow"] }, layers: wraith },
     breacher: { shape: { width: 1.04, shoulder: 1.12, hides: [] }, layers: breacher },
   },
+  helmets: HELMETS,
 };
 
 // ── Strider: lean, modular, a jump-kit ──────────────────────────────────────
@@ -262,4 +411,176 @@ function breacher(P, c) {
     })
     .join("");
   return { under: "", legs, torso, arms, glow: "" };
+}
+
+// ── Helmet painters ────────────────────────────────────────────────────────
+
+/**
+ * A closed helmet: the shell, a brow seam, the visor pick drawn down with
+ * the jaw plated under it, ear cups. `fins` go behind the shell, `crown`
+ * before the brow seam, `detail(c, w)` over the jaw; `jaw` is the jaw plate.
+ */
+function closedHelm(path, opts = {}) {
+  const { ears = true, jaw = JAW, crown = "", fins = () => "", detail = () => "" } = opts;
+  return (c, K, { half: w }) => {
+    const s = K.helmetShell(c, { path, half: w, ears });
+    const visor = K.closedVisor(c);
+    let details = line(`M${f(-w + 0.3)},-86 C-6,-88.4 6,-88.4 ${f(w - 0.3)},-86`, INK, 0.6, 0.7);
+    if (visor.jaw) {
+      details +=
+        line(`M${f(-w + 0.4)},-78 C-8.8,-75 -7.6,-72.6 -5.2,-70.6`, INK, 0.5, 0.6) +
+        line(`M${f(w - 0.4)},-78 C8.8,-75 7.6,-72.6 5.2,-70.6`, INK, 0.5, 0.6) +
+        shape(jaw, "url(#steelDk)", 0.6) +
+        line("M-2.2,-74 L2.2,-74 M-2.4,-72.5 L2.4,-72.5 M-2,-71 L2,-71", "#020306", 0.55, 0.9);
+    }
+    return {
+      front: fins(c) + s.shell + s.dome + crown + details + detail(c, w) + s.ears + visor.body,
+      glow: s.earGlow + visor.glow + (visor.eyeGlints ? K.eyeGlow(c, 0.9, true) : ""),
+    };
+  };
+}
+
+/**
+ * An open helmet: the face and hair under a lined shell, the visor pick
+ * flipped up onto the brow at `visorY`, `extra(c, K)` over the shell.
+ */
+function openHelm(path, visorY, extra) {
+  return (c, K, { half: w }) => {
+    const s = K.helmetShell(c, { path, half: w });
+    const liner = `<path d="M${f(-w + 1.2)},-86 C${f(-w + 1.2)},-92 -5,-94.4 0,-94.4 C5,-94.4 ${f(w - 1.2)},-92 ${f(w - 1.2)},-86 L${f(w - 1.6)},-70 L${f(-w + 1.6)},-70 Z" fill="#070a10"/>`;
+    const visorUp = K.raisedVisor(c, visorY);
+    return {
+      front: K.hairBack(c) + liner + K.face(c) + K.hair(c, true) + s.shell + s.dome + extra(c, K) + s.ears + visorUp.body,
+      glow: s.earGlow + visorUp.glow + K.eyeGlow(c, 0.35),
+    };
+  };
+}
+
+
+/**
+ * Reaper: a knit balaclava with a painted skull, the agent's own eyes looking
+ * out of the sockets, a comms headset and a field scarf bunched at the neck.
+ */
+function reaper(c, K) {
+  const knit = "#141513";
+  const bone = "#cfc8b6";
+  const boneLo = "#8f8776";
+  const hood =
+    "M0,-95.6 C6.9,-95.6 10.1,-90.8 10.1,-84 C10.1,-78 9.4,-72.6 7,-68.6 L8.4,-64.8 L-8.4,-64.8 L-7,-68.6 " +
+    "C-9.4,-72.6 -10.1,-78 -10.1,-84 C-10.1,-90.8 -6.9,-95.6 0,-95.6 Z";
+  // Gaunt, angular skull: sharp temples, a brow that cuts down toward the
+  // nose (a scowl), hollow cheeks, a long grimace from cheek to cheek.
+  const cranium =
+    "M-7,-85.6 C-7.2,-90.6 -4.2,-93.6 0,-93.6 C4.2,-93.6 7.2,-90.6 7,-85.6 L6.4,-81.6 C5.2,-82.6 3.4,-83.4 1.2,-82 " +
+    "L0,-80.6 L-1.2,-82 C-3.4,-83.4 -5.2,-82.6 -6.4,-81.6 Z";
+  const jaw =
+    "M-6.2,-81 L-6.8,-77.6 L-5.4,-74.8 L-4,-72.4 L-2.6,-69.8 L2.6,-69.8 L4,-72.4 L5.4,-74.8 L6.8,-77.6 L6.2,-81 " +
+    "C5,-79.8 3.6,-79.2 2.4,-79 L-2.4,-79 C-3.6,-79.2 -5,-79.8 -6.2,-81 Z";
+  // Sockets slant down toward the nose; the top edge is the scowl.
+  const socket = "M-6.2,-84.6 C-4.6,-84.4 -2.6,-83.4 -1.1,-81.8 C-1.2,-80.2 -2.4,-79.2 -3.8,-79.2 C-5.6,-79.4 -6.6,-81.4 -6.2,-84.6 Z";
+  // Eyes behind the mask: black eye paint, only a cold glint shows.
+  const eye = (x) =>
+    `<ellipse cx="${x}" cy="-81.4" rx="1.05" ry=".42" fill="#2a2620" opacity=".9"/>` +
+    `<circle cx="${x}" cy="-81.4" r=".42" fill="${K.mix(c.eyes, "#000000", 0.35)}"/><circle cx="${x}" cy="-81.4" r=".2" fill="#020202"/>` +
+    `<circle cx="${f(x - 0.16)}" cy="-81.6" r=".11" fill="#fff"/>`;
+  let teeth = "";
+  // A long grimace: narrow teeth across the whole jaw, dark gaps between.
+  for (let i = -4; i <= 4; i++) {
+    const x = i * 0.78;
+    const h = 1.9 - Math.abs(i) * 0.14;
+    const y = -75.6 + Math.abs(i) * Math.abs(i) * 0.05;
+    teeth +=
+      `<rect x="${f(x - 0.3)}" y="${f(y)}" width=".6" height="${f(h)}" rx=".22" fill="${bone}"/>` +
+      `<rect x="${f(x - 0.28)}" y="${f(y + h + 0.35)}" width=".56" height="${f(h * 0.85)}" rx=".22" fill="${boneLo}"/>`;
+  }
+  const mouth = "M-3.9,-75.8 C-2,-76.4 2,-76.4 3.9,-75.8 L3.4,-72.2 C1.6,-71.4 -1.6,-71.4 -3.4,-72.2 Z";
+  const scarf =
+    "M-9.8,-70.2 C-6,-67 6,-67 9.8,-70.2 C11.6,-68.4 12.8,-66.4 12.6,-64.6 C10.4,-63.4 8.6,-63.6 7,-62.4 " +
+    "C4.6,-61 2.4,-62.2 0,-61 C-2.4,-62.2 -4.6,-61 -7,-62.4 C-8.6,-63.6 -10.4,-63.4 -12.6,-64.6 C-12.8,-66.4 -11.6,-68.4 -9.8,-70.2 Z";
+  const front =
+    shape(hood, knit, 1) +
+    `<path d="${hood}" fill="url(#weave)" opacity=".6"/>` +
+    `<ellipse cx="-4.4" cy="-90.6" rx="4" ry="2.4" fill="#fff" opacity=".05"/>` +
+    // The print, worn into the knit.
+    `<path d="${cranium}" fill="${bone}"/>` +
+    `<path d="${jaw}" fill="${bone}"/>` +
+    `<path d="M-6.6,-85.6 C-6.4,-89.8 -3.6,-92.4 0,-92.8" fill="none" stroke="#fff" stroke-width=".55" stroke-opacity=".35"/>` +
+    // Temple and cheek hollows.
+    `<path d="M6.8,-87.6 C6.2,-85.6 5.8,-84.4 5.2,-83.6 L6.6,-82.4 Z" fill="#141513" opacity=".55"/>` +
+    `<path d="M-6.8,-87.6 C-6.2,-85.6 -5.8,-84.4 -5.2,-83.6 L-6.6,-82.4 Z" fill="#141513" opacity=".55"/>` +
+    `<path d="M-6.4,-79.6 C-5.6,-78.4 -4.6,-77.4 -3.4,-76.8 L-5.2,-75.4 C-5.8,-76.6 -6.4,-78 -6.4,-79.6 Z" fill="#141513" opacity=".7"/>` +
+    `<path d="M6.4,-79.6 C5.6,-78.4 4.6,-77.4 3.4,-76.8 L5.2,-75.4 C5.8,-76.6 6.4,-78 6.4,-79.6 Z" fill="#141513" opacity=".7"/>` +
+    `<path d="${socket}" fill="#070707"/><path d="${mirror(socket)}" fill="#070707"/>` +
+    eye(-3.4) +
+    eye(3.4) +
+    // Grime running down from the sockets.
+    line("M-4.6,-79.2 C-4.8,-77.6 -4.6,-76.6 -4.9,-75.6 M-3.2,-79.2 L-3.3,-77.8 M4.4,-79.2 C4.6,-77.8 4.4,-77 4.6,-76.2", "#3a352a", 0.45, 0.55) +
+    `<path d="M-0.75,-79.2 L0,-81 L0.75,-79.2 L0.45,-77 L-0.45,-77 Z" fill="#070707"/>` +
+    `<path d="${mouth}" fill="#070707"/>` +
+    teeth +
+    `<g opacity=".25"><path d="${cranium}" fill="url(#weave)"/><path d="${jaw}" fill="url(#weave)"/></g>` +
+    `<g fill="#2e2a22" opacity=".3"><ellipse cx="4.8" cy="-89.4" rx="1.6" ry=".8"/><ellipse cx="-5.4" cy="-73.6" rx="1.1" ry=".6"/><ellipse cx="1.4" cy="-92" rx=".9" ry=".45"/></g>` +
+    // Comms headset.
+    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", INK, 1.8, 1) +
+    line("M-9.6,-85 C-9.8,-95 9.8,-95 9.6,-85", "#25282a", 1.1, 1) +
+    shape("M-12,-84.6 C-12,-86.2 -10.8,-86.8 -9.6,-86.8 L-8.8,-86.8 L-8.8,-76.6 L-9.6,-76.6 C-10.8,-76.6 -12,-77.2 -12,-78.8 Z", "#202326", 0.8) +
+    shape("M12,-84.6 C12,-86.2 10.8,-86.8 9.6,-86.8 L8.8,-86.8 L8.8,-76.6 L9.6,-76.6 C10.8,-76.6 12,-77.2 12,-78.8 Z", "#202326", 0.8) +
+    line("M-11.4,-85 L-11.4,-78.4 M11.4,-85 L11.4,-78.4", "#3a3f44", 0.5, 0.8) +
+    line("M-9.2,-79.6 C-8.6,-76.6 -7.4,-74.8 -5,-74.2", INK, 1, 1) +
+    line("M-9.2,-79.6 C-8.6,-76.6 -7.4,-74.8 -5,-74.2", "#30353a", 0.55, 1) +
+    `<ellipse cx="-4.8" cy="-74.2" rx=".8" ry=".65" fill="#111" stroke="${INK}" stroke-width=".35"/>` +
+    // Field scarf, drab and worn.
+    shape(scarf, "#34392a", 1) +
+    `<path d="${scarf}" fill="url(#weave)"/>` +
+    line("M-8.8,-67.8 C-5,-65 5,-65 8.8,-67.8 M-10.6,-66 C-7.4,-63.8 -4,-64.4 -1.6,-63 M10.6,-66 C7.4,-63.8 4,-64.4 1.6,-63", "#1c1f16", 0.6, 0.8) +
+    line("M-10.4,-69.4 C-6,-66.2 -2,-65.6 1,-65.6", "#5c624a", 0.5, 0.55);
+  return { front, glow: K.eyeGlow(c, 0.12) };
+}
+
+/** Do-rag: a tied head wrap over the skull, the face bare. */
+function bandana(c, K) {
+  const cloth = "#2c3036";
+  const wrap =
+    "M-7.8,-84.4 C-8.2,-91.2 -4.6,-94.6 0,-94.6 C4.6,-94.6 8.2,-91.2 7.8,-84.4 C6.6,-86.8 4,-87.8 0,-87.9 C-4,-87.8 -6.6,-86.8 -7.8,-84.4 Z";
+  const knot = "M7.2,-89.6 C9.6,-90.6 11,-89.4 10.4,-87.6 C9.8,-86.4 8.4,-86.6 7.6,-87.4 Z";
+  const tails = "M9.6,-87.6 C11.4,-85 12.4,-81 12,-77.4 L10.6,-77.8 C10.8,-81 10.2,-84.4 8.8,-86.8 Z M10.2,-88 C12.6,-86.8 14.2,-84 14.4,-81.2 L13.2,-81 C12.8,-83.4 11.6,-85.6 9.6,-86.8 Z";
+  let dots = "";
+  for (let i = 0; i < 16; i++) {
+    const x = -6.4 + (i % 8) * 1.8 + (i > 7 ? 0.9 : 0);
+    const y = i > 7 ? -89.6 : -92.2;
+    dots += `<circle cx="${f(x)}" cy="${f(y + Math.abs(x) * 0.08)}" r=".32" fill="#5a6068"/>`;
+  }
+  return {
+    front:
+      K.face(c) +
+      shape(tails, cloth, 0.7) +
+      shape(wrap, cloth, 0.8) +
+      `<path d="${wrap}" fill="url(#weave)" opacity=".5"/>` +
+      dots +
+      line("M-6.8,-86.6 C-3.6,-88.6 3.6,-88.6 6.8,-86.6", "#4a5058", 0.5, 0.8) +
+      line("M-6,-91 C-3.6,-93 0,-93.4 2.6,-93", "#ffffff", 0.5, 0.18) +
+      shape(knot, cloth, 0.7),
+    glow: K.eyeGlow(c, 0.3),
+  };
+}
+
+/** Pilot: a sealed shell with a dark face plate and three round optics, glazed per the visor pick. */
+function pilot(c, K) {
+  const plate = "M-9.6,-87.2 C-4.6,-88.8 4.6,-88.8 9.6,-87.2 L9.4,-77.8 C8,-74 5,-71.6 0,-70.8 C-5,-71.6 -8,-74 -9.4,-77.8 Z";
+  const lenses = [[0, -82.6, 2.5], [-5, -83.2, 1.9], [5, -83.2, 1.9]];
+  const optics = K.visorLenses(c, lenses);
+  const ring = lenses.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${f(r + 0.7)}" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${r}" fill="${optics.glass}" stroke="${INK}" stroke-width=".35"/>`).join("");
+  return {
+    front:
+      K.helmetShell(c, { path: SHELLS.standard, half: 11.2, ears: false }).shell +
+      `<ellipse cx="-5.2" cy="-89.6" rx="4.4" ry="2.8" fill="url(#sheen)"/>` +
+      shape("M-2,-94.8 C-1.2,-95.4 1.2,-95.4 2,-94.8 L1.5,-88.6 L-1.5,-88.6 Z", "url(#steelDk)", 0.5) +
+      shape(plate, "#0c0f13", 0.8) +
+      ring +
+      optics.glint +
+      line("M-2.6,-75.4 L2.6,-75.4 M-3,-73.8 L3,-73.8", "#2a3038", 0.6, 1) +
+      line("M-1.2,-84.2 C-0.6,-84.8 0.4,-84.9 1,-84.6", "#ffffff", 0.45, 0.8) +
+      `<circle cx="-11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/><circle cx="11" cy="-80.6" r="2.3" fill="url(#steelDk)" stroke="${INK}" stroke-width=".6"/>`,
+    glow: optics.glow,
+  };
 }

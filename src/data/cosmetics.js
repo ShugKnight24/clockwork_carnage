@@ -303,26 +303,12 @@ export const ARMOR_STYLES = [
   },
 ];
 
-export const HELMET_STYLES = [
-  { id: "standard", name: "Standard Dome", desc: "Regulation sphere shell", tier: 1 },
-  { id: "wide", name: "Bastion", desc: "Wide reinforced dome", tier: 2, bonuses: { maxHealthAdd: 10 } },
-  { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2, bonuses: { armorAdd: 3 } },
-  { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 } },
-  { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { maxStaminaAdd: 20, moveSpeedAdd: 0.1 } },
-  { id: "ordnance", name: "Ordnance", desc: "Faceted gunner's helm with targeting spine", tier: 3, bonuses: { armorAdd: 4, maxHealthAdd: 8 } },
-  { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },
-  { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
-  { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
-  // Appended, never inserted: saves store the index.
-  // `visor: false`: the head has no visor to fit, so the pick is neither drawn
-  // nor counted (see takesVisor).
-  {
-    id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3, visor: false,
-    unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
-  },
-  { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { maxStaminaAdd: 10 } },
-  { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false },
-];
+/**
+ * Helmets, from the wardrobe themes (src/data/wardrobe-themes/), in theme
+ * order. `face: true` marks an open helmet (FACE_HELMETS); `visor: false` a
+ * head with no visor to fit (takesVisor).
+ */
+export const HELMET_STYLES = themeTable("helmets");
 
 /** Whether this helmet wears the visor pick (HELMET_STYLES[].visor). */
 export function takesVisor(helmetId) {

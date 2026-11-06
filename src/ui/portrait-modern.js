@@ -17,10 +17,10 @@ import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { COLOR } from "./design-tokens.js";
 import { isRealisticArt } from "../rendering/art-style.js";
 import { lookKey, pieceOf } from "../core/character-fields.js";
+import { FACE_HELMETS } from "../data/wardrobe-themes/index.js";
 
 const INK = COLOR.ink;
 const BOX = [-24, -104.5, 48, 48];
-const OPEN = new Set(["wide", "mohawk"]);
 
 // ─── Character layers ───────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ export function characterLayers(character) {
     _char = {
       key,
       accent,
-      open: OPEN.has(helmet),
+      open: FACE_HELMETS.has(helmet),
       defs: p.defs + silFilter("silW", "#ffffff") + silFilter("silH", "#7dffc4") + silFilter("silS", "#7cc8ff"),
       base,
       glow: p.headGlow,

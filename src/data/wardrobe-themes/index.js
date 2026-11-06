@@ -11,7 +11,7 @@
  *
  * Data only: nothing here imports rendering code.
  */
-import { deepFreeze } from "../../utils/freeze.js";
+import { deepFreeze, readonlySet } from "../../utils/freeze.js";
 import issue from "./issue.js";
 
 /** The tables a theme fills, by key. */
@@ -46,3 +46,11 @@ export function themeOf(table, id) {
 export function themeTable(table) {
   return WARDROBE_THEMES.flatMap((t) => t[table].map((e) => ({ ...e, theme: t.id })));
 }
+
+/**
+ * Helmets that leave the face visible (entries with `face: true`), derived
+ * once from the themes. Every reader (the rig, the fallen agent, the HUD
+ * portrait, the creator) asks this set; nothing keeps its own list.
+ * @type {ReadonlySet<string>}
+ */
+export const FACE_HELMETS = readonlySet(WARDROBE_THEMES.flatMap((t) => t.helmets.filter((e) => e.face === true).map((e) => e.id)));

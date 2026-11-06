@@ -1,8 +1,8 @@
 /**
  * Art for the wardrobe themes (src/data/wardrobe-themes/), merged by id.
  *
- * Each theme module's default export: `{ id, frames }`, its id the same as
- * its data module's.
+ * Each theme module's default export: `{ id, frames, helmets }`, its id the
+ * same as its data module's.
  *
  *   frames: { [id]: { shape, layers(P, c, K) -> { under, legs, torso, arms, glow } } }
  *     shape: { width, shoulder, softTorso?, bareRight?, hides: string[] }
@@ -16,6 +16,30 @@
  *       `legs`/`torso`/`arms` over their stock parts, `glow` is energy light.
  *       Helpers: ../frame-kit.js and ../models/hero.js by import; K is the
  *       rig's kit (K.mix blends two hex colours).
+ *
+ *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors: { top, half, rail } } }
+ *     paint: the whole head under the helmet (not called for a face peek,
+ *       which the rig draws bare). `front` is the head, `glow` its lit parts.
+ *       K is the rig's helmet kit; none of it knows a helmet id, so all a
+ *       helmet's own drawing lives here:
+ *         K.face(c), K.hair(c, under), K.hairBack(c) — the head under an
+ *           open helmet (under: only what shows below the shell)
+ *         K.eyeGlow(c, opacity, behindVisor?) — the eyes' light
+ *         K.closedVisor(c) -> { body, glow, jaw, eyeGlints } — the visor
+ *           pick's glass, drawn down over the face; `jaw` says whether the
+ *           glass leaves a jaw below it for the helmet to plate
+ *         K.raisedVisor(c, y) -> { body, glow } — the pick flipped up onto
+ *           the brow at height y
+ *         K.visorLenses(c, [[x, y, r], ...]) -> { glass, glint, glow } — the
+ *           pick's glass and light for round optics
+ *         K.helmetShell(c, { path, half, ears? }) -> { shell, dome, ears,
+ *           earGlow } — a steel shell from its outline, the dome's sheen and
+ *           rim light, and the bolted ear cups at ±half (ears: false for a
+ *           one-piece shell)
+ *         K.mix(a, b, t) — blend two hex colours
+ *     anchors: where helmet gear seats, in rig units. `top` is the top of
+ *       the shell (crown gear), `half` its half-width (side gear), `rail` the
+ *       height of the side rail lamps and whips mount on.
  *
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
@@ -55,6 +79,19 @@ export function frameArt(id) {
   return art;
 }
 
+/** Helmet art by helmet id. */
+export const HELMET_ART = Object.freeze(Object.assign({}, ...ART_THEMES.map((t) => t.helmets || {})));
+
+/**
+ * A helmet's art. Looks resolve through pieceOf, so the id is always a known
+ * helmet; an unknown one is a bug and throws rather than drawing another.
+ */
+export function helmetArt(id) {
+  const art = HELMET_ART[id];
+  if (!art) throw new Error(`helmetArt: no helmet "${id}"`);
+  return art;
+}
+
 /**
  * Whether a frame replaces one of the rig's stock layers.
  * @param {string} id frame id
@@ -66,7 +103,10 @@ export function frameHides(id, what) {
 }
 
 /** The art tables an art module fills, by data table key. */
-const ART_TABLES = ["frames"];
+const ART_TABLES = ["frames", "helmets"];
+
+/** The anchor numbers every helmet's art declares. */
+const HELMET_ANCHORS = ["top", "half", "rail"];
 
 /**
  * Check the data and art registries against each other.
@@ -98,9 +138,19 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
   for (const id of dataIds) if (!artIds.includes(id)) errors.push(`theme "${id}" has no art module`);
   for (const id of artIds) if (!dataIds.includes(id)) errors.push(`art module "${id}" has no data theme`);
   for (const t of artThemes) {
+    for (const table of ART_TABLES) {
+      for (const id of Object.keys(t[table] || {})) {
+        const owner = themes.find((d) => (d[table] || []).some((e) => e.id === id));
+        if (owner && owner.id !== t.id) errors.push(`${table}: art "${id}" is in theme "${t.id}" but its entry is in "${owner.id}"`);
+      }
+    }
+    for (const [id, a] of Object.entries(t.helmets || {})) {
+      if (typeof a.paint !== "function") errors.push(`helmets: "${id}" has no paint function`);
+      for (const key of HELMET_ANCHORS) {
+        if (!Number.isFinite(a.anchors?.[key])) errors.push(`helmets: "${id}" anchors.${key} is not a finite number`);
+      }
+    }
     for (const [id, a] of Object.entries(t.frames || {})) {
-      const owner = themes.find((d) => (d.frames || []).some((e) => e.id === id));
-      if (owner && owner.id !== t.id) errors.push(`frames: art "${id}" is in theme "${t.id}" but its entry is in "${owner.id}"`);
       if (typeof a.layers !== "function") errors.push(`frames: "${id}" has no layers function`);
       for (const key of ["width", "shoulder"]) {
         if (!Number.isFinite(a.shape?.[key])) errors.push(`frames: "${id}" shape.${key} is not a finite number`);

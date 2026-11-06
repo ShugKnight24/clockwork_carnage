@@ -4,7 +4,8 @@
 // every file unchanged; an intended art change updates only the pieces it
 // meant to, reviewed as a readable diff.
 import { describe, it, expect } from "vitest";
-import { buildAgentSvg, buildCastModel, CAST_KEYS, OPEN_HELMETS } from "../../src/rendering/svg-art/agent-rig.js";
+import { buildAgentSvg, buildCastModel, CAST_KEYS } from "../../src/rendering/svg-art/agent-rig.js";
+import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { BODY_FRAMES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES, BODY_TYPES } from "../../src/data/cosmetics.js";
 import { PLACEMENTS } from "../../src/data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../../src/data/accessories.js";
@@ -54,7 +55,7 @@ describe("agent rig golden snapshots", () => {
   });
 
   it("covers badges, accessories, armour variants, the fallen agent's helmets and option tiles", () => {
-    const open = (e) => OPEN_HELMETS.has(e.ids.helmet);
+    const open = (e) => FACE_HELMETS.has(e.ids.helmet);
     const visorless = (e) => HELMET_STYLES.find((h) => h.id === e.ids.helmet).visor === false;
     // Every helmet carries a badge at every placement, so each badge seat is drawn.
     for (const { id: helmet } of HELMET_STYLES) {
