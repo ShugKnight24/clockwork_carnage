@@ -10,8 +10,7 @@
  *       softTorso       — fabric over the chest: no chest trim, belt-only core light
  *       bareRight       — the right shoulder takes the soft cap, not its piece
  *       hides           — the stock rig layers the frame replaces, words from
- *                         HIDES: kit (chest kit and trims), collar, hips (the
- *                         belt's hip plates), shoulders, cape, limbGlow
+ *                         HIDES (see there for what each one removes)
  *     layers: drawn from the pose's joints (P.arms, P.legs) over the
  *       armoured body. `under` sits behind the body (packs, coat tails),
  *       `legs`/`torso`/`arms` over their stock parts, `glow` is energy light.
@@ -22,19 +21,39 @@
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
 import { WARDROBE_THEMES, THEME_TABLES } from "../../../data/wardrobe-themes/index.js";
+import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
 
-/** Art modules, one per data theme. */
-const ART_THEMES = [issue];
+/** Art modules, one per data theme, in the data registry's order; frozen through. */
+const ART_THEMES = deepFreeze([issue]);
 
-/** The stock rig layers a frame may hide (shape.hides). */
+/**
+ * The stock rig layers a frame may hide (shape.hides), and what each removes:
+ *   kit       — the armour's chest kit and its light (gear front and glow),
+ *               the plate and variant trims, the chest seams, the origin
+ *               insignia and the chest core light (the belt light stays).
+ *               Gear on the back and the player's badge still draw: the
+ *               badge is placed on whatever the frame wears.
+ *   collar    — the gorget plate; the bare neck under an open helmet stays
+ *   hips      — the belt's hip plates (centre plate and both tassets)
+ *   shoulders — both shoulder pieces
+ *   cape      — the cape
+ *   limbGlow  — the energy channels along the arms and legs
+ */
 export const HIDES = Object.freeze(["kit", "collar", "hips", "shoulders", "cape", "limbGlow"]);
 
 /** Frame art by frame id. */
 export const FRAME_ART = Object.freeze(Object.assign({}, ...ART_THEMES.map((t) => t.frames || {})));
 
-/** A frame's art; an unknown id draws the issued suit. */
-export const frameArt = (id) => FRAME_ART[id] || FRAME_ART.standard;
+/**
+ * A frame's art. Looks resolve through pieceOf, so the id is always a known
+ * frame; an unknown one is a bug and throws rather than drawing another frame.
+ */
+export function frameArt(id) {
+  const art = FRAME_ART[id];
+  if (!art) throw new Error(`frameArt: no frame "${id}"`);
+  return art;
+}
 
 /**
  * Whether a frame replaces one of the rig's stock layers.
@@ -74,8 +93,18 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
     for (const [id, theme] of seen) if (!art.has(id)) errors.push(`${table}: "${id}" (theme "${theme}") has no art`);
     for (const [id, theme] of art) if (!seen.has(id)) errors.push(`${table}: art "${id}" (theme "${theme}") has no entry`);
   }
+  const dataIds = themes.map((t) => t.id);
+  const artIds = artThemes.map((t) => t.id);
+  for (const id of dataIds) if (!artIds.includes(id)) errors.push(`theme "${id}" has no art module`);
+  for (const id of artIds) if (!dataIds.includes(id)) errors.push(`art module "${id}" has no data theme`);
   for (const t of artThemes) {
     for (const [id, a] of Object.entries(t.frames || {})) {
+      const owner = themes.find((d) => (d.frames || []).some((e) => e.id === id));
+      if (owner && owner.id !== t.id) errors.push(`frames: art "${id}" is in theme "${t.id}" but its entry is in "${owner.id}"`);
+      if (typeof a.layers !== "function") errors.push(`frames: "${id}" has no layers function`);
+      for (const key of ["width", "shoulder"]) {
+        if (!Number.isFinite(a.shape?.[key])) errors.push(`frames: "${id}" shape.${key} is not a finite number`);
+      }
       const hides = a.shape?.hides;
       if (!Array.isArray(hides)) {
         errors.push(`frames: "${id}" has no shape.hides list`);

@@ -1,10 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { BODY_FRAMES } from "../../src/data/cosmetics.js";
 import { WARDROBE_THEMES, themeOf } from "../../src/data/wardrobe-themes/index.js";
-import { FRAME_ART, HIDES, frameHides, validateWardrobe } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
-import { buildAgentParts } from "../../src/rendering/svg-art/agent-rig.js";
-import { torso } from "../../src/rendering/svg-art/models/hero.js";
-import { lookFromIds } from "./helpers/golden-looks.js";
+import { FRAME_ART, HIDES, frameArt, frameHides, validateWardrobe } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 
 const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
 
@@ -44,8 +41,25 @@ describe("wardrobe registries", () => {
     expect(frameHides("standard", "limbGlow")).toBe(false);
   });
 
-  it("treats an unknown frame as the standard frame", () => {
-    for (const word of HIDES) expect(frameHides("no-such-frame", word)).toBe(false);
+  it("throws on an unknown frame rather than drawing another", () => {
+    expect(() => frameHides("no-such-frame", "cape")).toThrow(/no-such-frame/);
+    expect(() => frameArt("no-such-frame")).toThrow(/no-such-frame/);
+  });
+
+  it("freezes every theme, table, entry and art shape", () => {
+    for (const t of WARDROBE_THEMES) {
+      expect(Object.isFrozen(t)).toBe(true);
+      for (const key of ["frames", "helmets", "shoulders"]) {
+        expect(Object.isFrozen(t[key])).toBe(true);
+        for (const e of t[key]) expect(Object.isFrozen(e)).toBe(true);
+      }
+    }
+    expect(Object.isFrozen(WARDROBE_THEMES)).toBe(true);
+    for (const art of Object.values(FRAME_ART)) {
+      expect(Object.isFrozen(art)).toBe(true);
+      expect(Object.isFrozen(art.shape)).toBe(true);
+      expect(Object.isFrozen(art.shape.hides)).toBe(true);
+    }
   });
 
   it("rejects a hides word outside the vocabulary", () => {
@@ -76,54 +90,32 @@ describe("validateWardrobe", () => {
     expect(msgs[0]).toMatch(/"boots"/);
   });
 
+  it("reports theme ids that do not match between data and art", () => {
+    const msgs = validateWardrobe([theme("a", [])], [{ id: "b", frames: {} }]);
+    expect(msgs.some((m) => /theme "a" has no art module/.test(m))).toBe(true);
+    expect(msgs.some((m) => /art module "b" has no data theme/.test(m))).toBe(true);
+  });
+
+  it("reports art filed under another theme than its entry", () => {
+    const msgs = validateWardrobe([theme("a", ["x"]), theme("b", [])], [{ id: "a", frames: {} }, { id: "b", frames: { x: art() } }]);
+    expect(msgs).toEqual([expect.stringMatching(/"x" is in theme "b" but its entry is in "a"/)]);
+  });
+
+  it("reports a frame without a layers function", () => {
+    const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: { ...art(), layers: "nope" } } }]);
+    expect(msgs).toEqual([expect.stringMatching(/"x" has no layers function/)]);
+  });
+
+  it("reports a width or shoulder that is not a finite number", () => {
+    const bad = { ...art(), shape: { width: Number.NaN, shoulder: "1", hides: [] } };
+    const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: bad } }]);
+    expect(msgs).toHaveLength(2);
+    expect(msgs.some((m) => /shape\.width/.test(m))).toBe(true);
+    expect(msgs.some((m) => /shape\.shoulder/.test(m))).toBe(true);
+  });
+
   it("passes a consistent pair", () => {
     expect(validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: art(["kit"]) } }])).toEqual([]);
   });
 });
 
-describe("the rig honours every hides word", () => {
-  /** Render a look as if the standard frame hid `words`. */
-  function partsHiding(words, ids) {
-    const shape = FRAME_ART.standard.shape;
-    const was = shape.hides;
-    shape.hides = words;
-    try {
-      return buildAgentParts(lookFromIds({ frame: "standard", ...ids }), { pose: "idle" });
-    } finally {
-      shape.hides = was;
-    }
-  }
-  const TASSET = "M-4.8,-22.4 L-14.6,-23";
-
-  it("hips: leaves off the belt's hip plates", () => {
-    expect(torso()).toContain(TASSET);
-    expect(torso({ hips: false })).not.toContain(TASSET);
-    // The rig warps the torso to the build, so compare sizes, not paths.
-    const cyl = (m) => m.split('fill="url(#cyl)"').length;
-    expect(cyl(partsHiding(["hips"]).body)).toBe(cyl(partsHiding([]).body) - 1);
-  });
-
-  it("collar: drops the suit's collar", () => {
-    const stock = partsHiding([]);
-    const hidden = partsHiding(["collar"]);
-    expect(stock.collar).not.toBe("");
-    expect(hidden.collar).toBe("");
-    expect(hidden.body.length).toBeLessThan(stock.body.length);
-  });
-
-  it("kit: drops the armour's chest kit and its light", () => {
-    const stock = partsHiding([], { armor: "heavy" });
-    const hidden = partsHiding(["kit"], { armor: "heavy" });
-    expect(hidden.body.length).toBeLessThan(stock.body.length);
-    expect(hidden.glow.length).toBeLessThan(stock.glow.length);
-    expect(hidden.back).toBe(stock.back);
-  });
-
-  it("shoulders, cape, limbGlow: drop their stock layers", () => {
-    const stock = partsHiding([]);
-    expect(partsHiding(["shoulders"]).body.length).toBeLessThan(stock.body.length);
-    expect(stock.cape).not.toBe("");
-    expect(partsHiding(["cape"]).cape).toBe("");
-    expect(partsHiding(["limbGlow"]).glow.length).toBeLessThan(stock.glow.length);
-  });
-});

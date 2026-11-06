@@ -1972,10 +1972,10 @@ function badgeAt(c, a, detail = "high") {
 
 const wears = (c, where) => c.badge.placements.includes(where);
 
-/** Gorget, with the bare neck above it when the face shows. */
-const collarOf = (c, showFace, map) =>
+/** Gorget, with the bare neck above it when the face shows; `plate: false` leaves off the gorget (a frame that hides the collar). */
+const collarOf = (c, showFace, map, plate = true) =>
   (showFace ? shape(NECK, "url(#skin)", 1) + `<path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="${c.skin.shadow}" opacity=".5"/>` : "") +
-  recolor(gorget(), map);
+  (plate ? recolor(gorget(), map) : "");
 
 /**
  * All layers of a customised agent as markup strings (without the <svg>).
@@ -2013,12 +2013,14 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   }
 
   // The frame's own layers, and the stock layers it hides (see HIDES in
-  // wardrobe-themes/index.js): a coat over the chest kit, a hood over the
-  // collar, a skirt over the hip plates, sleeves over the limbs' light.
+  // wardrobe-themes/index.js, which says what each word removes): a coat
+  // over the chest kit, a hood over the collar, a skirt over the hip plates,
+  // sleeves over the limbs' light.
   const fr = frameLayers(c.frame, P, c, { mix });
   const fs = frameShape(c.frame);
   const hides = (what) => frameHides(c.frame, what);
-  const collar = hides("collar") ? "" : collarOf(c, showFace, map);
+  const collar = collarOf(c, showFace, map, !hides("collar"));
+  const hideKit = hides("kit");
   // Shoulders scale about their joint with the frame; a Strider leaves the
   // right shoulder bare (soft cap) for its asymmetric kit.
   const shoulderAt = (s, t) => {
@@ -2035,9 +2037,8 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     recolor(fr.under + legs.map((l) => l.body).join("") + fr.legs, map) +
     TW(
       recolor(torso({ pecs: !c.fem, hips: !hides("hips") }) + (c.fem ? FEM_CHEST : "") + fr.torso, map) +
-        (fs.softTorso ? "" : chestTrim(c)) +
-        insignia(c) +
-        (hides("kit") ? "" : kit.front + (c.fem && PLATED.has(c.armor) ? FEM_PLATE : "") + variantTrim(c)) +
+        (fs.softTorso || hideKit ? "" : chestTrim(c)) +
+        (hideKit ? "" : insignia(c) + kit.front + (c.fem && PLATED.has(c.armor) ? FEM_PLATE : "") + variantTrim(c)) +
         acc.front,
     ) +
     rifle.body +
@@ -2050,9 +2051,9 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     TW(collar) +
     acc.top;
 
-  const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso ? BELT_GLOW : TORSO_GLOW;
+  const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
-  const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hides("kit") ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
+  const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
   const h = head(c, peek);
   const helmBadge = wears(c, "helmet") && !OPEN_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");

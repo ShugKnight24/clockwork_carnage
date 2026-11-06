@@ -11,6 +11,7 @@
  *
  * Data only: nothing here imports rendering code.
  */
+import { deepFreeze } from "../../utils/freeze.js";
 import issue from "./issue.js";
 
 /** The tables a theme fills, by key. */
@@ -18,9 +19,9 @@ export const THEME_TABLES = Object.freeze(["frames", "helmets", "shoulders"]);
 
 const THEMES = [issue];
 
-/** Every theme in creator order, each with all three tables. */
-export const WARDROBE_THEMES = Object.freeze(
-  THEMES.map((t) => Object.freeze({ id: t.id, name: t.name, ...Object.fromEntries(THEME_TABLES.map((key) => [key, t[key] || []])) })),
+/** Every theme in creator order, each with all three tables; frozen through. */
+export const WARDROBE_THEMES = deepFreeze(
+  THEMES.map((t) => ({ id: t.id, name: t.name, ...Object.fromEntries(THEME_TABLES.map((key) => [key, t[key] || []])) })),
 );
 
 const OWNER = Object.fromEntries(
