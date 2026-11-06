@@ -158,6 +158,33 @@ export const HAIR_STYLES = [
   { id: "ponytail", name: "Ponytail", desc: "Pulled back tight", color: "#6b3a1c" },
 ];
 
+/**
+ * Hair colour, picked apart from the cut (agent-rig.js hairOf). "natural"
+ * keeps the cut's own colour; a natural shade colours the brows with it; a
+ * dye (`dye: true`) leaves the brows the cut's natural colour; Chrono Charged
+ * (`energy: true`) takes the suit's energy colour. Never locked.
+ */
+export const HAIR_COLORS = Object.freeze([
+  { id: "natural", name: "Natural", color: null },
+  { id: "jet", name: "Jet Black", color: "#0e0b0a" },
+  { id: "brown", name: "Dark Brown", color: "#3a2416" },
+  { id: "chestnut", name: "Chestnut", color: "#6b3a1c" },
+  { id: "auburn", name: "Auburn", color: "#8a3218" },
+  { id: "copper", name: "Copper", color: "#b85a24" },
+  { id: "honey", name: "Honey Blonde", color: "#c9a25a" },
+  { id: "platinum", name: "Platinum", color: "#e8dcc0" },
+  { id: "silver", name: "Silver", color: "#a8b0b8" },
+  { id: "snow", name: "Snow White", color: "#eef4ff" },
+  { id: "crimson", name: "Crimson", color: "#b01e3c", dye: true },
+  { id: "pink", name: "Hot Pink", color: "#e8408c", dye: true },
+  { id: "violet", name: "Violet", color: "#7a3ad0", dye: true },
+  { id: "electric", name: "Electric Blue", color: "#2a7cff", dye: true },
+  { id: "teal", name: "Teal", color: "#1aa8a0", dye: true },
+  { id: "toxic", name: "Toxic Green", color: "#5ad02a", dye: true },
+  { id: "sunset", name: "Sunset Orange", color: "#ff7a2a", dye: true },
+  { id: "chrono", name: "Chrono Charged", color: null, dye: true, energy: true },
+].map((e) => Object.freeze(e)));
+
 export const EYE_COLORS = [
   { id: "amber", name: "Amber", color: "#ffcc66" },
   { id: "blue", name: "Blue", color: "#66bbff" },
@@ -491,6 +518,7 @@ export const DEFAULT_LOOK_IDS = Object.freeze({
   color: "chrono_teal",
   skinTone: "warm_light",
   hair: "buzz",
+  hairColor: "natural",
   eye: "amber",
   armor: "standard",
   helmet: "standard",
@@ -545,6 +573,7 @@ export const DEFAULT_CHARACTER = {
   color: DEFAULT_LOOK_IDS.color,
   skinTone: DEFAULT_LOOK_IDS.skinTone,
   hair: DEFAULT_LOOK_IDS.hair,
+  hairColor: DEFAULT_LOOK_IDS.hairColor,
   eye: DEFAULT_LOOK_IDS.eye,
   armor: DEFAULT_LOOK_IDS.armor,
   frame: DEFAULT_LOOK_IDS.frame,

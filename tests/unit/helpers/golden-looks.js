@@ -162,7 +162,18 @@ function buildMatrix() {
     }
     themed.push({ name: `cast-hero_fallen-${name}-masc`, ids: { ...look, body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
   }
-  return [...issue, ...themed.map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
+  // Hair colour, appended: a natural shade, a dye (the brows stay natural) and
+  // the charged colour (the suit's accent), on face-showing helmets so the
+  // hair is drawn. Named by colour, ids prefixed by name like the themes'.
+  const hair = [
+    ["platinum", { helmet: "wide", hair: "short" }],
+    ["pink", { helmet: "ledmask", hair: "hawk" }],
+    ["chrono", { helmet: "bubble", hair: "long", color: "void_purple" }],
+  ].map(([hairColor, ids]) => {
+    const name = `hair-${hairColor}-${ids.helmet}-${ids.hair}-masc-idle`;
+    return { name, ids: { ...ids, hairColor, body: "masc" }, opts: { pose: "idle" }, kind: "svg" };
+  });
+  return [...issue, ...[...themed, ...hair].map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
 }
 
 /** @type {{ name: string, ids: object, opts: object, kind: "svg"|"cast" }[]} */

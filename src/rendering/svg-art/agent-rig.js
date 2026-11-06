@@ -121,6 +121,24 @@ const WEAPON_FINISH = {
 // Resolved look
 // ---------------------------------------------------------------------------
 
+/**
+ * The cut in the picked hair colour (HAIR_COLORS), as every renderer that
+ * draws hair takes it. Natural is the cut as it is. A natural shade colours
+ * the brows with it; a dye leaves them the cut's natural colour (a cut that
+ * is itself dyed, the mohawk, carries its natural `brow`); Chrono Charged
+ * takes the suit's energy colour. A shaved head has no hair to colour.
+ * @param {object} ch the character
+ * @param {object} [pal] its palette, when the caller has it
+ */
+export function hairOf(ch, pal = pieceOf(ch, "color")) {
+  const cut = pieceOf(ch, "hair");
+  const pick = pieceOf(ch, "hairColor");
+  if (cut.id === "none" || (!pick.color && !pick.energy)) return cut;
+  const color = pick.energy ? mix(pal.accent, "#ffffff", 0.15) : pick.color;
+  const brow = pick.dye ? cut.brow || cut.color : mix(color, "#000000", 0.25);
+  return { ...cut, color, brow };
+}
+
 function resolve(ch) {
   const pal = pieceOf(ch, "color");
   const armorPiece = pieceOf(ch, "armor");
@@ -147,7 +165,7 @@ function resolve(ch) {
     loadout: pieceOf(ch, "loadout").id,
     origin: pieceOf(ch, "backstory").id,
     skin: pieceOf(ch, "skinTone"),
-    hair: pieceOf(ch, "hair"),
+    hair: hairOf(ch, pal),
     eyes: pieceOf(ch, "eye").color,
     variant: ch.armorVariant ? armorPiece.variant || null : null,
     energy: pal.accent,

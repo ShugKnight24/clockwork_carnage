@@ -12,6 +12,8 @@ import { shareSession } from "./playtest-export.js";
 import {
   CREATOR_CATEGORIES,
   getCreatorLayout,
+  hairColorSwatches,
+  listRows,
   setCreatorCategory,
   tabRect,
 } from "../ui/character-creator.js";
@@ -53,8 +55,18 @@ export function handleCreatorClick(game, e) {
   const items = curCat.data;
   if (!items) return;
 
-  // Same window the renderer uses — L.maxBySpace is derived from panel height.
-  const maxVisible = Math.min(items.length, L.maxBySpace);
+  // The hair colour row under the cuts (HAIR tab): same boxes the renderer draws.
+  if (curCat.key === "hair") {
+    const hit = hairColorSwatches(L).rects.findIndex((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+    if (hit >= 0) {
+      Object.assign(game.character, withIndex(game.character, "hairColor", hit));
+      game.audio.menuSelect();
+      return;
+    }
+  }
+
+  // Same window the renderer uses (listRows), derived from panel height.
+  const maxVisible = listRows(L, curCat);
   const selIdx = curCat.multi
     ? Math.min(Math.max(game.creatorPlacementSel | 0, 0), items.length - 1)
     : getIndex(game.character, curCat.key);

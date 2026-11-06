@@ -2,6 +2,7 @@ import {
   CHARACTER_COLORS,
   SKIN_TONES,
   HAIR_STYLES,
+  HAIR_COLORS,
   EYE_COLORS,
   ARMOR_STYLES,
   HELMET_STYLES,
@@ -19,7 +20,7 @@ import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
-import { buildAgentParts, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
+import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
 import { FACE_HELMETS } from "../data/wardrobe-themes/index.js";
 
 // ── Shared category definitions (used by render + click handler) ──
@@ -169,6 +170,36 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   };
 }
 
+/**
+ * The hair colour swatches under the cuts on the HAIR tab: a labelled grid
+ * at the foot of the list panel. Shared by the renderer and the click
+ * handler (src/systems/input-click-dispatch.js) so both see the same boxes.
+ */
+export function hairColorSwatches(L) {
+  const pad = 10;
+  const gap = 4;
+  const cols = 9;
+  const labelH = 20;
+  const size = Math.floor((L.listW - 2 * pad - (cols - 1) * gap) / cols);
+  const rows = Math.ceil(HAIR_COLORS.length / cols);
+  const h = labelH + rows * size + (rows - 1) * gap + pad;
+  const top = L.contentY + L.panelH - h;
+  const rects = HAIR_COLORS.map((_, i) => ({
+    x: L.contentX + pad + (i % cols) * (size + gap),
+    y: top + labelH + Math.floor(i / cols) * (size + gap),
+    w: size,
+    h: size,
+  }));
+  return { top, h, labelY: top + labelH - 6, rects };
+}
+
+/** How many option rows a tab's list shows: the HAIR tab gives the foot of the panel to its colours. */
+export function listRows(L, curCat) {
+  if (curCat.key !== "hair") return Math.min(curCat.data.length, L.maxBySpace);
+  const free = Math.floor((L.panelH - 16 - hairColorSwatches(L).h) / L.itemH);
+  return Math.min(curCat.data.length, Math.max(2, free));
+}
+
 // ── Shared SVG art, rasterised onto the canvas ──
 //
 // Badges and accessories only exist as SVG, so the Legacy creator draws them
@@ -195,7 +226,7 @@ function badgeLayer(ch, detail = "high") {
 // showroom uses (js/components/agent-showroom.js): the rifle only exists in the
 // armed pose, and the face is only drawn under a closed helmet when asked for.
 const ARMED_KEYS = new Set(["loadout", "weaponSkin"]);
-const FACE_KEYS = new Set(["skinTone", "hair", "eye"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
 const IDLE_STAGE = { pose: "idle", peek: false };
 
 function stageFor(key, ch) {
@@ -813,7 +844,7 @@ export function renderCharacterCreator(
   const char = character;
   const palette = pieceOf(char, "color");
   const skinTone = pieceOf(char, "skinTone");
-  const hairStyle = pieceOf(char, "hair");
+  const hairStyle = hairOf(char);
   const eyeColor = pieceOf(char, "eye");
   const armor = pieceOf(char, "armor");
   const skin = pieceOf(char, "weaponSkin");
@@ -1043,7 +1074,7 @@ export function renderCharacterCreator(
   const lookSig = lookKey(char);
   const hasTile = BADGE_TILE_KEYS.has(curCat.key) || !!curCat.slot;
   const listX = L.contentX;
-  const maxVisible = Math.min(items.length, L.maxBySpace);
+  const maxVisible = listRows(L, curCat);
   const listH = L.panelH;
 
   ctx.fillStyle = "rgba(0, 5, 15, 0.7)";
@@ -1078,8 +1109,8 @@ export function renderCharacterCreator(
       ctx.fillRect(listX + 4, iy + 6, 3, L.itemH - 16);
     }
 
-    // Color swatches for visual categories
-    const swatch = item.primary || item.color;
+    // Color swatches for visual categories (a cut in the hair colour picked)
+    const swatch = curCat.key === "hair" ? hairOf({ ...char, hair: item.id }).color : item.primary || item.color;
     const hasSwatch = curCat.key === "color" || curCat.key === "skinTone" || curCat.key === "hair" || curCat.key === "eye";
     if (hasSwatch && swatch) {
       ctx.fillStyle = swatch;
@@ -1128,6 +1159,36 @@ export function renderCharacterCreator(
       ctx.font = "10px monospace";
       ctx.fillText("\uD83D\uDD12", listX + L.listW - 28, iy + 22);
     }
+  }
+
+  // ─── Hair colour row, under the cuts ───
+  if (curCat.key === "hair") {
+    const row = hairColorSwatches(L);
+    const picked = pieceOf(char, "hairColor");
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.font = "bold 11px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(`COLOR \u00B7 ${picked.name.toUpperCase()}`, listX + 10, row.labelY);
+    if (!isTouchDevice) {
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.fillText("Q / E", listX + L.listW - 10, row.labelY);
+      ctx.textAlign = "left";
+    }
+    HAIR_COLORS.forEach((hc, i) => {
+      const r = row.rects[i];
+      ctx.fillStyle = hairOf({ ...char, hairColor: hc.id }).color;
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, 3);
+      ctx.fill();
+      if (hc.id === picked.id) {
+        ctx.strokeStyle = palette.accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 4);
+        ctx.stroke();
+      }
+    });
   }
 
   // ─── Character preview (center panel) ───

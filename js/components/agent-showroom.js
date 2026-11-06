@@ -1,4 +1,4 @@
-import { AGENT_VIEW, GEAR_VIEW, buildAgentSvg, buildRifleSvg, camoPattern } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, buildAgentSvg, buildRifleSvg, camoPattern, hairOf } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
@@ -19,6 +19,7 @@ import {
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
   EYE_COLORS,
+  HAIR_COLORS,
   HAIR_STYLES,
   HELMET_STYLES,
   LOADOUT_CLASSES,
@@ -48,14 +49,14 @@ import { clamp } from "../../src/utils/math.js";
  * is exactly one input path.
  */
 
-const APPEARANCE = ["color", "skinTone", "hair", "eye", "armor", "helmet", "visor", "shoulder", "weaponSkin", "armorVariant"];
+const APPEARANCE = ["color", "skinTone", "hair", "hairColor", "eye", "armor", "helmet", "visor", "shoulder", "weaponSkin", "armorVariant"];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 /** Saved looks: storage key, how many, and the appearance fields they keep. */
 const LOOKS_KEY = "cc_saved_looks";
 const MAX_LOOKS = 5;
 const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voice", "backstory", "loadout", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
-const FACE_KEYS = new Set(["skinTone", "hair", "eye"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
 /** Camera toggle order (the C key cycles through them). */
 const CAMERAS = ["full", "bust", "face"];
 
@@ -162,6 +163,9 @@ const CATEGORIES = [
       { key: "skinTone", title: "Skin", data: SKIN_TONES, kind: "skin" },
       { key: "eye", title: "Eyes", data: EYE_COLORS, kind: "eye" },
       { key: "hair", title: "Hair", data: HAIR_STYLES, kind: "hair" },
+      // Under the cuts: each swatch shows the colour on the cut worn
+      // (refreshContent), so Natural and Chrono Charged read true.
+      { key: "hairColor", title: "Hair color", data: HAIR_COLORS, kind: "hairColor" },
     ],
   },
   {
@@ -575,6 +579,7 @@ svg { display: block; }
 .grid.enamel { grid-template-columns: repeat(6, 1fr); }
 .grid.metal { grid-template-columns: repeat(4, 1fr); }
 .grid.eye, .grid.skin { grid-template-columns: repeat(6, 1fr); }
+.grid.hairColor { grid-template-columns: repeat(9, 1fr); gap: 6px; }
 .grid.palette { grid-template-columns: repeat(2, 1fr); }
 .grid.rifle { grid-template-columns: repeat(3, 1fr); }
 .grid.origin, .grid.voice, .grid.class { grid-template-columns: 1fr; }
@@ -614,6 +619,11 @@ svg { display: block; }
 .grid.eye .swatch, .grid.skin .swatch { width: min(34px, 100%); flex: none; }
 .grid.eye .swatch { background: radial-gradient(circle, #fff 0 12%, var(--c) 26%, color-mix(in srgb, var(--c) 30%, #000) 70%); box-shadow: 0 0 0 var(--cc-ink-outline) var(--cc-ink), 0 0 12px color-mix(in srgb, var(--c) 60%, transparent); }
 .grid.eye .oname, .grid.skin .oname, .grid.enamel .oname { display: none; }
+/* Hair colour: a lock of hair, lit from the top left. Chrono Charged glows. */
+.grid.hairColor .opt { padding: 5px 2px; align-items: center; --cc-chamfer: 6px; }
+.grid.hairColor .swatch { width: min(26px, 100%); flex: none; background: linear-gradient(150deg, color-mix(in srgb, var(--c) 55%, #fff) 0 14%, var(--c) 40%, color-mix(in srgb, var(--c) 40%, #000) 100%); }
+.grid.hairColor .swatch.energy { box-shadow: 0 0 0 var(--cc-ink-outline) var(--cc-ink), 0 0 10px color-mix(in srgb, var(--c) 70%, transparent); }
+.grid.hairColor .oname { display: none; }
 .grid.enamel .opt, .grid.metal .opt { padding: 7px 4px; align-items: center; --cc-chamfer: 7px; min-height: 44px; }
 .grid.enamel .swatch, .grid.metal .swatch { width: min(34px, 100%); flex: none; }
 /* Enamel: a glossy cabochon of the colour. */
@@ -986,6 +996,7 @@ const REALISTIC_STYLE = `
 :host([realistic]) .tier i { background: rgba(228, 230, 225, 0.14); box-shadow: none; }
 :host([realistic]) .tier i.on { background: var(--r-text); }
 :host([realistic]) .swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 -3px 5px rgba(0, 0, 0, 0.3); }
+:host([realistic]) .grid.hairColor .swatch.energy { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 6px color-mix(in srgb, var(--c) 35%, transparent); }
 :host([realistic]) .grid.eye .swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 6px color-mix(in srgb, var(--c) 35%, transparent); }
 :host([realistic]) .pal { background: rgba(0, 0, 0, 0.45); padding: 1px; gap: 1px; }
 :host([realistic]) .bar { height: 4px; background: rgba(228, 230, 225, 0.1); box-shadow: none; }
@@ -1758,6 +1769,8 @@ class AgentShowroom extends HTMLElement {
       color: any(CHARACTER_COLORS),
       skinTone: any(SKIN_TONES),
       hair: any(HAIR_STYLES),
+      // Mostly natural; a dye now and then.
+      hairColor: Math.random() < 0.6 ? "natural" : any(HAIR_COLORS),
       eye: any(EYE_COLORS),
       armor: any(ARMOR_STYLES),
       helmet: any(HELMET_STYLES),
@@ -2673,6 +2686,11 @@ class AgentShowroom extends HTMLElement {
       }
       case "eye":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="--c:${item.color}"></span><span class="oname">${esc(item.name)}</span></button>`;
+      case "hairColor": {
+        // The colour itself is filled in by refreshContent: it depends on the cut and palette.
+        const kind = item.energy ? " energy" : item.dye ? " dye" : "";
+        return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch hc${kind}" data-hair-swatch></span><span class="oname">${esc(item.name)}</span></button>`;
+      }
       case "skin":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:radial-gradient(circle at 35% 30%, ${item.color}, ${item.shadow})"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "camo": {
@@ -2719,6 +2737,8 @@ class AgentShowroom extends HTMLElement {
       const key = opt.dataset.key;
       const idx = Number(opt.dataset.idx);
       opt.setAttribute("aria-checked", String(getIndex(ch, key) === idx));
+      const hairSwatch = opt.querySelector("[data-hair-swatch]");
+      if (hairSwatch) hairSwatch.style.setProperty("--c", hairOf({ ...ch, ...withIndex(ch, key, idx) }).color);
       const thumb = opt.querySelector(".thumb[data-thumb]");
       if (!thumb || (!force && thumb.dataset.sig === sig)) return;
       thumb.dataset.sig = sig;

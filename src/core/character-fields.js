@@ -11,7 +11,7 @@
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, BADGE_PRESETS, indexOfId } from "../data/badges.js";
 import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
 import {
-  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, EYE_COLORS, ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
+  CHARACTER_COLORS, SKIN_TONES, HAIR_STYLES, HAIR_COLORS, EYE_COLORS, ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES,
   WEAPON_SKINS, LOADOUT_CLASSES, BACKSTORIES, VOICE_PROFILES, BODY_FRAMES, CAPE_STYLES, BODY_TYPES, CAMO_STYLES,
   pieceIn,
 } from "../data/cosmetics.js";
@@ -21,6 +21,7 @@ export const LOOK_TABLES = Object.freeze({
   color: CHARACTER_COLORS,
   skinTone: SKIN_TONES,
   hair: HAIR_STYLES,
+  hairColor: HAIR_COLORS,
   eye: EYE_COLORS,
   armor: ARMOR_STYLES,
   helmet: HELMET_STYLES,
@@ -159,7 +160,7 @@ export function cloneLook(ch) {
 const DRAWN = [
   "color", "skinTone", "hair", "eye", "armor", "helmet",
   "visor", "shoulder", "weaponSkin", "loadout", "backstory",
-  "frame", "cape", "body", "camo",
+  "frame", "cape", "body", "camo", "hairColor",
 ];
 
 export function lookKey(ch) {

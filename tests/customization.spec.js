@@ -42,6 +42,24 @@ test("gear choice persists across reload", async ({ page }) => {
   expect(await page.evaluate(() => window.ccDebug.game.character.accessories.back)).toBe("backpack");
 });
 
+test("a hair colour picked in the showroom changes the figure and survives a reload", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "face").click();
+  const figure = () => room(page).locator(".figure").innerHTML();
+  const before = await figure();
+  const pink = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).HAIR_COLORS.findIndex((e) => e.id === "pink"));
+  await opt(page, "hairColor", pink).click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.hairColor)).toBe("pink");
+  await expect.poll(figure).not.toBe(before);
+  expect(await figure()).toContain("#e8408c");
+  await expect(opt(page, "hairColor", pink)).toHaveAttribute("aria-checked", "true");
+  await room(page).locator(".save").click();
+  await page.reload();
+  await page.waitForFunction(() => window.ccDebug?.game);
+  expect(await page.evaluate(() => window.ccDebug.game.character.hairColor)).toBe("pink");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).hairColor)).toBe("pink");
+});
+
 test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -193,6 +211,32 @@ test("legacy PLACE tab toggles where the badge is worn", async ({ page }) => {
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Space");
   expect(await page.evaluate(() => window.ccDebug.game.character.badge.placements)).toEqual(["shoulder"]);
+});
+
+test("legacy HAIR tab picks a hair colour by key and by swatch", async ({ page }) => {
+  await openLegacyCreator(page);
+  await legacyTab(page, "hair");
+  const hairColor = () => page.evaluate(() => window.ccDebug.game.character.hairColor);
+  await page.keyboard.press("KeyE");
+  expect(await hairColor()).toBe("jet");
+  await page.keyboard.press("KeyQ");
+  await page.keyboard.press("KeyQ");
+  expect(await hairColor()).toBe("chrono");
+  // The cut is untouched by the colour row.
+  expect(await page.evaluate(() => window.ccDebug.game.character.hair)).toBe("buzz");
+  const point = await page.evaluate(async () => {
+    const { getCreatorLayout, hairColorSwatches } = await import("/src/ui/character-creator.js");
+    const { HAIR_COLORS } = await import("/src/data/cosmetics.js");
+    const g = window.ccDebug.game;
+    const rect = g.canvas.getBoundingClientRect();
+    const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
+    const r = hairColorSwatches(L).rects[HAIR_COLORS.findIndex((e) => e.id === "platinum")];
+    const k = rect.width / g.canvas.width;
+    return { x: rect.left + (r.x + r.w / 2) * k, y: rect.top + (r.y + r.h / 2) * k };
+  });
+  await page.mouse.click(point.x, point.y);
+  expect(await hairColor()).toBe("platinum");
+  expect(await page.evaluate(() => window.ccDebug.game.character.hair)).toBe("buzz");
 });
 
 test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) => {

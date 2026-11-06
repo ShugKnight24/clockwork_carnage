@@ -10,7 +10,7 @@ import { isModernArt } from "../rendering/art-style.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES, setCreatorCategory } from "../ui/character-creator.js";
-import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
+import { getIndex, withIndex, togglePlacement, LOOK_TABLES } from "../core/character-fields.js";
 import { archiveLayout, archiveEntries, ARCHIVE_TABS, FILMS_TAB } from "../ui/archive-screen.js";
 import { playFilm } from "../cinematic/films.js";
 import { directorInput } from "../cinematic/director.js";
@@ -208,6 +208,16 @@ export function dispatchKeyPress(game, code, e) {
     }
     if (code === "ArrowLeft" || code === "KeyA") {
       setCreatorCategory(game, (game.creatorCategory - 1 + catLen) % catLen);
+      game.audio.menuSelect();
+      return;
+    }
+
+    // Hair colour, under the cuts on the HAIR tab: Q / E (LB / RB on a pad)
+    // step through the swatches. Never locked.
+    if (curCat.key === "hair" && (code === "KeyQ" || code === "KeyE")) {
+      const n = LOOK_TABLES.hairColor.length;
+      const next = (getIndex(game.character, "hairColor") + (code === "KeyQ" ? -1 : 1) + n) % n;
+      Object.assign(game.character, withIndex(game.character, "hairColor", next));
       game.audio.menuSelect();
       return;
     }
