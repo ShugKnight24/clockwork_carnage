@@ -6,6 +6,7 @@
 export default {
   id: "runner",
   name: "Neon Runner",
+  short: "Runner",
   frames: [{ id: "streetwear", name: "Streetwear", desc: "Cropped crew jacket, LED-inked forearms, a wired wrist deck", tier: 2 }],
   // A bare face behind a mouth mask: the face shows, no visor.
   helmets: [{ id: "ledmask", name: "LED Mask", desc: "Bare face, a pixel-grin mask, ear jacks and a holo band", tier: 3, face: true, visor: false,

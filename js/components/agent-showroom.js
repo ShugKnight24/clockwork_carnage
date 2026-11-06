@@ -245,6 +245,7 @@ const allSections = (c) => (c.modes ? Object.values(c.modes).flat() : c.sections
 for (const c of CATEGORIES) for (const s of allSections(c)) if (s.key && !s.data) s.data = tableFor(s.key);
 const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", act: "Act emblems", earned: "Earned" };
 const THEME_NAMES = Object.fromEntries(WARDROBE_THEMES.map((t) => [t.id, t.name]));
+const THEME_SHORT = Object.fromEntries(WARDROBE_THEMES.map((t) => [t.id, t.short]));
 /** A group's caption: a badge set's name, or a wardrobe theme's. */
 const groupName = (by, g) => (by === "theme" ? THEME_NAMES[g] : GROUP_NAMES[g]) || g;
 
@@ -637,7 +638,7 @@ svg { display: block; }
 .groups.theme .group { display: grid; grid-template-rows: subgrid; grid-row: span 2; min-width: 0; }
 .groups.theme .group + .group { margin-top: 0; }
 .groups.theme .group.wide { grid-column: 1 / -1; }
-.groups.theme .gcap { justify-self: start; align-self: end; max-width: 100%; margin: 6px 0 0; }
+.groups.theme .gcap { justify-self: start; align-self: end; max-width: 100%; margin: 6px 0 0; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .groups.theme .group:not(.wide) .grid { grid-template-columns: minmax(0, 1fr); align-self: start; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
@@ -2574,7 +2575,12 @@ class AgentShowroom extends HTMLElement {
       // panel, each designed theme's piece takes a cell under its caption.
       const theme = s.groupBy === "theme";
       body = `<div class="groups${theme ? ` theme ${s.kind}` : ""}" role="radiogroup" aria-label="${s.title}">${[...groups]
-        .map(([g, entries]) => `<div class="group${theme && entries.length > 1 ? " wide" : ""}" data-group="${esc(g)}"><span class="gcap caption steel">${esc(groupName(s.groupBy, g))}</span>${grid(entries)}</div>`)
+        .map(([g, entries]) => {
+          // A one-tile cell captions with the theme's short name; the full one is its title.
+          const wide = !theme || entries.length > 1;
+          const cap = wide ? groupName(s.groupBy, g) : THEME_SHORT[g];
+          return `<div class="group${theme && entries.length > 1 ? " wide" : ""}" data-group="${esc(g)}"><span class="gcap caption steel" title="${esc(groupName(s.groupBy, g))}">${esc(cap)}</span>${grid(entries)}</div>`;
+        })
         .join("")}</div>`;
     } else {
       body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);

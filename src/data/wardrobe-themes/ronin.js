@@ -5,6 +5,7 @@
 export default {
   id: "ronin",
   name: "Ronin",
+  short: "Ronin",
   frames: [{ id: "lamellar", name: "Ronin", desc: "Laced chrono-steel lamellar, hanging tassets, an obi with a short blade and a back banner", tier: 2 }],
   // The war mask covers the face; there is no visor to fit.
   helmets: [{ id: "kabuto", name: "Kabuto", desc: "Crescent-crested helm, flared neck guard and a snarling war mask", tier: 3, visor: false,

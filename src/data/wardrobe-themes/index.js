@@ -6,7 +6,9 @@
  * src/data/cosmetics.js builds each table from these themes, in this order.
  *
  * A theme module's default export:
- *   { id, name, frames?: Entry[], helmets?: Entry[], shoulders?: Entry[] }
+ *   { id, name, short, frames?: Entry[], helmets?: Entry[], shoulders?: Entry[] }
+ * where `short` is the name for a tight caption (a one-tile group in the
+ * creator's grids: "Marshal" for Frontier Marshal).
  * with each entry `{ id, name, desc, tier?, unlock?, bonuses?, perk?, visor?, face? }`,
  * and a helmet entry also `seats?` and `faceSlots?`:
  *   seats: which accessory seats the helmet takes, words from HELMET_SEATS
@@ -41,7 +43,7 @@ const THEMES = [issue, exo, marshal, ronin, horologist, runner, diver, ranger, c
 
 /** Every theme in creator order, each with all three tables; frozen through. */
 export const WARDROBE_THEMES = deepFreeze(
-  THEMES.map((t) => ({ id: t.id, name: t.name, ...Object.fromEntries(THEME_TABLES.map((key) => [key, t[key] || []])) })),
+  THEMES.map((t) => ({ id: t.id, name: t.name, short: t.short, ...Object.fromEntries(THEME_TABLES.map((key) => [key, t[key] || []])) })),
 );
 
 const OWNER = Object.fromEntries(

@@ -48,6 +48,15 @@ const LEGACY_ANCHORS = {
 };
 
 describe("wardrobe registries", () => {
+  it("every theme has a short name for a one-tile caption", () => {
+    for (const t of WARDROBE_THEMES) {
+      expect(typeof t.short, t.id).toBe("string");
+      expect(t.short.length, t.id).toBeGreaterThan(0);
+      expect(t.short.length, t.id).toBeLessThanOrEqual(10);
+      expect(t.short.length, t.id).toBeLessThanOrEqual(t.name.length);
+    }
+  });
+
   it("validateWardrobe() returns []", () => {
     expect(validateWardrobe()).toEqual([]);
   });

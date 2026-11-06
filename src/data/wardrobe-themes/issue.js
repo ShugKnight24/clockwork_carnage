@@ -5,6 +5,7 @@
 export default {
   id: "issue",
   name: "Field Issue",
+  short: "Issue",
   /** Body frames: the silhouette the suit is built on. Any armour style can be worn on any frame. */
   frames: [
     { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },

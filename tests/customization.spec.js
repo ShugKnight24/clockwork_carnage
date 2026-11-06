@@ -338,9 +338,11 @@ test("the shoulder note reads the frame's own right shoulder", async ({ page }) 
 test("theme captions appear in helmet grid in theme order", async ({ page }) => {
   await openCreator(page);
   await tab(page, "helmet").click();
-  const themes = await page.evaluate(async () => (await import("/src/data/wardrobe-themes/index.js")).WARDROBE_THEMES.map((t) => t.name));
+  const themes = await page.evaluate(async () => (await import("/src/data/wardrobe-themes/index.js")).WARDROBE_THEMES.map((t) => ({ name: t.name, short: t.short })));
   const caps = room(page).locator('.section[data-key="helmet"] .gcap');
-  await expect(caps).toHaveText(themes.map((t) => new RegExp(`^${t}$`, "i")));
+  // A one-helmet theme captions with its short name; every caption's title is the full one.
+  await expect(caps).toHaveText(themes.map((t, i) => new RegExp(`^${i === 0 ? t.name : t.short}$`, "i")));
+  for (const [i, t] of themes.entries()) await expect(caps.nth(i)).toHaveAttribute("title", t.name);
   // Each helmet sits under its own theme's caption.
   const misplaced = await room(page).evaluate(async (el) => {
     const { HELMET_STYLES } = await import("/src/data/cosmetics.js");
@@ -351,7 +353,7 @@ test("theme captions appear in helmet grid in theme order", async ({ page }) => 
   expect(misplaced).toEqual([]);
   // The frame and shoulder grids are captioned the same way.
   await tab(page, "suit").click();
-  await expect(room(page).locator('.section[data-key="frame"] .gcap')).toHaveText(themes.map((t) => new RegExp(`^${t}$`, "i")));
+  await expect(room(page).locator('.section[data-key="frame"] .gcap')).toHaveText(themes.map((t, i) => new RegExp(`^${i === 0 ? t.name : t.short}$`, "i")));
   await expect(room(page).locator('.section[data-key="shoulder"] .gcap').first()).toHaveText(/field issue/i);
 });
 

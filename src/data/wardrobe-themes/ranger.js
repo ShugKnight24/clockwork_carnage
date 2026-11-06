@@ -6,6 +6,7 @@
 export default {
   id: "ranger",
   name: "Void Ranger",
+  short: "Ranger",
   frames: [{ id: "spacesuit", name: "Void Ranger", desc: "Puffy white pressure suit: ribbed joints, life-support pack, moon boots", tier: 2 }],
   // Clear glass: the face shows; there is no visor to fit.
   helmets: [{ id: "bubble", name: "Bubble", desc: "Clear glass dome on a neck ring, with a lamp", tier: 3, face: true, visor: false,
