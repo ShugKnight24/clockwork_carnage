@@ -8,6 +8,7 @@ import { buildAgentParts, buildCastModel, rigAnchors } from "../../src/rendering
 import { validateWardrobe } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import { STAND, FALLEN } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
+import { HELMET_STYLES, VISOR_STYLES } from "../../src/data/cosmetics.js";
 
 // Hoisted with the mocks, which run before the imports.
 const { ANCHORS } = vi.hoisted(() => ({ ANCHORS: { top: -99.3, half: 13.1, rail: -81.7, badge: { x: 6.2, y: -93.4, rot: 11, size: 3.9 } } }));
@@ -92,6 +93,19 @@ describe("helmets come from their art", () => {
     // The Centurion's crest takes the crown.
     expect(head("mohawk", "plume")).not.toContain(`data-acc="plume"`);
     expect(head("mohawk", "lamp")).toContain(`data-acc="lamp"`);
+  });
+});
+
+describe("a helmet's visor flag matches its art", () => {
+  // A helmet that draws no visor must say visor: false (so the pick is not
+  // counted and the creator says so), and one that says it must not draw it.
+  // Two picks that differ in every helmet that wears one: the first two.
+  const head = (helmet, visor) => {
+    const p = buildAgentParts(look({ helmet, visor: VISOR_STYLES[visor].id }));
+    return p.head + p.headGlow;
+  };
+  it.each(HELMET_STYLES.filter((h) => !h.id.endsWith("-fixture")).map((h) => [h.id, h.visor !== false]))("%s takes a visor: %s", (id, takes) => {
+    expect(head(id, 0) !== head(id, 1)).toBe(takes);
   });
 });
 

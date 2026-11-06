@@ -98,6 +98,7 @@ for (const t of THEMES) {
   }
 }
 const ISSUE_LOOKS = ISSUE.helmets.length;
+const VISORLESS = new Set(WARDROBE_THEMES.flatMap((t) => t.helmets.filter((e) => e.visor === false).map((e) => e.id)));
 
 const pad = (n) => String(n).padStart(2, "0");
 const lookName = (i) => {
@@ -142,6 +143,11 @@ function buildMatrix() {
   out.push({ name: `bust-peek-${lookName(1)}-masc`, ids: { ...PIECE_LOOKS[1], body: "masc" }, opts: { pose: "bust", peek: true }, kind: "svg" });
   // The other themes, last, so their entries never shift a Field Issue one.
   looks(ISSUE_LOOKS, PIECE_LOOKS.length);
+  // ...and their visorless helmets fallen, as for the Field Issue ones.
+  for (let i = ISSUE_LOOKS; i < PIECE_LOOKS.length; i++) {
+    if (!VISORLESS.has(PIECE_LOOKS[i].helmet)) continue;
+    out.push({ name: `cast-hero_fallen-${lookName(i)}-masc`, ids: { ...PIECE_LOOKS[i], body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
+  }
   return out.map((e, n) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `g${n}-` } } : e));
 }
 
