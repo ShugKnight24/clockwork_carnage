@@ -55,9 +55,10 @@ const worn = (table) => ids(table).filter((id) => id !== "none");
 // placement (so each helmet's badge seat is drawn) and one accessory per
 // slot; the helmet slot cycles, so every helmet carries a helmet accessory.
 //
-// The Field Issue looks cycle over that theme's own pieces, and every other
-// theme's looks come after them (THEME_LOOKS, rendered last), so a new theme
-// adds snapshot files and never changes an existing one.
+// The Field Issue looks cycle over that theme's own pieces. Every other
+// theme's looks (THEME_LOOKS) are rendered after them and named by theme, so
+// adding a theme, or a piece to one, adds files and never renames or changes
+// another theme's (see THEME_LOOKS).
 const lookAt = (i, { helmet, frame, shoulder }) => ({
   helmet,
   frame,
@@ -83,21 +84,24 @@ const lookAt = (i, { helmet, frame, shoulder }) => ({
 const [ISSUE, ...THEMES] = WARDROBE_THEMES;
 const PIECE_LOOKS = ids(ISSUE.helmets).map((helmet, i) => lookAt(i, { helmet, frame: at(ids(ISSUE.frames), i), shoulder: at(ids(ISSUE.shoulders), i) }));
 
-// Each later theme: as many looks as its longest table, its own pieces
-// cycling, numbered on from the Field Issue looks.
-for (const t of THEMES) {
-  const n = Math.max(t.frames.length, t.helmets.length, t.shoulders.length);
-  for (let j = 0; j < n; j++) {
-    PIECE_LOOKS.push(
-      lookAt(PIECE_LOOKS.length, {
-        helmet: t.helmets.length ? at(ids(t.helmets), j) : "standard",
-        frame: t.frames.length ? at(ids(t.frames), j) : "standard",
-        shoulder: t.shoulders.length ? at(ids(t.shoulders), j) : "pads",
-      }),
-    );
-  }
-}
 const ISSUE_LOOKS = ISSUE.helmets.length;
+
+// Each later theme: as many looks as its longest table, its own pieces
+// cycling. The other fields cycle from a seed of the theme's own (its place
+// after Field Issue, plus the look's number in the theme), never from how
+// many looks came before, so one theme's pieces never move another's. A look
+// is named `<theme>-<n>-<helmet>-<frame>-<shoulder>`.
+const THEME_LOOKS = THEMES.flatMap((t, k) => {
+  const n = Math.max(t.frames.length, t.helmets.length, t.shoulders.length);
+  return Array.from({ length: n }, (_, j) => {
+    const look = lookAt(ISSUE_LOOKS + k + j, {
+      helmet: t.helmets.length ? at(ids(t.helmets), j) : "standard",
+      frame: t.frames.length ? at(ids(t.frames), j) : "standard",
+      shoulder: t.shoulders.length ? at(ids(t.shoulders), j) : "pads",
+    });
+    return { name: `${t.id}-${j}-${look.helmet}-${look.frame}-${look.shoulder}`, look };
+  });
+});
 const VISORLESS = new Set(WARDROBE_THEMES.flatMap((t) => t.helmets.filter((e) => e.visor === false).map((e) => e.id)));
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -117,7 +121,7 @@ function buildMatrix() {
       }
     }
   };
-  looks(0, ISSUE_LOOKS);
+  looks(0, PIECE_LOOKS.length);
   // The stock agent with nothing worn: no badge, no accessories.
   out.push({ name: "default-plain-masc-idle", ids: {}, opts: { pose: "idle" }, kind: "svg" });
   // Cast models: look 0, and a fem build with a wide frame and pads.
@@ -141,14 +145,18 @@ function buildMatrix() {
   out.push({ name: `real-${lookName(2)}-fem-hero`, ids: { ...PIECE_LOOKS[2], body: "fem" }, opts: { pose: "hero", realistic: true }, kind: "svg" });
   out.push({ name: `real-cast-hero_fallen-${lookName(6)}-masc`, ids: { ...PIECE_LOOKS[6], body: "masc" }, opts: { key: "hero_fallen", realistic: true }, kind: "cast" });
   out.push({ name: `bust-peek-${lookName(1)}-masc`, ids: { ...PIECE_LOOKS[1], body: "masc" }, opts: { pose: "bust", peek: true }, kind: "svg" });
-  // The other themes, last, so their entries never shift a Field Issue one.
-  looks(ISSUE_LOOKS, PIECE_LOOKS.length);
-  // ...and their visorless helmets fallen, as for the Field Issue ones.
-  for (let i = ISSUE_LOOKS; i < PIECE_LOOKS.length; i++) {
-    if (!VISORLESS.has(PIECE_LOOKS[i].helmet)) continue;
-    out.push({ name: `cast-hero_fallen-${lookName(i)}-masc`, ids: { ...PIECE_LOOKS[i], body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
+  // Field Issue entries take their ids from their place in the matrix.
+  const issue = out.map((e, n) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `g${n}-` } } : e));
+  // The other themes, last, each entry's ids prefixed by its own name so no
+  // other entry moves them; their visorless helmets fallen too, as above.
+  const themed = [];
+  for (const { name, look } of THEME_LOOKS) {
+    for (const body of ids(BODY_TYPES)) {
+      for (const pose of ["idle", "hero"]) themed.push({ name: `${name}-${body}-${pose}`, ids: { ...look, body }, opts: { pose }, kind: "svg" });
+    }
+    if (VISORLESS.has(look.helmet)) themed.push({ name: `cast-hero_fallen-${name}-masc`, ids: { ...look, body: "masc" }, opts: { key: "hero_fallen" }, kind: "cast" });
   }
-  return out.map((e, n) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `g${n}-` } } : e));
+  return [...issue, ...themed.map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
 }
 
 /** @type {{ name: string, ids: object, opts: object, kind: "svg"|"cast" }[]} */
