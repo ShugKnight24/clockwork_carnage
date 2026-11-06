@@ -16,9 +16,11 @@ import {
   withinReach,
   droppableItems,
   migrateUnlockStore,
+  lockedItems,
 } from "../../src/systems/unlocks.js";
 import { LEGACY_LOOK_INDICES } from "../../src/core/legacy-look-indices.js";
-import { LOADOUT_CLASSES, ARMOR_STYLES, HELMET_STYLES, DEFAULT_CHARACTER, TIER_UNLOCKS } from "../../src/data/cosmetics.js";
+import { LOADOUT_CLASSES, ARMOR_STYLES, HELMET_STYLES, BODY_FRAMES, HAIR_COLORS, DEFAULT_CHARACTER, TIER_UNLOCKS } from "../../src/data/cosmetics.js";
+import { WARDROBE_THEMES } from "../../src/data/wardrobe-themes/index.js";
 import { SYMBOLS, BADGE_PRESETS, byId } from "../../src/data/badges.js";
 import { ACTS } from "../../src/data/campaign/acts.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
@@ -437,5 +439,108 @@ describe("unlock lookups take piece ids", () => {
     const met = unlockContext({ owned: { [`armorVariant:#${heavy.variant.id}`]: true } });
     expect(variantState("heavy", met).unlocked).toBe(true);
     expect(variantState("nope", met).unlocked).toBe(false);
+  });
+});
+
+describe("theme piece pacing", () => {
+  const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
+  const actsCleared = (n) => unlockContext({ stats: { campaignActsCleared: n } });
+  const themeFrames = (tier) => BODY_FRAMES.filter((f) => f.tier === tier).map((f) => f.id);
+
+  it("legacy frames are always unlocked", () => {
+    for (const id of LEGACY_FRAMES) {
+      expect(ruleFor("frame", id), id).toBe(null);
+      expect(unlockState("frame", id, unlockContext()).unlocked, id).toBe(true);
+    }
+    // Nothing always open is loot, and nothing about them is announced.
+    expect(lockedItems(unlockContext()).some(({ key, id }) => key === "frame" && LEGACY_FRAMES.includes(id))).toBe(false);
+    expect(earnedIds(actsCleared(4)).filter((k) => LEGACY_FRAMES.some((id) => k === `frame:#${id}`))).toEqual([]);
+  });
+
+  it("a tier 2 theme frame unlocks with Act 1", () => {
+    expect(LOCK.frame.kind).toBe("Frame");
+    const tier2 = themeFrames(2);
+    expect(tier2.length).toBeGreaterThan(0);
+    for (const id of tier2) {
+      expect(ruleFor("frame", id), id).toBe(TIER_UNLOCKS[2]);
+      expect(unlockState("frame", id, unlockContext()).unlocked, id).toBe(false);
+      expect(unlockState("frame", id, unlockContext()).hint, id).toBe(TIER_UNLOCKS[2].label);
+      expect(unlockState("frame", id, actsCleared(1)).unlocked, id).toBe(true);
+      expect(earnedIds(actsCleared(1)), id).toContain(`frame:#${id}`);
+    }
+  });
+
+  it("exo pieces unlock with Act 2", () => {
+    const exo = WARDROBE_THEMES.find((t) => t.id === "exo");
+    const pieces = [["frame", exo.frames], ["helmet", exo.helmets], ["shoulder", exo.shoulders]].flatMap(([key, items]) => items.map((it) => [key, it.id]));
+    expect(pieces.length).toBe(3);
+    for (const [key, id] of pieces) {
+      expect(ruleFor(key, id), `${key} ${id}`).toBe(TIER_UNLOCKS[3]);
+      expect(unlockState(key, id, actsCleared(1)).unlocked, `${key} ${id}`).toBe(false);
+      expect(unlockState(key, id, actsCleared(2)).unlocked, `${key} ${id}`).toBe(true);
+    }
+  });
+
+  it("every designed theme spreads frame and shoulders at tier 2, the helmet at tier 3", () => {
+    for (const t of WARDROBE_THEMES.filter((x) => x.id !== "issue" && x.id !== "exo")) {
+      for (const f of t.frames) expect(f.tier, `${t.id} frame`).toBe(2);
+      for (const s of t.shoulders) expect(s.tier, `${t.id} shoulders`).toBe(2);
+      for (const h of t.helmets) expect(h.tier, `${t.id} helmet`).toBe(3);
+    }
+  });
+
+  it("a frame can drop in the act that is working towards it", () => {
+    const actOne = unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 2 });
+    const frames = droppableItems(actOne).filter(({ key }) => key === "frame").map(({ id }) => id).sort();
+    expect(frames).toEqual(themeFrames(2).sort());
+    // Act 2's pool has the Exo-Frame; an owned frame never drops again.
+    const owned = { [ownedKey("frame", "exo")]: true };
+    expect(droppableItems(unlockContext({ campaignSaveAct: 2 })).some(({ key, id }) => key === "frame" && id === "exo")).toBe(true);
+    expect(droppableItems(unlockContext({ campaignSaveAct: 2, owned })).some(({ key, id }) => key === "frame" && id === "exo")).toBe(false);
+  });
+
+  it("hair colours and eyes/face tier-1 items are unlocked from the start", () => {
+    const ctx = unlockContext();
+    expect(LOCK.hairColor).toBeUndefined();
+    for (const c of HAIR_COLORS) expect(unlockState("hairColor", c.id, ctx).unlocked, c.id).toBe(true);
+    for (const slot of ["eyes", "face"]) {
+      for (const item of ACCESSORIES[slot]) {
+        const open = unlockState(`acc.${slot}`, item.id, ctx).unlocked;
+        expect(open, `${slot} ${item.id}`).toBe(!item.tier || item.tier === 1);
+      }
+    }
+  });
+
+  it("a locked theme frame worn without owning it falls back to the default frame", () => {
+    const ch = { ...cloneLook(DEFAULT_CHARACTER), frame: "duster" };
+    expect(sanitizeLocked(ch, unlockContext()).frame).toBe("standard");
+    expect(sanitizeLocked(ch, actsCleared(1)).frame).toBeUndefined();
+    expect(sanitizeLocked({ ...ch, frame: "wraith" }, unlockContext())).toEqual({});
+  });
+
+  describe("grandfathering the saved frame", () => {
+    const store = {};
+    beforeEach(() => {
+      for (const k of Object.keys(store)) delete store[k];
+      vi.stubGlobal("localStorage", {
+        getItem: (k) => store[k] ?? null,
+        setItem: (k, v) => { store[k] = v; },
+        removeItem: (k) => { delete store[k]; },
+      });
+      resetUnlockStore();
+    });
+
+    it("a player whose saved frame is a legacy one is unaffected", () => {
+      store.cc_character = "{}";
+      const s = ensureUnlockStore({ ...cloneLook(DEFAULT_CHARACTER), frame: "wraith" }, {}, {});
+      expect(Object.keys(s.owned).filter((k) => k.startsWith("frame:"))).toEqual([]);
+      expect(unlockState("frame", "wraith", unlockContext({ owned: s.owned })).unlocked).toBe(true);
+    });
+
+    it("a first-run save already wearing a theme frame keeps it", () => {
+      store.cc_character = "{}";
+      const s = ensureUnlockStore({ ...cloneLook(DEFAULT_CHARACTER), frame: "duster" }, {}, {});
+      expect(s.owned["frame:#duster"]).toBe(true);
+    });
   });
 });

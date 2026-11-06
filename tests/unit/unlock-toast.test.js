@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { announcements, ownedKey } from "../../src/systems/unlocks.js";
 import { SYMBOLS, BADGE_PRESETS, FINISHES, byId } from "../../src/data/badges.js";
 import { ACCESSORIES } from "../../src/data/accessories.js";
-import { ARMOR_STYLES, HELMET_STYLES, LOADOUT_CLASSES } from "../../src/data/cosmetics.js";
+import { ARMOR_STYLES, BODY_FRAMES, HELMET_STYLES, LOADOUT_CLASSES } from "../../src/data/cosmetics.js";
 
 /**
  * `initUnlockToasts` marks every freshly earned id as seen before it announces
@@ -47,7 +47,19 @@ describe("unlock toast announcements", () => {
       ownedKey("helmet", HELMET_STYLES.find((x) => x.tier === 2).id),
     ];
     expect(announcements(ids)).toEqual([
-      { kind: "Gear tier", name: "MK II armor, helmets, visors & shoulders" },
+      { kind: "Gear tier", name: "MK II armor, frames, helmets, visors & shoulders" },
+    ]);
+  });
+
+  it("tier toast batches frames with helmets", () => {
+    const ids = [
+      ownedKey("frame", BODY_FRAMES.find((x) => x.tier === 2).id),
+      ownedKey("helmet", HELMET_STYLES.find((x) => x.tier === 2).id),
+      ownedKey("frame", BODY_FRAMES.find((x) => x.tier === 3).id),
+    ];
+    expect(announcements(ids)).toEqual([
+      { kind: "Gear tier", name: "MK II armor, frames, helmets, visors & shoulders" },
+      { kind: "Gear tier", name: "MK III armor, frames, helmets, visors & shoulders" },
     ]);
   });
 

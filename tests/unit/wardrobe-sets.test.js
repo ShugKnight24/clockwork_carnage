@@ -22,8 +22,8 @@ describe("wardrobe sets", () => {
   });
 
   it("equipSet with a locked helmet equips frame and shoulders and reports the helmet", () => {
-    // Ronin's helmet and shoulders are tiered gear: a fresh save owns neither.
-    const ctx = owning(["shoulder", "sode"]);
+    // Every piece of Ronin's set is tiered gear: a fresh save owns none of it.
+    const ctx = owning(["frame", "lamellar"], ["shoulder", "sode"]);
     expect(unlockState("helmet", "kabuto", ctx).unlocked).toBe(false);
     const ch = { ...fresh(), helmet: "wide" };
     const { changes, skipped } = equipSet(ch, "ronin", ctx);
@@ -34,8 +34,20 @@ describe("wardrobe sets", () => {
     expect({ ...ch, ...changes }.helmet).toBe("wide");
   });
 
+  it("equipSet with a locked frame keeps the frame worn and reports it", () => {
+    const ctx = owning(["helmet", "kabuto"], ["shoulder", "sode"]);
+    expect(unlockState("frame", "lamellar", ctx).unlocked).toBe(false);
+    const ch = { ...fresh(), frame: "wraith" };
+    const { changes, skipped } = equipSet(ch, "ronin", ctx);
+    expect(changes).toEqual({ helmet: "kabuto", shoulder: "sode" });
+    expect(skipped).toEqual([{ field: "frame", id: "lamellar", hint: unlockState("frame", "lamellar", ctx).hint }]);
+    expect({ ...ch, ...changes }.frame).toBe("wraith");
+  });
+
   it("equipSet never equips a locked piece", () => {
-    for (const ctx of [unlockContext(), owning(["helmet", "cockpit"])]) {
+    // Nothing owned; only a helmet; every helmet and shoulder but no frame.
+    const allButFrames = owning(...SET_THEMES.flatMap((t) => setPieces(t.id).filter((p) => p.field !== "frame").map((p) => [p.field, p.id])));
+    for (const ctx of [unlockContext(), owning(["helmet", "cockpit"]), allButFrames]) {
       for (const t of SET_THEMES) {
         const { changes, skipped } = equipSet(fresh(), t.id, ctx);
         for (const [field, id] of Object.entries(changes)) expect(unlockState(field, id, ctx).unlocked, `${t.id} ${field}`).toBe(true);
@@ -45,13 +57,14 @@ describe("wardrobe sets", () => {
         }
         // Every piece of the set is either worn or reported.
         expect(Object.keys(changes).length + skipped.length).toBe(3);
+        if (ctx === allButFrames) expect(skipped.map((s) => s.field), t.id).toEqual(["frame"]);
       }
     }
   });
 
   it("with everything owned, the whole set goes on and is worn", () => {
     for (const t of SET_THEMES) {
-      const ctx = owning(...setPieces(t.id).filter((p) => p.field !== "frame").map((p) => [p.field, p.id]));
+      const ctx = owning(...setPieces(t.id).map((p) => [p.field, p.id]));
       const ch = fresh();
       const { changes, skipped } = equipSet(ch, t.id, ctx);
       expect(skipped).toEqual([]);

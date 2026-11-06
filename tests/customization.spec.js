@@ -380,25 +380,114 @@ test("Sets row equips Ronin", async ({ page }) => {
   expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "standard", helmet: "standard", shoulder: "none" });
 });
 
+/** Clear Act 1 the way the campaign records it, and have the showroom (if open) see it. */
+const clearActOne = (page) =>
+  page.evaluate(async () => {
+    window.ccDebug.game.achievementStats.campaignActsCleared = 1;
+    (await import("/src/systems/unlocks.js")).invalidateUnlockContext();
+    const room = document.querySelector("agent-showroom");
+    if (room) {
+      room._unlockCtx = null; // the showroom caches the context per open
+      room.renderAll(); // and builds a tab's tiles, locks and all, as it opens
+    }
+  });
+
 test("a set with locked pieces equips what is owned and says what it skipped", async ({ page }) => {
   await openCreator(page);
   await tab(page, "suit").click();
-  // A fresh save owns no tiered helmet or shoulder: the Ronin tile says so up front.
+  // A fresh save owns none of a theme's set: the Ronin tile says so up front.
   const ronin = room(page).locator('.settile[data-set="ronin"]');
   await expect(ronin.locator(".setlock")).toBeVisible();
-  await expect(ronin.locator(".setlock b")).toHaveText("2");
-  await expect(ronin.locator(".sown")).toHaveText("1/3 owned");
-  await expect(ronin).toHaveAttribute("title", /^Ronin: Kabuto \(Clear Act .+\), Sode \(Clear Act .+\)$/);
-  await expect(ronin).toHaveAttribute("aria-label", /Skips: Kabuto locked: Clear Act/);
-  // The rules that earn them sit in the section's unlock fold, grouped by rule.
+  await expect(ronin.locator(".setlock b")).toHaveText("3");
+  await expect(ronin.locator(".sown")).toHaveText("0/3 owned");
+  await expect(ronin).toHaveClass(/\blocked\b/);
+  await expect(ronin).toHaveAttribute("title", /^Ronin: Ronin \(Clear Act 1 .+\), Kabuto \(Clear Act 2 .+\), Sode \(Clear Act 1 .+\)$/);
+  await expect(ronin).toHaveAttribute("aria-label", /Every piece is locked: Ronin locked: Clear Act 1/);
+  // The rules that earn them sit in the section's unlock fold, grouped by rule:
+  // every set's frame and shoulders with Act 1, its helmet with Act 2.
   const fold = room(page).locator(".setlocks .lockfold");
-  await expect(fold.locator("summary")).toHaveText(/How to unlock · 16/);
+  await expect(fold.locator("summary")).toHaveText(/How to unlock · 24/);
   await fold.locator("summary").click();
+  await expect(fold.locator(".lockrow")).toHaveCount(2);
   await expect(fold.locator(".lockrow").filter({ hasText: "Kabuto" })).toContainText(/Clear Act 2/);
+  await expect(fold.locator(".lockrow").filter({ hasText: "Sode" })).toContainText(/Clear Act 1/);
   await ronin.click();
-  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "lamellar", helmet: "standard", shoulder: "none" });
-  await expect(room(page).locator(".toast")).toHaveText("Ronin set on · Kabuto, Sode locked, skipped");
+  await expect(room(page).locator(".toast")).toHaveText(/^Ronin set locked · Clear Act 1/);
+  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "standard", helmet: "standard", shoulder: "none" });
+
+  // After Act 1 the frame and shoulders are earned; the helmet still waits.
+  await clearActOne(page);
+  await expect(ronin.locator(".sown")).toHaveText("2/3 owned");
+  await expect(ronin.locator(".setlock b")).toHaveText("");
+  await expect(ronin).not.toHaveClass(/\blocked\b/);
+  // Left: every set's helmet, and the Exo-Frame's frame and pods (all MK III).
+  await expect(room(page).locator(".setlocks .lockfold summary")).toHaveText(/How to unlock · 10/);
+  await ronin.click();
+  expect(await page.evaluate(() => window.ccDebug.game.character)).toMatchObject({ frame: "lamellar", helmet: "standard", shoulder: "sode" });
+  await expect(room(page).locator(".toast")).toHaveText("Ronin set on · Kabuto locked, skipped");
   await expect(ronin).toHaveAttribute("aria-pressed", "false");
+});
+
+test("theme frames are locked on a fresh save and earned with Act 1; the stock frames are open", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "suit").click();
+  const frames = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).BODY_FRAMES.map((f) => ({ id: f.id, name: f.name, tier: f.tier || 0 })));
+  const frameOpt = (id) => opt(page, "frame", frames.findIndex((f) => f.id === id));
+  const ACT1 = "Clear Act 1 or survive arena round 10";
+  const ACT2 = "Clear Act 2 or survive arena round 15";
+  for (const f of frames) {
+    const o = frameOpt(f.id);
+    if (!f.tier) {
+      await expect(o, f.id).not.toHaveClass(/\blocked\b/);
+      continue;
+    }
+    await expect(o, f.id).toHaveClass(/\blocked\b/);
+    // Tier 3's rule counts acts, so its hint carries the progress too.
+    const hint = f.tier === 2 ? ACT1 : `${ACT2} · 0/2 acts`;
+    await expect(o, f.id).toHaveAttribute("title", hint);
+    await expect(o, f.id).toHaveAttribute("aria-label", new RegExp(`Locked: ${hint}$`));
+    await expect(o.locator(".lockbadge"), f.id).toBeVisible();
+  }
+  const fold = room(page).locator('.section[data-key="frame"] .lockfold');
+  await expect(fold.locator("summary")).toHaveText(`How to unlock · ${frames.filter((f) => f.tier).length}`);
+  await frameOpt("duster").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "screenshots/frames-locked-fresh.png" });
+
+  // Picking one says what earns it and leaves the frame as worn (forced: a
+  // locked tile is aria-disabled, which Playwright will not click).
+  await frameOpt("duster").click({ force: true });
+  await expect(room(page).locator(".toast")).toHaveText(`Frontier Duster locked · ${ACT1}`);
+  expect(await page.evaluate(() => window.ccDebug.game.character.frame)).toBe("standard");
+
+  await clearActOne(page);
+  for (const f of frames.filter((x) => x.tier === 2)) await expect(frameOpt(f.id), f.id).not.toHaveClass(/\blocked\b/);
+  await expect(frameOpt("exo")).toHaveClass(/\blocked\b/);
+  await expect(fold.locator("summary")).toHaveText("How to unlock · 1");
+  await frameOpt("duster").click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.frame)).toBe("duster");
+  await frameOpt("duster").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "screenshots/frames-after-act1.png" });
+});
+
+test("clearing Act 1 announces frames with the MK II gear tier", async ({ page }) => {
+  await openCreator(page);
+  await page.evaluate(() => {
+    // The toast element is made on first use: record what reaches any of them.
+    const proto = customElements.get("unlock-toast").prototype;
+    const show = proto.show;
+    window.__shown = [];
+    proto.show = function (msg) {
+      window.__shown.push(msg);
+      return show.call(this, msg);
+    };
+    window.ccDebug.game.achievementStats.campaignActsCleared = 1;
+    window.dispatchEvent(new CustomEvent("cc:progress"));
+  });
+  await expect.poll(() => page.evaluate(() => window.__shown)).toContainEqual({ kind: "Gear tier", name: "MK II armor, frames, helmets, visors & shoulders" });
+  // The tier plate leads (armour is the first lockable slot); it is what shows.
+  const name = page.locator("unlock-toast .plate .name");
+  await expect(name).toHaveText("MK II armor, frames, helmets, visors & shoulders");
+  await page.screenshot({ path: "screenshots/unlock-toast-frames.png" });
 });
 
 test("editing a small piece frames the face, and gives the camera back after", async ({ page }) => {
@@ -730,9 +819,12 @@ test("canvas creator preview shows a theme frame", async ({ page }) => {
   // Two frames of the same look differ only by the panel's animation: the noise floor.
   await page.waitForTimeout(250);
   const again = await page.evaluate(() => window.__preview.sample());
-  // Picked as a player would: down the SUIT FRAME list to the Abyssal Diver's suit.
-  const diving = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).BODY_FRAMES.findIndex((e) => e.id === "diving"));
-  for (let i = 0; i < diving; i++) await page.keyboard.press("ArrowDown");
+  // Theme frames are earned with Act 1; then picked as a player would, down
+  // the SUIT FRAME list to the Abyssal Diver's suit.
+  await clearActOne(page);
+  // The list steps over the still-locked Exo-Frame, so walk by what is worn.
+  const count = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).BODY_FRAMES.length);
+  for (let i = 0; i < count && (await page.evaluate(() => window.ccDebug.game.character.frame)) !== "diving"; i++) await page.keyboard.press("ArrowDown");
   expect(await page.evaluate(() => window.ccDebug.game.character.frame)).toBe("diving");
   const f = await page.evaluate(() => window.__preview.settled());
   expect(f.shown).toContain(".diving.");
@@ -743,6 +835,26 @@ test("canvas creator preview shows a theme frame", async ({ page }) => {
   expect(base.lit).toBeGreaterThan(1000);
   expect(change).toBeGreaterThan(Math.max(2, noise * 4));
   await page.screenshot({ path: "screenshots/legacy-preview-theme-frame.png" });
+});
+
+test("the canvas creator's SUIT FRAME list skips locked theme frames until they are earned", async ({ page }) => {
+  await openLegacyCreator(page);
+  await legacyTab(page, "frame");
+  const frames = await page.evaluate(async () => (await import("/src/data/cosmetics.js")).BODY_FRAMES.map((f) => ({ id: f.id, tier: f.tier || 0 })));
+  const walk = async () => {
+    const seen = [];
+    for (let i = 0; i < frames.length; i++) {
+      await page.keyboard.press("ArrowDown");
+      seen.push(await page.evaluate(() => window.ccDebug.game.character.frame));
+    }
+    return [...new Set(seen)].sort();
+  };
+  // A fresh save steps through the stock frames only.
+  expect(await walk()).toEqual(frames.filter((f) => !f.tier).map((f) => f.id).sort());
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: "screenshots/legacy-frames-locked-fresh.png" });
+  await clearActOne(page);
+  expect(await walk()).toEqual(frames.filter((f) => f.tier !== 3).map((f) => f.id).sort());
 });
 
 test("canvas creator preview never blanks while a new look decodes", async ({ page }) => {

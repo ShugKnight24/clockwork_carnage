@@ -14,6 +14,7 @@
 
 import {
   ARMOR_STYLES,
+  BODY_FRAMES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -33,6 +34,8 @@ const STORE_KEY = "cc_unlocks";
 /** Character fields whose options can be locked, with their tables. */
 export const LOCKABLE = {
   armor: { table: ARMOR_STYLES, kind: "Armor" },
+  // Theme frames carry a tier; the stock frames have none and stay open.
+  frame: { table: BODY_FRAMES, kind: "Frame" },
   helmet: { table: HELMET_STYLES, kind: "Helmet" },
   visor: { table: VISOR_STYLES, kind: "Visor" },
   shoulder: { table: SHOULDER_STYLES, kind: "Shoulders" },
@@ -216,9 +219,9 @@ export function describeId(id) {
   return item ? { kind: entry.kind, name: item.name, tier: item.tier || 0 } : { kind: "", name: id, tier: 0 };
 }
 
-// The four flat slots that share TIER_UNLOCKS: one tier opens items across all
-// of them at once, so they are announced together rather than four times over.
-const TIER_SLOTS = new Set(["armor", "helmet", "visor", "shoulder"]);
+// The flat slots that share TIER_UNLOCKS: one tier opens items across all of
+// them at once, so they are announced together rather than once per slot.
+const TIER_SLOTS = new Set(["armor", "frame", "helmet", "visor", "shoulder"]);
 
 /**
  * The lines the unlock toast should show for a batch of freshly earned ids, in
@@ -238,7 +241,7 @@ export function announcements(ids) {
     if (TIER_SLOTS.has(key) && info.tier) {
       if (tiers.has(info.tier)) continue;
       tiers.add(info.tier);
-      out.push({ kind: "Gear tier", name: `MK ${"I".repeat(info.tier)} armor, helmets, visors & shoulders` });
+      out.push({ kind: "Gear tier", name: `MK ${"I".repeat(info.tier)} armor, frames, helmets, visors & shoulders` });
       continue;
     }
     // An id whose table entry has gone (a renamed item in an old save) has no

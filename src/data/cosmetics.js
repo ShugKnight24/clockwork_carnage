@@ -197,7 +197,8 @@ export const EYE_COLORS = [
 /**
  * Body frames: the silhouette the suit is built on, from the wardrobe themes
  * (src/data/wardrobe-themes/), in theme order. Any armour style can be worn
- * on any frame.
+ * on any frame. Theme frames are earned by their tier (TIER_UNLOCKS); the
+ * stock frames carry none and are always open.
  */
 export const BODY_FRAMES = themeTable("frames");
 
@@ -355,8 +356,8 @@ export const VISOR_STYLES = [
 export const SHOULDER_STYLES = themeTable("shoulders");
 
 /**
- * Unlock rules for tiered gear (armor, helmet, visor, shoulders, and the
- * accessories in src/data/accessories.js). Tier 1 is standard issue. Spread
+ * Unlock rules for tiered gear (armor, frame, helmet, visor, shoulders, and
+ * the accessories in src/data/accessories.js). Tier 1 is standard issue. Spread
  * over the campaign: MK II with Act I, MK III with Act II, so each act still
  * has a wardrobe to earn. Rule shapes are evaluated in src/systems/unlocks.js.
  */
