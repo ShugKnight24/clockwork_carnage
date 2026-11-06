@@ -345,6 +345,64 @@ test("a set with locked pieces equips what is owned and says what it skipped", a
   await expect(ronin).toHaveAttribute("aria-pressed", "false");
 });
 
+test("editing a small piece frames the face, and gives the camera back after", async ({ page }) => {
+  await openCreator(page);
+  const camera = () => room(page).getAttribute("camera");
+  // Focus as the showroom's own keyboard navigation does (focusNav): without
+  // scrolling the page, which a bare focus() would, under the fixed panel.
+  const focusTile = (key, idx = 0) => opt(page, key, idx).evaluate((el) => el.focus({ preventScroll: true }));
+  // Clicks land in place too: Playwright's own scroll-into-view can shift the
+  // fixed panel's ancestors on a loaded machine and leave a tile over the tabs.
+  const press = (loc) => loc.evaluate((el) => el.click());
+  await press(tab(page, "gear"));
+  expect(await camera()).toBe("full");
+  // Eyewear, the face item and its paint colour: the stage moves in on the face.
+  await focusTile("acc.eyes", 1);
+  await expect.poll(camera).toBe("face");
+  await focusTile("acc.face", 1);
+  expect(await camera()).toBe("face");
+  // On to a slot that reads on the whole figure: back to the camera the tab had.
+  await focusTile("acc.back", 1);
+  await expect.poll(camera).toBe("full");
+  // A pick by tap frames it too (Safari does not focus a tapped button).
+  await press(opt(page, "acc.face", 1));
+  await expect.poll(camera).toBe("face");
+  await press(tab(page, "colors"));
+  expect(await camera()).toBe("full");
+  // Hair on the Face tab, which already looks at the face: it stays there.
+  await press(tab(page, "face"));
+  await focusTile("hair", 2);
+  expect(await camera()).toBe("face");
+  await focusTile("skinTone", 1);
+  expect(await camera()).toBe("face");
+  // A camera the player picks this visit wins: editing the eyewear leaves it be.
+  await press(tab(page, "gear"));
+  await press(room(page).locator('[data-camera="bust"]'));
+  await focusTile("acc.eyes", 1);
+  await page.waitForTimeout(150);
+  expect(await camera()).toBe("bust");
+  await focusTile("acc.back", 1);
+  expect(await camera()).toBe("bust");
+});
+
+test("the canvas creator's preview moves in to the bust on the hair, eyes and face tabs", async ({ page }) => {
+  await openLegacyCreator(page);
+  const view = async (key) => {
+    await legacyTab(page, key);
+    return page.evaluate(async () => {
+      const { previewFigure } = await import("/src/ui/character-creator.js");
+      // Two frames: the game draws the tab, then the figure is on screen.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return previewFigure().wanted.split(":")[0];
+    });
+  };
+  for (const key of ["hair", "eye", "skinTone", "acc.eyes", "acc.face"]) expect(await view(key), key).toBe("bust");
+  for (const key of ["shoulder", "helmet", "color", "acc.back"]) expect(await view(key), key).toBe("full");
+  await legacyTab(page, "hair");
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "screenshots/legacy-preview-bust.png" });
+});
+
 test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));

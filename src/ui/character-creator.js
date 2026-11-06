@@ -475,13 +475,24 @@ function badgeLayer(ch, detail = "high") {
 // armed pose, and the face is only drawn under a closed helmet when asked for.
 const ARMED_KEYS = new Set(["loadout", "weaponSkin"]);
 const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
-const IDLE_STAGE = { pose: "idle", peek: false };
+// Tabs whose pieces are small on the whole figure (the FACE, HAIR and EYES
+// tabs, and the eyewear and face gear): the preview moves in to the bust
+// while one is open, as the showroom's stage does (CLOSE_UP there), and
+// stands back for every other tab.
+const CLOSE_UP_KEYS = new Set(["skinTone", "hair", "eye", "acc.eyes", "acc.face"]);
+const IDLE_STAGE = { pose: "idle", peek: false, view: "full" };
+
+/** The preview's camera on a tab: "bust" on a close-up tab, else the whole figure. */
+export function previewView(key) {
+  return CLOSE_UP_KEYS.has(key) ? "bust" : "full";
+}
 
 function stageFor(key, ch) {
   const helmet = pieceOf(ch, "helmet").id;
   return {
     pose: ARMED_KEYS.has(key) ? "hero" : "idle",
     peek: FACE_KEYS.has(key) && !FACE_HELMETS.has(helmet),
+    view: previewView(key),
   };
 }
 
@@ -510,28 +521,37 @@ function pixelRatio(ctx) {
 let _figure = null; // the look asked for: { key, defs, markup, asked, decodeMs }
 let _shown = null; // the last look that decoded, and the scale it decoded at
 
-/** The preview's figure: the look asked for, the one on screen, and how long the last one took to decode (ms). */
+/**
+ * The preview's figure: the look asked for, the one on screen (keys start
+ * with the camera, "full" or "bust"), and how long the last one took to
+ * decode (ms).
+ */
 export function previewFigure() {
   return { wanted: _figure?.key ?? null, shown: _shown?.key ?? null, decodeMs: _shown?.decodeMs ?? null };
 }
 
 /**
- * Draw the customised agent centred on (cx, cy), `h` px tall, posed for the
- * field being edited: the look asked for once it has decoded, the last
- * decoded look until then.
+ * Draw the customised agent centred on (cx, cy), posed and framed for the
+ * field being edited (stage.view, an AGENT_VIEW crop): the look asked for
+ * once it has decoded, the last decoded look until then. `heightFor(box)`
+ * is how tall a crop draws, so a figure kept on screen keeps its own size.
  */
-function drawAgentFigure(ctx, ch, cx, cy, h, stage = IDLE_STAGE) {
-  const key = `${stage.pose}:${stage.peek ? 1 : 0}:${lookKey(ch)}`;
-  if (!_figure || _figure.key !== key) _figure = { key, ...agentMarkup(ch, stage), asked: performance.now() };
-  const scale = (h / AGENT_VIEW.full[3]) * pixelRatio(ctx);
-  let img = getLayerImage(`legacy-agent:${key}`, AGENT_VIEW.full, _figure.defs, _figure.markup, scale);
+function drawAgentFigure(ctx, ch, cx, cy, heightFor, stage = IDLE_STAGE) {
+  const view = stage.view || "full";
+  const key = `${view}:${stage.pose}:${stage.peek ? 1 : 0}:${lookKey(ch)}`;
+  if (!_figure || _figure.key !== key) _figure = { key, box: AGENT_VIEW[view], ...agentMarkup(ch, stage), asked: performance.now() };
+  const scale = (heightFor(_figure.box) / _figure.box[3]) * pixelRatio(ctx);
+  let img = getLayerImage(`legacy-agent:${key}`, _figure.box, _figure.defs, _figure.markup, scale);
+  let shown = _figure;
   if (img) {
     if (_shown?.key !== key) _shown = { ..._figure, scale, decodeMs: performance.now() - _figure.asked };
   } else if (_shown) {
-    img = getLayerImage(`legacy-agent:${_shown.key}`, AGENT_VIEW.full, _shown.defs, _shown.markup, _shown.scale);
+    shown = _shown;
+    img = getLayerImage(`legacy-agent:${_shown.key}`, _shown.box, _shown.defs, _shown.markup, _shown.scale);
   }
   if (!img) return;
-  const w = (AGENT_VIEW.full[2] / AGENT_VIEW.full[3]) * h;
+  const h = heightFor(shown.box);
+  const w = (shown.box[2] / shown.box[3]) * h;
   ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
 }
 
@@ -745,7 +765,7 @@ export function renderCharacterCreator(
     const prevScale = isMobile
       ? 1.0
       : Math.max(1.2, Math.min(2.4, (prevBottom - prevTop - 70) / 150));
-    drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150);
+    drawAgentFigure(ctx, char, prevCX, prevCY, () => prevScale * 150);
 
     // Styled nameplate (name step)
     const npText = char.name || "Agent";
@@ -966,7 +986,9 @@ export function renderCharacterCreator(
     Math.min((L.previewW - 48) / 120, (prevH - 96) / 150),
   );
   const prevCY = L.contentY + prevH / 2 - 10;
-  drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150, stageFor(curCat.key, char));
+  // The whole figure as before; a close-up crop fills the panel above the nameplate.
+  const heightFor = (box) => (box === AGENT_VIEW.full ? prevScale * 150 : Math.min(prevH - 76, ((L.previewW - 24) * box[3]) / box[2]));
+  drawAgentFigure(ctx, char, prevCX, prevCY, heightFor, stageFor(curCat.key, char));
 
   // ── Scan-line overlay ──
   ctx.save();

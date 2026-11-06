@@ -61,6 +61,12 @@ const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
 const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
 /** Camera toggle order (the C key cycles through them). */
 const CAMERAS = ["full", "bust", "face"];
+/**
+ * Sections whose pieces are small on the whole figure: editing one (focus
+ * in it, or a pick) moves the stage to this camera, and leaving it moves
+ * back, unless the player has picked a camera this visit (frameSection).
+ */
+const CLOSE_UP = { eye: "face", hair: "face", hairColor: "face", "acc.eyes": "face", "acc.face": "face" };
 
 /** A library badge worn at the given places. */
 const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
@@ -1288,6 +1294,8 @@ class AgentShowroom extends HTMLElement {
     this._yawRestore = null;
     this.poseChoice = "idle";
     this.cameraChoice = "full";
+    this.cameraPicked = false;
+    this._cameraRestore = null;
     this.setAttribute("camera", "full");
     this.view = AGENT_VIEW.full.slice();
     this._viewTween = null;
@@ -1533,6 +1541,27 @@ class AgentShowroom extends HTMLElement {
     if (p && this.classList.contains("kbd")) this.setPreview(on ? { key: p.key, value: p.value } : null);
     const sec = e.target.closest?.(".section");
     this.previewSection = on && sec ? sec.dataset.key || null : null;
+    // Focus arriving anywhere frames (or unframes) the stage for what it edits.
+    if (on) this.frameSection(this.previewSection);
+  }
+
+  /**
+   * Move the stage in on a small piece while its section is being edited
+   * (CLOSE_UP), and back to the camera it had once focus moves on. A camera
+   * the player picked this visit always wins: nothing moves it then.
+   */
+  frameSection(key) {
+    const cam = CLOSE_UP[key];
+    if (!cam) {
+      if (this._cameraRestore == null) return;
+      const back = this._cameraRestore;
+      this._cameraRestore = null;
+      if (!this.cameraPicked && back !== this.cameraChoice) this.setCamera(back);
+      return;
+    }
+    if (this.cameraPicked) return;
+    this._cameraRestore ??= this.cameraChoice;
+    if (cam !== this.cameraChoice) this.setCamera(cam);
   }
 
   // ── Keys (routed from the game's dispatch) ──────────────
@@ -1736,6 +1765,8 @@ class AgentShowroom extends HTMLElement {
       return;
     }
     this.turnFor(key);
+    // A tap picks without focusing on some browsers (Safari): frame here too.
+    this.frameSection(key);
     if (getId(this.character, key) === item.id) {
       this.preview = null;
       return;
@@ -2071,6 +2102,7 @@ class AgentShowroom extends HTMLElement {
     this.restoreYaw();
     const cat = CATEGORIES[next];
     // Categories frame the stage for what they edit; manual toggles still win after.
+    this._cameraRestore = null;
     this.setCamera(cat.camera || "full");
     this.setPose(cat.pose || "idle");
     if (changed) this.sfx("menuNav");
@@ -2092,6 +2124,10 @@ class AgentShowroom extends HTMLElement {
   }
 
   setCamera(mode, user = false) {
+    if (user) {
+      this.cameraPicked = true;
+      this._cameraRestore = null;
+    }
     this.cameraChoice = mode;
     this.setAttribute("camera", mode);
     this.shadowRoot.querySelectorAll("[data-camera]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.camera === mode)));
@@ -2628,6 +2664,7 @@ class AgentShowroom extends HTMLElement {
    * of the drag repaints in place until the input's change event ends it.
    */
   chooseTint(slot, hex, live = false) {
+    this.frameSection(`acc.${slot}`);
     const changes = withTint(this.character, slot, hex);
     if (live && this._tintLive === slot) {
       Object.assign(this.character, changes);
