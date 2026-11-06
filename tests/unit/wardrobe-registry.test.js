@@ -16,10 +16,10 @@ import {
   shoulderArt,
   validateWardrobe,
 } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
-import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, withLeg, mix, RIG_DEFS, HELMET_KIT, HELMET_KIT_IDS } from "../../src/rendering/svg-art/agent-rig.js";
+import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, withLeg, mix, RIG_DEFS, HELMET_KIT, HELMET_KIT_IDS, shoulderKit } from "../../src/rendering/svg-art/agent-rig.js";
 import { paintAccessories } from "../../src/rendering/svg-art/accessories/index.js";
 import { idScope } from "../../src/rendering/svg-art/id-scope.js";
-import { STAND, mirror, pauldron } from "../../src/rendering/svg-art/models/hero.js";
+import { STAND } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
 
 const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
@@ -438,8 +438,7 @@ describe("painters name only their own ids and the rig's shared defs", () => {
     const c = lookOf({ shoulder: id });
     for (const s of [-1, 1]) {
       const scope = idScope();
-      const K = { M: s < 0 ? mirror : (d) => d, rot: (m) => m, lit: s < 0, pauldron: (side) => pauldron(side, 0), mix, ...scope.kit(`shoulder-${id}`) };
-      expectOwn(SHOULDER_ART[id].paint(c, s, K) + scope.markup(), `shoulder-${id}-`, `shoulder ${id} ${s}`);
+      expectOwn(SHOULDER_ART[id].paint(c, s, shoulderKit(id, s, 0, scope)) + scope.markup(), `shoulder-${id}-`, `shoulder ${id} ${s}`);
     }
   });
 

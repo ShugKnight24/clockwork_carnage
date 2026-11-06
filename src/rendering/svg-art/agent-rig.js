@@ -1103,9 +1103,16 @@ function eyeGlow(c, op, behindVisor = false) {
  * kit). `scope` is the figure's idScope.
  */
 function shoulder(c, s, tilt, scope, id = c.shoulder) {
+  return shoulderArt(id).paint(c, s, shoulderKit(id, s, tilt, scope));
+}
+
+/**
+ * The kit shoulder `id`'s painter draws side `s` with at the arm's `tilt`
+ * (wardrobe-themes/index.js documents it), its ids scoped by `scope`.
+ */
+export function shoulderKit(id, s, tilt, scope) {
   const rot = (inner) => `<g transform="rotate(${f(tilt)} ${f(s * 12)} -65)">${inner}</g>`;
-  const K = { M: s < 0 ? mirror : (d) => d, rot, lit: s < 0, pauldron: (side) => pauldron(side, tilt), mix, ...scope.kit(`shoulder-${id}`) };
-  return shoulderArt(id).paint(c, s, K);
+  return { M: s < 0 ? mirror : (d) => d, rot, lit: s < 0, pauldron: (side) => pauldron(side, tilt), mix, ...scope.kit(`shoulder-${id}`) };
 }
 
 // ---------------------------------------------------------------------------
