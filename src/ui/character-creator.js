@@ -132,9 +132,14 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   const tabStripH = tabRows * tabH + (tabRows - 1) * tabGap;
 
   const contentY = tabY + tabStripH + (isMobile ? 12 : 20);
-  const listW = isMobile ? Math.min(w * 0.45, 180) : 230;
-  const previewW = isMobile ? Math.min(w * 0.4, 140) : 300;
-  const infoW = isMobile ? 0 : 240;
+  // A touch phone on its side: a wider list (a narrower preview and info
+  // beside it, which the short screen cannot fill anyway) so the HAIR tab's
+  // colour swatches stay finger-sized beside two rows of cuts, and the
+  // content clears the edge zones that cycle tabs (edgeInset).
+  const shortTouch = isTouch && h < 500;
+  const listW = isMobile ? Math.min(w * 0.45, shortTouch ? 300 : 180) : shortTouch ? 300 : 230;
+  const previewW = isMobile ? Math.min(w * 0.4, 140) : shortTouch ? 180 : 300;
+  const infoW = isMobile ? 0 : shortTouch ? 180 : 240;
   const contentGap = isMobile ? 8 : 20;
   const totalContentW =
     listW + previewW + (isMobile ? 0 : infoW + contentGap) + contentGap;
@@ -149,6 +154,8 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
 
   return {
     width: w,
+    touch: isTouch,
+    inset: edgeInset(w, isTouch),
     titleY,
     tabGap,
     tabW,
@@ -171,22 +178,30 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false) {
   };
 }
 
+/** The smallest hair colour swatch on touch, in canvas px: a fingertip. */
+export const HAIR_SWATCH_MIN_TOUCH = 28;
+
 /**
  * The hair colour swatches under the cuts on the HAIR tab: a labelled grid
  * at the foot of the list panel. Shared by the renderer and the click
  * handler (src/systems/input-click-dispatch.js) so both see the same boxes.
  */
 export function hairColorSwatches(L) {
-  const pad = 10;
-  const gap = 4;
-  const cols = 9;
+  const pad = L.touch ? 6 : 10;
+  const gap = L.touch ? 3 : 4;
   const labelH = 20;
-  const size = Math.floor((L.listW - 2 * pad - (cols - 1) * gap) / cols);
+  // On touch the row keeps out of the edge zones, where a tap cycles tabs.
+  const left = Math.max(L.contentX + pad, L.inset || 0);
+  const right = Math.min(L.contentX + L.listW - pad, L.width - (L.inset || 0));
+  const avail = right - left;
+  // Mouse: two tidy rows of nine. Touch: as many columns as keep a fingertip swatch.
+  const cols = L.touch ? Math.max(1, Math.min(9, Math.floor((avail + gap) / (HAIR_SWATCH_MIN_TOUCH + gap)))) : 9;
+  const size = Math.floor((avail - (cols - 1) * gap) / cols);
   const rows = Math.ceil(HAIR_COLORS.length / cols);
   const h = labelH + rows * size + (rows - 1) * gap + pad;
   const top = L.contentY + L.panelH - h;
   const rects = HAIR_COLORS.map((_, i) => ({
-    x: L.contentX + pad + (i % cols) * (size + gap),
+    x: left + (i % cols) * (size + gap),
     y: top + labelH + Math.floor(i / cols) * (size + gap),
     w: size,
     h: size,
