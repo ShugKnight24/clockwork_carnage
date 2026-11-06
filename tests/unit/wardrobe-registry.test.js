@@ -16,8 +16,9 @@ import {
   shoulderArt,
   validateWardrobe,
 } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
-import { rigAnchors } from "../../src/rendering/svg-art/agent-rig.js";
+import { rigAnchors, buildAgentSvg, buildCastModel } from "../../src/rendering/svg-art/agent-rig.js";
 import { STAND } from "../../src/rendering/svg-art/models/hero.js";
+import { lookFromIds } from "./helpers/golden-looks.js";
 
 const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
 const LEGACY_HELMETS = ["standard", "wide", "angular", "mohawk", "crested", "ordnance", "bucket", "crusader", "sealed", "reaper", "pilot", "bandana"];
@@ -140,14 +141,14 @@ describe("helmets", () => {
     }
   });
 
-  it("FACE_HELMETS equals {wide, mohawk}, derived from the data and read-only", () => {
-    expect([...FACE_HELMETS].sort()).toEqual(["mohawk", "wide"]);
+  it("FACE_HELMETS equals {wide, mohawk, brim}, derived from the data and read-only", () => {
+    expect([...FACE_HELMETS].sort()).toEqual(["brim", "mohawk", "wide"]);
     expect([...FACE_HELMETS].sort()).toEqual(HELMET_STYLES.filter((e) => e.face === true).map((e) => e.id).sort());
     expect(() => FACE_HELMETS.add("standard")).toThrow();
     expect(() => FACE_HELMETS.delete("wide")).toThrow();
     expect(() => FACE_HELMETS.clear()).toThrow();
     expect(FACE_HELMETS.has("wide")).toBe(true);
-    expect(FACE_HELMETS.size).toBe(2);
+    expect(FACE_HELMETS.size).toBe(3);
   });
 
   it("throws on an unknown helmet rather than drawing another", () => {
@@ -208,6 +209,55 @@ describe("the Exo-Frame theme", () => {
     expect(A.sideL.x).toBeCloseTo(-15.8, 10);
     expect(A.helmet).toEqual({ x: -7.6, y: -93.4, rot: -6, size: 4.2 });
     expect(FACE_HELMETS.has("cockpit")).toBe(false);
+  });
+});
+
+// The themes in creator order; the spike's later themes join as they are ported.
+const THEME_ORDER = ["issue", "exo", "marshal", "ronin", "horologist", "runner", "diver", "ranger", "chronomancer"];
+const PORTED = ["issue", "exo", "marshal"];
+
+describe("the spike themes", () => {
+  const spike = () => WARDROBE_THEMES.filter((t) => !["issue", "exo"].includes(t.id));
+
+  it("every theme ported so far is registered in theme order", () => {
+    const ids = WARDROBE_THEMES.map((t) => t.id);
+    expect(ids).toEqual(PORTED);
+    expect(ids).toEqual(THEME_ORDER.slice(0, ids.length));
+  });
+
+  it("each has one frame (tier 2), helmet (tier 3) and shoulder (tier 2), all its own", () => {
+    for (const t of spike()) {
+      expect(t.frames.map((e) => e.tier), t.id).toEqual([2]);
+      expect(t.helmets.map((e) => e.tier), t.id).toEqual([3]);
+      expect(t.shoulders.map((e) => e.tier), t.id).toEqual([2]);
+      for (const table of ["frames", "helmets", "shoulders"]) expect(themeOf(table, t[table][0].id), t.id).toBe(t.id);
+    }
+  });
+
+  it("the Marshal's duster covers the kit, the cape and the limb light; the brim is an open hat with no brow seat", () => {
+    expect([...FRAME_ART.duster.shape.hides]).toEqual(["kit", "cape", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "brim")).toMatchObject({ face: true, visor: false });
+    expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true });
+    expect(HELMET_ART.brim.anchors.badge).toBe(false);
+  });
+});
+
+describe("every theme piece draws cleanly", () => {
+  // Each theme's own set, both builds, both poses and fallen: no NaN or
+  // undefined in the markup, ids unique in the figure, every url(#…) one of its own.
+  const looks = WARDROBE_THEMES.filter((t) => t.id !== "issue").map((t) => [t.id, { frame: t.frames[0].id, helmet: t.helmets[0].id, shoulder: t.shoulders[0].id }]);
+  const check = (markup) => {
+    expect(markup).not.toMatch(/NaN|undefined/);
+    const ids = [...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const [, ref] of markup.matchAll(/url\(#([^)]+)\)/g)) expect(ids, ref).toContain(ref);
+  };
+  it.each(looks)("%s", (id, pieces) => {
+    for (const body of ["masc", "fem"]) {
+      for (const pose of ["idle", "hero"]) check(buildAgentSvg(lookFromIds({ ...pieces, body }), { pose, idPrefix: "t-" }));
+    }
+    const fallen = buildCastModel(lookFromIds(pieces), "hero_fallen");
+    check(`<defs>${fallen.defs}</defs>` + fallen.layers.map((l) => l.markup).join(""));
   });
 });
 

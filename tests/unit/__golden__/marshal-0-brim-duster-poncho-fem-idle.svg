@@ -1,0 +1,893 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-74 -116 148 182" class="" role="img" aria-label="Agent preview">
+<defs>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-steel" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#c2b9a2"/>
+<stop offset="0.18" stop-color="#918872"/>
+<stop offset="0.5" stop-color="#554f40"/>
+<stop offset="0.82" stop-color="#29261e"/>
+<stop offset="1" stop-color="#15130f"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-steelDk" x1="0" y1="0" x2="1" y2="0.35">
+<stop offset="0" stop-color="#706957"/>
+<stop offset="0.45" stop-color="#3f3b2f"/>
+<stop offset="1" stop-color="#0f0d0b"/>
+</linearGradient>
+<pattern id="marshal-0-brim-duster-poncho-fem-idle-suit" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="scale(1) rotate(-12)">
+<rect width="18" height="18" fill="#4a5236"/>
+<path d="M11.8,4C11.7,4.7 11.2,5.5 10.4,5.8C9.7,6.1 8.4,5.8 7.4,5.7C6.4,5.6 4.9,5.4 4.6,5C4.3,4.6 5.1,3.8 5.6,3.3C6.1,2.9 6.4,2.5 7.4,2.2C8.3,2 10.3,1.5 11,1.8C11.8,2.1 11.9,3.4 11.8,4Z" fill="#2f3a22"/>
+<path d="M11.8,22C11.7,22.7 11.2,23.5 10.4,23.8C9.7,24.1 8.4,23.8 7.4,23.7C6.4,23.6 4.9,23.4 4.6,23C4.3,22.6 5.1,21.8 5.6,21.3C6.1,20.9 6.4,20.5 7.4,20.2C8.3,20 10.3,19.5 11,19.8C11.8,20.1 11.9,21.4 11.8,22Z" fill="#2f3a22"/>
+<path d="M9.1,4.7C9.1,5.2 8.4,5.8 7.6,6.2C6.9,6.6 5.6,7.1 4.7,7.1C3.7,7 2.4,6.3 1.9,5.7C1.4,5.2 1.1,4 1.6,3.5C2.1,3 3.8,2.8 4.8,2.7C5.9,2.6 7.2,2.6 7.9,3C8.6,3.3 9.2,4.2 9.1,4.7Z" fill="#2f3a22"/>
+<path d="M9.1,22.7C9.1,23.2 8.4,23.8 7.6,24.2C6.9,24.6 5.6,25.1 4.7,25.1C3.7,25 2.4,24.3 1.9,23.7C1.4,23.2 1.1,22 1.6,21.5C2.1,21 3.8,20.8 4.8,20.7C5.9,20.6 7.2,20.6 7.9,21C8.6,21.3 9.2,22.2 9.1,22.7Z" fill="#2f3a22"/>
+<path d="M8.6,-2.9C8.7,-2.5 8.4,-1.9 7.9,-1.7C7.4,-1.4 6.4,-1.4 5.7,-1.5C5,-1.6 4.1,-1.8 3.7,-2.2C3.3,-2.6 3,-3.3 3.3,-3.7C3.6,-4.2 4.7,-4.8 5.5,-4.8C6.3,-4.9 7.3,-4.4 7.9,-4.1C8.4,-3.8 8.6,-3.3 8.6,-2.9Z" fill="#2f3a22"/>
+<path d="M8.6,15.1C8.7,15.5 8.4,16.1 7.9,16.3C7.4,16.6 6.4,16.6 5.7,16.5C5,16.4 4.1,16.2 3.7,15.8C3.3,15.4 3,14.7 3.3,14.3C3.6,13.8 4.7,13.2 5.5,13.2C6.3,13.1 7.3,13.6 7.9,13.9C8.4,14.2 8.6,14.7 8.6,15.1Z" fill="#2f3a22"/>
+<path d="M12.1,-0.8C12.2,-0.3 11.8,0.5 11.1,0.9C10.5,1.3 9,1.5 8,1.4C6.9,1.3 5.3,0.8 5,0.3C4.7,-0.2 5.6,-1 6.1,-1.6C6.5,-2.2 7.1,-3.3 7.8,-3.4C8.6,-3.5 9.9,-2.6 10.6,-2.1C11.3,-1.7 12,-1.3 12.1,-0.8Z" fill="#2f3a22"/>
+<path d="M12.1,17.2C12.2,17.7 11.8,18.5 11.1,18.9C10.5,19.3 9,19.5 8,19.4C6.9,19.3 5.3,18.8 5,18.3C4.7,17.8 5.6,17 6.1,16.4C6.5,15.8 7.1,14.7 7.8,14.6C8.6,14.5 9.9,15.4 10.6,15.9C11.3,16.3 12,16.7 12.1,17.2Z" fill="#2f3a22"/>
+<path d="M2.9,4C2.9,4.7 0.7,5.5 -0.6,6.1C-1.9,6.7 -3.6,7.8 -4.9,7.7C-6.3,7.6 -8.1,6.4 -8.8,5.5C-9.5,4.6 -9.8,3 -9.1,2.4C-8.3,1.7 -5.8,1.7 -4.4,1.6C-3,1.5 -1.9,1.5 -0.7,1.9C0.5,2.3 2.9,3.3 2.9,4Z" fill="#2f3a22"/>
+<path d="M2.9,22C2.9,22.7 0.7,23.5 -0.6,24.1C-1.9,24.7 -3.6,25.8 -4.9,25.7C-6.3,25.6 -8.1,24.4 -8.8,23.5C-9.5,22.6 -9.8,21 -9.1,20.4C-8.3,19.7 -5.8,19.7 -4.4,19.6C-3,19.5 -1.9,19.5 -0.7,19.9C0.5,20.3 2.9,21.3 2.9,22Z" fill="#2f3a22"/>
+<path d="M20.9,4C20.9,4.7 18.7,5.5 17.4,6.1C16.1,6.7 14.4,7.8 13.1,7.7C11.7,7.6 9.9,6.4 9.2,5.5C8.5,4.6 8.2,3 8.9,2.4C9.7,1.7 12.2,1.7 13.6,1.6C15,1.5 16.1,1.5 17.3,1.9C18.5,2.3 20.9,3.3 20.9,4Z" fill="#2f3a22"/>
+<path d="M20.9,22C20.9,22.7 18.7,23.5 17.4,24.1C16.1,24.7 14.4,25.8 13.1,25.7C11.7,25.6 9.9,24.4 9.2,23.5C8.5,22.6 8.2,21 8.9,20.4C9.7,19.7 12.2,19.7 13.6,19.6C15,19.5 16.1,19.5 17.3,19.9C18.5,20.3 20.9,21.3 20.9,22Z" fill="#2f3a22"/>
+<path d="M12,4.4C12,5.4 12.4,7.1 11.5,7.5C10.5,7.9 7.8,7.1 6.4,6.8C4.9,6.5 3.4,6.3 2.8,5.7C2.2,5 2.1,3.7 2.7,3.1C3.2,2.5 4.9,2.3 6.4,2C7.8,1.7 10.5,1 11.4,1.4C12.3,1.7 12,3.4 12,4.4Z" fill="#6b5a3a"/>
+<path d="M12,22.4C12,23.4 12.4,25.1 11.5,25.5C10.5,25.9 7.8,25.1 6.4,24.8C4.9,24.5 3.4,24.3 2.8,23.7C2.2,23 2.1,21.7 2.7,21.1C3.2,20.5 4.9,20.3 6.4,20C7.8,19.7 10.5,19 11.4,19.4C12.3,19.7 12,21.4 12,22.4Z" fill="#6b5a3a"/>
+<path d="M1,-2.3C0.7,-1.5 -1.2,-0.9 -2.2,-0.6C-3.3,-0.2 -4.4,0.1 -5.5,0C-6.6,0 -7.8,-0.5 -8.6,-1.1C-9.5,-1.8 -10.8,-3.2 -10.4,-4C-9.9,-4.7 -7.6,-5.6 -5.9,-5.8C-4.3,-6 -1.8,-5.8 -0.6,-5.3C0.5,-4.7 1.3,-3.1 1,-2.3Z" fill="#6b5a3a"/>
+<path d="M1,15.7C0.7,16.5 -1.2,17.1 -2.2,17.4C-3.3,17.8 -4.4,18.1 -5.5,18C-6.6,18 -7.8,17.5 -8.6,16.9C-9.5,16.2 -10.8,14.8 -10.4,14C-9.9,13.3 -7.6,12.4 -5.9,12.2C-4.3,12 -1.8,12.2 -0.6,12.7C0.5,13.3 1.3,14.9 1,15.7Z" fill="#6b5a3a"/>
+<path d="M19,-2.3C18.7,-1.5 16.8,-0.9 15.8,-0.6C14.7,-0.2 13.6,0.1 12.5,0C11.4,0 10.2,-0.5 9.4,-1.1C8.5,-1.8 7.2,-3.2 7.6,-4C8.1,-4.7 10.4,-5.6 12.1,-5.8C13.7,-6 16.2,-5.8 17.4,-5.3C18.5,-4.7 19.3,-3.1 19,-2.3Z" fill="#6b5a3a"/>
+<path d="M19,15.7C18.7,16.5 16.8,17.1 15.8,17.4C14.7,17.8 13.6,18.1 12.5,18C11.4,18 10.2,17.5 9.4,16.9C8.5,16.2 7.2,14.8 7.6,14C8.1,13.3 10.4,12.4 12.1,12.2C13.7,12 16.2,12.2 17.4,12.7C18.5,13.3 19.3,14.9 19,15.7Z" fill="#6b5a3a"/>
+<path d="M2.8,2.2C2.9,2.6 3.4,3.5 3,3.7C2.6,4 1,3.8 0.4,3.6C-0.2,3.4 -0.5,3 -0.7,2.6C-1,2.3 -1.5,1.8 -1.3,1.5C-1.1,1.2 -0.1,1.1 0.5,1C1.1,0.9 2.1,0.8 2.5,1C2.9,1.2 2.7,1.7 2.8,2.2Z" fill="#6b5a3a"/>
+<path d="M2.8,20.2C2.9,20.6 3.4,21.5 3,21.7C2.6,22 1,21.8 0.4,21.6C-0.2,21.4 -0.5,21 -0.7,20.6C-1,20.3 -1.5,19.8 -1.3,19.5C-1.1,19.2 -0.1,19.1 0.5,19C1.1,18.9 2.1,18.8 2.5,19C2.9,19.2 2.7,19.7 2.8,20.2Z" fill="#6b5a3a"/>
+<path d="M20.8,2.2C20.9,2.6 21.4,3.5 21,3.7C20.6,4 19,3.8 18.4,3.6C17.8,3.4 17.5,3 17.3,2.6C17,2.3 16.5,1.8 16.7,1.5C16.9,1.2 17.9,1.1 18.5,1C19.1,0.9 20.1,0.8 20.5,1C20.9,1.2 20.7,1.7 20.8,2.2Z" fill="#6b5a3a"/>
+<path d="M20.8,20.2C20.9,20.6 21.4,21.5 21,21.7C20.6,22 19,21.8 18.4,21.6C17.8,21.4 17.5,21 17.3,20.6C17,20.3 16.5,19.8 16.7,19.5C16.9,19.2 17.9,19.1 18.5,19C19.1,18.9 20.1,18.8 20.5,19C20.9,19.2 20.7,19.7 20.8,20.2Z" fill="#6b5a3a"/>
+<path d="M8.6,8C8.5,8.9 8.1,10 7.3,10.3C6.4,10.7 4.7,10.2 3.4,10.1C2,9.9 -0.1,9.9 -0.6,9.4C-1.1,8.9 0,7.7 0.6,7C1.2,6.3 1.8,5.2 3,4.9C4.1,4.6 6.8,4.8 7.8,5.3C8.7,5.8 8.7,7.2 8.6,8Z" fill="#6b5a3a"/>
+<path d="M26.6,8C26.5,8.9 26.1,10 25.3,10.3C24.4,10.7 22.7,10.2 21.4,10.1C20,9.9 17.9,9.9 17.4,9.4C16.9,8.9 18,7.7 18.6,7C19.2,6.3 19.8,5.2 21,4.9C22.1,4.6 24.8,4.8 25.8,5.3C26.7,5.8 26.7,7.2 26.6,8Z" fill="#6b5a3a"/>
+<path d="M13.9,0.6C13.8,1.1 12.4,1.4 11.5,1.8C10.7,2.2 9.8,3 8.9,3C8.1,2.9 7,2 6.7,1.5C6.4,0.9 6.6,0.2 7,-0.2C7.5,-0.6 8.4,-0.7 9.3,-0.9C10.2,-1.1 11.5,-1.5 12.3,-1.2C13,-1 14,0.1 13.9,0.6Z" fill="#6b5a3a"/>
+<path d="M13.9,18.6C13.8,19.1 12.4,19.4 11.5,19.8C10.7,20.2 9.8,21 8.9,21C8.1,20.9 7,20 6.7,19.5C6.4,18.9 6.6,18.2 7,17.8C7.5,17.4 8.4,17.3 9.3,17.1C10.2,16.9 11.5,16.5 12.3,16.8C13,17 14,18.1 13.9,18.6Z" fill="#6b5a3a"/>
+<path d="M4.9,-0.5C4.9,0.2 5.1,1 4.4,1.5C3.7,1.9 1.7,2.4 0.8,2.2C-0.1,2 -0.5,0.9 -0.8,0.3C-1.1,-0.3 -1.1,-0.5 -0.9,-1.2C-0.7,-1.9 -0.4,-3.7 0.5,-3.9C1.4,-4 3.6,-2.9 4.4,-2.4C5.1,-1.8 4.9,-1.1 4.9,-0.5Z" fill="#1c1f16"/>
+<path d="M4.9,17.5C4.9,18.2 5.1,19 4.4,19.5C3.7,19.9 1.7,20.4 0.8,20.2C-0.1,20 -0.5,18.9 -0.8,18.3C-1.1,17.7 -1.1,17.5 -0.9,16.8C-0.7,16.1 -0.4,14.3 0.5,14.1C1.4,14 3.6,15.1 4.4,15.6C5.1,16.2 4.9,16.9 4.9,17.5Z" fill="#1c1f16"/>
+<path d="M22.9,-0.5C22.9,0.2 23.1,1 22.4,1.5C21.7,1.9 19.7,2.4 18.8,2.2C17.9,2 17.5,0.9 17.2,0.3C16.9,-0.3 16.9,-0.5 17.1,-1.2C17.3,-1.9 17.6,-3.7 18.5,-3.9C19.4,-4 21.6,-2.9 22.4,-2.4C23.1,-1.8 22.9,-1.1 22.9,-0.5Z" fill="#1c1f16"/>
+<path d="M22.9,17.5C22.9,18.2 23.1,19 22.4,19.5C21.7,19.9 19.7,20.4 18.8,20.2C17.9,20 17.5,18.9 17.2,18.3C16.9,17.7 16.9,17.5 17.1,16.8C17.3,16.1 17.6,14.3 18.5,14.1C19.4,14 21.6,15.1 22.4,15.6C23.1,16.2 22.9,16.9 22.9,17.5Z" fill="#1c1f16"/>
+<path d="M8.8,7.7C8.6,8.4 7.5,8.8 6.6,9.4C5.6,9.9 4.5,10.9 3.1,10.9C1.8,10.9 -1.1,10.1 -1.5,9.4C-1.9,8.7 0.1,7.5 0.8,6.7C1.6,5.9 2,5 3.2,4.7C4.3,4.4 6.8,4.6 7.8,5.1C8.7,5.6 9,7 8.8,7.7Z" fill="#1c1f16"/>
+<path d="M26.8,7.7C26.6,8.4 25.5,8.8 24.6,9.4C23.6,9.9 22.5,10.9 21.1,10.9C19.8,10.9 16.9,10.1 16.5,9.4C16.1,8.7 18.1,7.5 18.8,6.7C19.6,5.9 20,5 21.2,4.7C22.3,4.4 24.8,4.6 25.8,5.1C26.7,5.6 27,7 26.8,7.7Z" fill="#1c1f16"/>
+<path d="M11.1,10C11,10.4 10.5,10.9 10,11.1C9.5,11.4 8.5,11.4 7.9,11.3C7.4,11.2 7.1,10.8 6.7,10.5C6.2,10.1 5,9.4 5.2,9C5.4,8.7 6.9,8.5 7.8,8.4C8.7,8.2 10,8.2 10.5,8.4C11.1,8.7 11.2,9.5 11.1,10Z" fill="#1c1f16"/>
+<path d="M4.6,3.4C4.5,4 5,4.5 4.5,4.9C4,5.2 2.6,5.7 1.8,5.6C0.9,5.5 -0.2,4.7 -0.4,4.3C-0.5,3.8 0.3,3.2 0.7,2.9C1.1,2.6 1.4,2.4 2.1,2.2C2.8,2 4.4,1.5 4.8,1.8C5.3,2 4.7,2.9 4.6,3.4Z" fill="#1c1f16"/>
+<path d="M4.6,21.4C4.5,22 5,22.5 4.5,22.9C4,23.2 2.6,23.7 1.8,23.6C0.9,23.5 -0.2,22.7 -0.4,22.3C-0.5,21.8 0.3,21.2 0.7,20.9C1.1,20.6 1.4,20.4 2.1,20.2C2.8,20 4.4,19.5 4.8,19.8C5.3,20 4.7,20.9 4.6,21.4Z" fill="#1c1f16"/>
+<path d="M22.6,3.4C22.5,4 23,4.5 22.5,4.9C22,5.2 20.6,5.7 19.8,5.6C18.9,5.5 17.8,4.7 17.6,4.3C17.5,3.8 18.3,3.2 18.7,2.9C19.1,2.6 19.4,2.4 20.1,2.2C20.8,2 22.4,1.5 22.8,1.8C23.3,2 22.7,2.9 22.6,3.4Z" fill="#1c1f16"/>
+<path d="M22.6,21.4C22.5,22 23,22.5 22.5,22.9C22,23.2 20.6,23.7 19.8,23.6C18.9,23.5 17.8,22.7 17.6,22.3C17.5,21.8 18.3,21.2 18.7,20.9C19.1,20.6 19.4,20.4 20.1,20.2C20.8,20 22.4,19.5 22.8,19.8C23.3,20 22.7,20.9 22.6,21.4Z" fill="#1c1f16"/>
+<path d="M9.9,8.3C10,8.7 9.5,9.6 8.9,9.9C8.3,10.1 7.2,9.7 6.3,9.6C5.5,9.5 4.2,9.4 3.9,9.1C3.7,8.8 4.2,8.1 4.6,7.7C5,7.2 5.5,6.5 6.1,6.4C6.7,6.3 7.6,6.9 8.2,7.2C8.9,7.5 9.8,7.9 9.9,8.3Z" fill="#1c1f16"/>
+</pattern>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-cape" gradientUnits="userSpaceOnUse" x1="-38" y1="-50" x2="34" y2="10">
+<stop offset="0" stop-color="#42403e"/>
+<stop offset="0.3" stop-color="#23211e"/>
+<stop offset="0.62" stop-color="#181614"/>
+<stop offset="1" stop-color="#080707"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-paint" x1="0" y1="0" x2="1" y2="0.4">
+<stop offset="0" stop-color="#777571"/>
+<stop offset="0.45" stop-color="#2e2a25"/>
+<stop offset="1" stop-color="#0c0a08"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-visor" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#382c10"/>
+<stop offset="0.42" stop-color="#e0b141"/>
+<stop offset="0.58" stop-color="#fff0cc"/>
+<stop offset="1" stop-color="#2e240d"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-mirrorGlass" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#3c4a5c"/>
+<stop offset="0.35" stop-color="#0b1119"/>
+<stop offset="0.55" stop-color="#4f4527"/>
+<stop offset="0.7" stop-color="#05080d"/>
+<stop offset="1" stop-color="#1a2330"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-gun" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#3c3f45"/>
+<stop offset="0.3" stop-color="#1b1d21"/>
+<stop offset="1" stop-color="#050608"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-goldGlass" x1="0" y1="0" x2="0.25" y2="1">
+<stop offset="0" stop-color="#3a2405"/>
+<stop offset="0.28" stop-color="#b47a16"/>
+<stop offset="0.42" stop-color="#ffe39a"/>
+<stop offset="0.56" stop-color="#c88a1c"/>
+<stop offset="1" stop-color="#2a1803"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-skin" x1="0" y1="0" x2="1" y2="0.3">
+<stop offset="0" stop-color="#c89e78"/>
+<stop offset="0.42" stop-color="#b98252"/>
+<stop offset="0.8" stop-color="#8d5c3b"/>
+<stop offset="1" stop-color="#70432c"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-hair" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#5a4c45"/>
+<stop offset="0.45" stop-color="#2b1a10"/>
+<stop offset="1" stop-color="#110a06"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-leather" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#3a3430"/>
+<stop offset="0.45" stop-color="#1c1815"/>
+<stop offset="1" stop-color="#080706"/>
+</linearGradient>
+<radialGradient id="marshal-0-brim-duster-poncho-fem-idle-shade">
+<stop offset="0" stop-color="#000" stop-opacity="0.7"/>
+<stop offset="1" stop-color="#000" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="marshal-0-brim-duster-poncho-fem-idle-sheen">
+<stop offset="0" stop-color="#fff" stop-opacity="0.5"/>
+<stop offset="1" stop-color="#fff" stop-opacity="0"/>
+</radialGradient>
+<filter id="marshal-0-brim-duster-poncho-fem-idle-glow" x="-1" y="-1" width="3" height="3">
+<feGaussianBlur stdDeviation="1.3"/>
+</filter>
+<filter id="marshal-0-brim-duster-poncho-fem-idle-bloom" x="-1" y="-1" width="3" height="3">
+<feGaussianBlur stdDeviation="3"/>
+</filter>
+<filter id="marshal-0-brim-duster-poncho-fem-idle-ao" x="-0.5" y="-0.5" width="2" height="2">
+<feGaussianBlur stdDeviation="1.5"/>
+</filter>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-pecShade" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/>
+<stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+<stop offset="0.8" stop-color="#000000" stop-opacity="0.18"/>
+<stop offset="1" stop-color="#000000" stop-opacity="0.38"/>
+</linearGradient>
+<linearGradient id="marshal-0-brim-duster-poncho-fem-idle-cyl" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#ffffff" stop-opacity="0.05"/>
+<stop offset="0.28" stop-color="#ffffff" stop-opacity="0.14"/>
+<stop offset="0.5" stop-color="#000000" stop-opacity="0"/>
+<stop offset="0.82" stop-color="#000000" stop-opacity="0.34"/>
+<stop offset="1" stop-color="#000000" stop-opacity="0.18"/>
+</linearGradient>
+<pattern id="marshal-0-brim-duster-poncho-fem-idle-weave" width="0.9" height="0.9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+<rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
+<rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
+</pattern>
+<radialGradient id="marshal-0-brim-duster-poncho-fem-idle-aura">
+<stop offset="0" stop-color="#ffc94a" stop-opacity="0.16"/>
+<stop offset="0.6" stop-color="#ffc94a" stop-opacity="0.05"/>
+<stop offset="1" stop-color="#000" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<ellipse cx="0" cy="-24" rx="52" ry="86" fill="url(#marshal-0-brim-duster-poncho-fem-idle-aura)" class="ag-aura"/>
+<g class="ag-fig">
+<g class="ag-shadow">
+<ellipse cx="0" cy="58.6" rx="38" ry="4.8" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)"/>
+</g>
+<g class="ag-yaw-back">
+<g>
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
+<path d="M-15.6,-75 L15.6,-75 L17.6,-38 L-17.6,-38 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-13.6,-73.4 L13.6,-73.4" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.1,-72.9Q17.8,-81.8 23.4,-90.7C24.2,-92 26.6,-90.6 25.8,-89.3Q20.4,-80.2 15.1,-71.1C14.1,-69.5 11.2,-71.3 12.1,-72.9Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M14.1,-74.7Q17.8,-80.6 21.5,-86.4" fill="none" stroke="#eaf4ff" stroke-opacity="0.4" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M15.6,-72.8Q20.1,-80.4 24.6,-88" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M25.5,-91.1Q29.8,-87.5 34.1,-83.9C35,-83.1 33.7,-81.4 32.7,-82.1Q28.2,-85.5 23.7,-88.9C22.5,-89.9 24.3,-92.1 25.5,-91.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M26.2,-89.8Q29,-87.4 31.8,-85" fill="none" stroke="#eaf4ff" stroke-opacity="0.4" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M24.7,-88.7Q28.5,-85.8 32.2,-83" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<circle cx="24.6" cy="-90" r="2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.7"/>
+<path d="M33,-85.6 L37.4,-86.4 L36,-83.4 L37.6,-80.8 L33.2,-80.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-13,-73 L-17,-90" fill="none" stroke="#04060b" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-13,-73 L-17,-90" fill="none" stroke="#8a8574" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<g data-acc="antenna">
+<rect x="-9" y="-74" width="24" height="22" rx="2" fill="#1e2022" stroke="#0a0d12" stroke-width="1"/>
+<path d="M13,-68 L24,-112" fill="none" stroke="#0a0d12" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13,-68 L24,-112" fill="none" stroke="#3a414a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="15.55" y="-84.2" width="2.6" height="1.6" rx="0.4" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="18.85" y="-97.4" width="2.6" height="1.6" rx="0.4" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.6"/>
+<rect x="10" y="-71" width="6" height="5" rx="1" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.9"/>
+<circle cx="24" cy="-112" r="1.5" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.8"/>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-cape">
+<g class="ag-cape">
+<g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-body">
+<g>
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
+<path d="M-16.4,-64.6 C-8,-66.6 8,-66.6 16.4,-64.6 L19.6,-30 L24.6,37.4 C20,39.6 14,40.6 8,39.6 L1.4,36.4 L0,18 L-1.4,36.4 L-8,39.6 C-14,40.6 -20,39.6 -24.6,37.4 L-19.6,-30 Z" fill="#251a12" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.4,-64.6 C-8,-66.6 8,-66.6 16.4,-64.6 L19.6,-30 L24.6,37.4 C20,39.6 14,40.6 8,39.6 L1.4,36.4 L0,18 L-1.4,36.4 L-8,39.6 C-14,40.6 -20,39.6 -24.6,37.4 L-19.6,-30 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.5"/>
+<path d="M-13,-22 L-17.6,36 M13,-22 L17.6,36 M-6,-12 L-7.6,38 M6,-12 L7.6,38" fill="none" stroke="#000000" stroke-width="0.7" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-19.2,-26 L-23.6,35.6" fill="none" stroke="#3d2c1e" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-1.4,36.4 L0,18 L1.4,36.4 Z" fill="#140d08" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-17.9,-19.6C-18.1,-18.2 -19.1,-14.1 -19.4,-11.3C-19.7,-8.4 -19.8,-5.9 -19.6,-2.5C-19.3,0.9 -18.5,5.5 -18.1,9C-17.6,12.6 -17,17 -16.8,18.6C-17.2,24 -6.5,24.7 -6.2,19.3C-6,18.8 -5.6,17.7 -5.2,16.3C-4.7,15 -4,13.7 -3.6,11.1C-3.2,8.4 -3.1,4.1 -2.7,0.5C-2.3,-3.2 -1.5,-7.7 -1.2,-10.9C-0.9,-14.1 -1.2,-17.2 -1.1,-18.5C-0.6,-26.9 -17.3,-27.9 -17.9,-19.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-17.9,-19.6C-18.1,-18.2 -19.1,-14.1 -19.4,-11.3C-19.7,-8.4 -19.8,-5.9 -19.6,-2.5C-19.3,0.9 -18.5,5.5 -18.1,9C-17.6,12.6 -17,17 -16.8,18.6C-17.2,24 -6.5,24.7 -6.2,19.3C-6,18.8 -5.6,17.7 -5.2,16.3C-4.7,15 -4,13.7 -3.6,11.1C-3.2,8.4 -3.1,4.1 -2.7,0.5C-2.3,-3.2 -1.5,-7.7 -1.2,-10.9C-0.9,-14.1 -1.2,-17.2 -1.1,-18.5C-0.6,-26.9 -17.3,-27.9 -17.9,-19.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M-17.9,-19.6C-18.1,-18.2 -19.1,-14.1 -19.4,-11.3C-19.7,-8.4 -19.8,-5.9 -19.6,-2.5C-19.3,0.9 -18.5,5.5 -18.1,9C-17.6,12.6 -17,17 -16.8,18.6C-17.2,24 -6.5,24.7 -6.2,19.3C-6,18.8 -5.6,17.7 -5.2,16.3C-4.7,15 -4,13.7 -3.6,11.1C-3.2,8.4 -3.1,4.1 -2.7,0.5C-2.3,-3.2 -1.5,-7.7 -1.2,-10.9C-0.9,-14.1 -1.2,-17.2 -1.1,-18.5C-0.6,-26.9 -17.3,-27.9 -17.9,-19.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-17.8,-11.2C-17.8,-9.7 -18.2,-5.8 -18,-2.4C-17.7,1 -16.7,7.2 -16.5,9.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M-1.6,-10.9C-1.9,-9 -2.7,-3.2 -3.1,0.4C-3.5,4.1 -3.6,8.4 -4,11.1C-4.4,13.7 -5.3,15.4 -5.6,16.3" fill="none" stroke="#bdd280" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-16.6,18.6C-17,19.6 -18.7,22.5 -19.1,24.7C-19.5,26.8 -19.3,28.8 -19,31.5C-18.7,34.3 -17.7,38 -17.4,41C-17.1,44 -17.1,48.3 -17,49.7C-17.3,53.3 -10.1,53.8 -9.9,50.3C-9.6,49.1 -9.3,46 -8.5,43.5C-7.7,41 -6,37.4 -5.2,35C-4.5,32.6 -3.9,31.5 -4,28.9C-4.1,26.3 -5.6,21 -6,19.4C-5.6,14 -16.3,13.3 -16.6,18.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.6,18.6C-17,19.6 -18.7,22.5 -19.1,24.7C-19.5,26.8 -19.3,28.8 -19,31.5C-18.7,34.3 -17.7,38 -17.4,41C-17.1,44 -17.1,48.3 -17,49.7C-17.3,53.3 -10.1,53.8 -9.9,50.3C-9.6,49.1 -9.3,46 -8.5,43.5C-7.7,41 -6,37.4 -5.2,35C-4.5,32.6 -3.9,31.5 -4,28.9C-4.1,26.3 -5.6,21 -6,19.4C-5.6,14 -16.3,13.3 -16.6,18.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M-16.6,18.6C-17,19.6 -18.7,22.5 -19.1,24.7C-19.5,26.8 -19.3,28.8 -19,31.5C-18.7,34.3 -17.7,38 -17.4,41C-17.1,44 -17.1,48.3 -17,49.7C-17.3,53.3 -10.1,53.8 -9.9,50.3C-9.6,49.1 -9.3,46 -8.5,43.5C-7.7,41 -6,37.4 -5.2,35C-4.5,32.6 -3.9,31.5 -4,28.9C-4.1,26.3 -5.6,21 -6,19.4C-5.6,14 -16.3,13.3 -16.6,18.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-17.6,24.8C-17.6,25.9 -17.8,28.9 -17.5,31.6C-17.2,34.4 -16.2,39.5 -15.9,41.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M-4.4,28.8C-4.6,29.9 -4.9,32.5 -5.6,35C-6.4,37.4 -8.3,42.1 -8.9,43.5" fill="none" stroke="#bdd280" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<ellipse cx="-8.8" cy="-12.6" rx="7.6" ry="3.2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)" opacity="0.85"/>
+<ellipse cx="-10.4" cy="7.7" rx="6.4" ry="2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)" opacity="0.7"/>
+<ellipse cx="-11.7" cy="26.6" rx="5.4" ry="1.8" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)" opacity="0.75"/>
+<g transform="translate(-11.2,19) rotate(4.1)">
+<path d="M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-17.2,-14.9C-17.3,-14 -17.9,-11.5 -18.1,-9.3C-18.3,-7.1 -18.3,-3.9 -18.2,-1.7C-18.1,0.6 -17.5,3.2 -17.3,4.1C-17.7,10.5 -5,11.3 -4.6,4.9C-4.5,4.3 -4.3,3 -4,1.1C-3.7,-0.7 -3.3,-3.9 -3.1,-6.4C-2.9,-9 -2.7,-12.8 -2.6,-14C-2.2,-21.3 -16.7,-22.2 -17.2,-14.9Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-17.2,-14.9C-17.3,-14 -17.9,-11.5 -18.1,-9.3C-18.3,-7.1 -18.3,-3.9 -18.2,-1.7C-18.1,0.6 -17.5,3.2 -17.3,4.1C-17.7,10.5 -5,11.3 -4.6,4.9C-4.5,4.3 -4.3,3 -4,1.1C-3.7,-0.7 -3.3,-3.9 -3.1,-6.4C-2.9,-9 -2.7,-12.8 -2.6,-14C-2.2,-21.3 -16.7,-22.2 -17.2,-14.9Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-17.2,-14.9C-17.3,-14 -17.9,-11.5 -18.1,-9.3C-18.3,-7.1 -18.3,-3.9 -18.2,-1.7C-18.1,0.6 -17.5,3.2 -17.3,4.1C-17.7,10.5 -5,11.3 -4.6,4.9C-4.5,4.3 -4.3,3 -4,1.1C-3.7,-0.7 -3.3,-3.9 -3.1,-6.4C-2.9,-9 -2.7,-12.8 -2.6,-14C-2.2,-21.3 -16.7,-22.2 -17.2,-14.9Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-16.5,-9.2C-16.5,-7.9 -16.6,-2.8 -16.6,-1.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M-3.5,-6.5C-3.7,-5.2 -4.3,-0.1 -4.4,1.1" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(-10.5,8.4) rotate(3.6)">
+<path d="M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z" fill="#14181d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-3.9,-1.7 L-0.9,-1.7 L-0.9,1.7 L-3.9,1.7 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.4" stroke-linejoin="round"/>
+</g>
+<path d="M-15.6,-14.1C-15.9,-12.9 -17.1,-10.1 -17.2,-7.2C-17.4,-4.3 -16.6,1.6 -16.5,3.4C-16.7,6.6 -10.2,7 -10,3.8C-9.9,0.9 -9.1,-10.8 -8.9,-13.7C-8.7,-17 -15.4,-17.4 -15.6,-14.1Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M-13.4,-12.8C-13.3,-11.5 -13.3,-7.9 -13.1,-5.2C-12.9,-2.4 -12.4,2 -12.2,3.5" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12.6,-12.8C-12.5,-11.5 -12.5,-7.8 -12.3,-5.1C-12.1,-2.4 -11.6,2.1 -11.4,3.5" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.7,-12.7C-11.6,-11.4 -11.6,-7.8 -11.4,-5C-11.2,-2.3 -10.7,2.2 -10.5,3.6" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.1,5.3C-11.2,7.4 -11.6,15.7 -11.7,17.8C-11.9,19.9 -7.6,20.2 -7.5,18.1C-7,17.6 -5.2,16.3 -4.7,15.1C-4.2,13.9 -4.1,12.3 -4.6,10.7C-5.1,9.1 -7.4,6.3 -7.9,5.5C-7.8,3.9 -11,3.7 -11.1,5.3Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M-16.9,24.8C-17.1,25.5 -18,27.1 -18.1,28.7C-18.2,30.2 -17.6,32.4 -17.4,33.9C-17.2,35.5 -16.9,37.3 -16.8,37.9C-17.1,42 -8.9,42.6 -8.6,38.5C-8.4,37.9 -7.8,36.1 -7.2,34.7C-6.7,33.3 -5.7,31.7 -5.6,30.2C-5.5,28.7 -6.4,26.3 -6.6,25.6C-6.2,20.4 -16.5,19.7 -16.9,24.8Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-16.9,24.8C-17.1,25.5 -18,27.1 -18.1,28.7C-18.2,30.2 -17.6,32.4 -17.4,33.9C-17.2,35.5 -16.9,37.3 -16.8,37.9C-17.1,42 -8.9,42.6 -8.6,38.5C-8.4,37.9 -7.8,36.1 -7.2,34.7C-6.7,33.3 -5.7,31.7 -5.6,30.2C-5.5,28.7 -6.4,26.3 -6.6,25.6C-6.2,20.4 -16.5,19.7 -16.9,24.8Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-16.9,24.8C-17.1,25.5 -18,27.1 -18.1,28.7C-18.2,30.2 -17.6,32.4 -17.4,33.9C-17.2,35.5 -16.9,37.3 -16.8,37.9C-17.1,42 -8.9,42.6 -8.6,38.5C-8.4,37.9 -7.8,36.1 -7.2,34.7C-6.7,33.3 -5.7,31.7 -5.6,30.2C-5.5,28.7 -6.4,26.3 -6.6,25.6C-6.2,20.4 -16.5,19.7 -16.9,24.8Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-16.6,28.8C-16.5,29.7 -16.1,33.2 -16,34.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="0.8" stroke-linecap="round"/>
+<path d="M-6,30.2C-6.3,30.9 -7.4,33.9 -7.6,34.6" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-13.9,26.1C-13.8,26.9 -13.5,29.2 -13.5,31C-13.4,32.8 -13.5,35.9 -13.5,36.8" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-13.1,26.1C-13,27 -12.7,29.2 -12.7,31C-12.6,32.8 -12.7,35.9 -12.7,36.9" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12.2,26.2C-12.1,27 -11.8,29.3 -11.8,31.1C-11.7,32.9 -11.8,36 -11.8,37" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.9,28.3L-12.3,35.1" fill="none" stroke="#070605" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.9,28.3L-12.3,35.1" fill="none" stroke="#1e1b18" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.4,37.3C-17.3,38.5 -17.1,42.3 -17.2,44.5C-17.2,46.6 -17.8,49.3 -17.9,50.3C-18.2,54.6 -9.5,55.3 -9.2,50.9C-9.2,49.9 -9.3,47.2 -9.1,45C-8.9,42.9 -8.1,39.1 -7.9,37.9C-7.5,33.2 -17,32.5 -17.4,37.3Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-17.4,37.3C-17.3,38.5 -17.1,42.3 -17.2,44.5C-17.2,46.6 -17.8,49.3 -17.9,50.3C-18.2,54.6 -9.5,55.3 -9.2,50.9C-9.2,49.9 -9.3,47.2 -9.1,45C-8.9,42.9 -8.1,39.1 -7.9,37.9C-7.5,33.2 -17,32.5 -17.4,37.3Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-17.4,37.3C-17.3,38.5 -17.1,42.3 -17.2,44.5C-17.2,46.6 -17.8,49.3 -17.9,50.3C-18.2,54.6 -9.5,55.3 -9.2,50.9C-9.2,49.9 -9.3,47.2 -9.1,45C-8.9,42.9 -8.1,39.1 -7.9,37.9C-7.5,33.2 -17,32.5 -17.4,37.3Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<g transform="translate(-12.8,41.3) rotate(4.1)">
+<path d="M-3.8,0 L3.8,0 M-3.7,2.8 L3.7,2.8" fill="none" stroke="#05070a" stroke-width="0.9" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,22.1) rotate(4.1)">
+<path d="M-5.4,0.2 L-6.2,0.4 M5.4,0.2 L6.2,0.4" fill="none" stroke="#14181d" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-5.6 C3.6,-5.6 5.4,-3.4 5.4,-0.4 C5.4,2.8 3.2,5 0,5.6 C-3.2,5 -5.4,2.8 -5.4,-0.4 C-5.4,-3.4 -3.6,-5.6 0,-5.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M0,-3.8 C2.4,-3.8 3.6,-2.2 3.6,-0.2 C3.6,2 2,3.4 0,3.8 C-2,3.4 -3.6,2 -3.6,-0.2 C-3.6,-2.2 -2.4,-3.8 0,-3.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-2.6,-2.6 C-1.4,-3.4 0,-3.5 0.8,-3.4" fill="none" stroke="#eaf4ff" stroke-width="0.6" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-13.4,50) rotate(4.1)">
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C5,3 5.2,6.6 4.4,8 L-6.8,8 C-7.6,6.6 -7.4,3 -4.7,2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-7.1,6.4 L4.7,6.4 L4.4,8 L-6.8,8 Z" fill="#07090d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C5,3 5.2,6.6 4.4,8 L-6.8,8 C-7.6,6.6 -7.4,3 -4.7,2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-5.4,2.2 C-3.2,0.8 0.8,0.8 3,2.2 L3.8,5.6 L-6.2,5.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-4.2,2.6 C-2.2,1.8 -0.2,1.8 1.2,2.4" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M1.1,-18.5C1.2,-17.2 0.9,-14.1 1.2,-10.9C1.5,-7.7 2.3,-3.2 2.7,0.5C3.1,4.1 3.2,8.4 3.6,11.1C4,13.7 4.7,15 5.2,16.3C5.6,17.7 6,18.8 6.2,19.3C6.5,24.7 17.2,24 16.8,18.6C17,17 17.6,12.6 18.1,9C18.5,5.5 19.3,0.9 19.6,-2.5C19.8,-5.9 19.7,-8.4 19.4,-11.3C19.1,-14.1 18.1,-18.2 17.9,-19.6C17.3,-27.9 0.6,-26.9 1.1,-18.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M1.1,-18.5C1.2,-17.2 0.9,-14.1 1.2,-10.9C1.5,-7.7 2.3,-3.2 2.7,0.5C3.1,4.1 3.2,8.4 3.6,11.1C4,13.7 4.7,15 5.2,16.3C5.6,17.7 6,18.8 6.2,19.3C6.5,24.7 17.2,24 16.8,18.6C17,17 17.6,12.6 18.1,9C18.5,5.5 19.3,0.9 19.6,-2.5C19.8,-5.9 19.7,-8.4 19.4,-11.3C19.1,-14.1 18.1,-18.2 17.9,-19.6C17.3,-27.9 0.6,-26.9 1.1,-18.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M1.1,-18.5C1.2,-17.2 0.9,-14.1 1.2,-10.9C1.5,-7.7 2.3,-3.2 2.7,0.5C3.1,4.1 3.2,8.4 3.6,11.1C4,13.7 4.7,15 5.2,16.3C5.6,17.7 6,18.8 6.2,19.3C6.5,24.7 17.2,24 16.8,18.6C17,17 17.6,12.6 18.1,9C18.5,5.5 19.3,0.9 19.6,-2.5C19.8,-5.9 19.7,-8.4 19.4,-11.3C19.1,-14.1 18.1,-18.2 17.9,-19.6C17.3,-27.9 0.6,-26.9 1.1,-18.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M2.8,-11C3.1,-9.1 3.9,-3.3 4.3,0.4C4.7,4 5.1,9.2 5.2,11" fill="none" stroke="#eaf4ff" stroke-opacity="0.14" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M19,-11.3C19,-9.8 19.4,-5.9 19.2,-2.5C18.9,0.9 17.9,7.1 17.7,9.1" fill="none" stroke="#bdd280" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M6,19.4C5.6,21 4.1,26.3 4,28.9C3.9,31.5 4.5,32.6 5.2,35C6,37.4 7.7,41 8.5,43.5C9.3,46 9.6,49.1 9.9,50.3C10.1,53.8 17.3,53.3 17,49.7C17.1,48.3 17.1,44 17.4,41C17.7,38 18.7,34.3 19,31.5C19.3,28.8 19.5,26.8 19.1,24.7C18.7,22.5 17,19.6 16.6,18.6C16.3,13.3 5.6,14 6,19.4Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M6,19.4C5.6,21 4.1,26.3 4,28.9C3.9,31.5 4.5,32.6 5.2,35C6,37.4 7.7,41 8.5,43.5C9.3,46 9.6,49.1 9.9,50.3C10.1,53.8 17.3,53.3 17,49.7C17.1,48.3 17.1,44 17.4,41C17.7,38 18.7,34.3 19,31.5C19.3,28.8 19.5,26.8 19.1,24.7C18.7,22.5 17,19.6 16.6,18.6C16.3,13.3 5.6,14 6,19.4Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M6,19.4C5.6,21 4.1,26.3 4,28.9C3.9,31.5 4.5,32.6 5.2,35C6,37.4 7.7,41 8.5,43.5C9.3,46 9.6,49.1 9.9,50.3C10.1,53.8 17.3,53.3 17,49.7C17.1,48.3 17.1,44 17.4,41C17.7,38 18.7,34.3 19,31.5C19.3,28.8 19.5,26.8 19.1,24.7C18.7,22.5 17,19.6 16.6,18.6C16.3,13.3 5.6,14 6,19.4Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M5.5,28.8C5.7,29.8 6,32.5 6.7,34.9C7.5,37.3 9.4,42 10,43.4" fill="none" stroke="#eaf4ff" stroke-opacity="0.12" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M18.7,24.7C18.7,25.8 18.9,28.8 18.6,31.6C18.3,34.3 17.3,39.4 17,41" fill="none" stroke="#bdd280" stroke-opacity="0.3" stroke-width="0.6" stroke-linecap="round"/>
+<ellipse cx="8.8" cy="-12.6" rx="7.6" ry="3.2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)" opacity="0.85"/>
+<ellipse cx="10.4" cy="7.7" rx="6.4" ry="2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)" opacity="0.7"/>
+<ellipse cx="11.7" cy="26.6" rx="5.4" ry="1.8" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)" opacity="0.75"/>
+<g transform="translate(11.2,19) rotate(-4.1)">
+<path d="M-4.4,-5.6 C-2,-4.6 1.8,-4.6 4.2,-5.8 M-3.8,-3.4 C-1.4,-2.6 1.2,-2.6 3.6,-3.6" fill="none" stroke="#000000" stroke-width="0.5" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M2.6,-14C2.7,-12.8 2.9,-9 3.1,-6.4C3.3,-3.9 3.7,-0.7 4,1.1C4.3,3 4.5,4.3 4.6,4.9C5,11.3 17.7,10.5 17.3,4.1C17.5,3.2 18.1,0.6 18.2,-1.7C18.3,-3.9 18.3,-7.1 18.1,-9.3C17.9,-11.5 17.3,-14 17.2,-14.9C16.7,-22.2 2.2,-21.3 2.6,-14Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M2.6,-14C2.7,-12.8 2.9,-9 3.1,-6.4C3.3,-3.9 3.7,-0.7 4,1.1C4.3,3 4.5,4.3 4.6,4.9C5,11.3 17.7,10.5 17.3,4.1C17.5,3.2 18.1,0.6 18.2,-1.7C18.3,-3.9 18.3,-7.1 18.1,-9.3C17.9,-11.5 17.3,-14 17.2,-14.9C16.7,-22.2 2.2,-21.3 2.6,-14Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M2.6,-14C2.7,-12.8 2.9,-9 3.1,-6.4C3.3,-3.9 3.7,-0.7 4,1.1C4.3,3 4.5,4.3 4.6,4.9C5,11.3 17.7,10.5 17.3,4.1C17.5,3.2 18.1,0.6 18.2,-1.7C18.3,-3.9 18.3,-7.1 18.1,-9.3C17.9,-11.5 17.3,-14 17.2,-14.9C16.7,-22.2 2.2,-21.3 2.6,-14Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M4.7,-6.5C4.9,-5.3 5.4,-0.2 5.6,1" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M17.7,-9.3C17.7,-8 17.8,-2.9 17.8,-1.6" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(10.5,8.4) rotate(-3.6)">
+<path d="M-6.6,-1.1 L6.6,-1.1 L6.3,1.1 L-6.3,1.1 Z" fill="#14181d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M0.9,-1.7 L3.9,-1.7 L3.9,1.7 L0.9,1.7 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.4" stroke-linejoin="round"/>
+</g>
+<path d="M8.9,-13.7C9.1,-10.8 9.9,0.9 10,3.8C10.2,7 16.7,6.6 16.5,3.4C16.6,1.6 17.4,-4.3 17.2,-7.2C17.1,-10.1 15.9,-12.9 15.6,-14.1C15.4,-17.4 8.7,-17 8.9,-13.7Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M13.4,-12.8C13.3,-11.5 13.3,-7.9 13.1,-5.2C12.9,-2.4 12.4,2 12.2,3.5" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.6,-12.8C12.5,-11.5 12.5,-7.8 12.3,-5.1C12.1,-2.4 11.6,2.1 11.4,3.5" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.7,-12.7C11.6,-11.4 11.6,-7.8 11.4,-5C11.2,-2.3 10.7,2.2 10.5,3.6" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7.9,5.5C7.4,6.3 5.1,9.1 4.6,10.7C4.1,12.3 4.2,13.9 4.7,15.1C5.2,16.3 7,17.6 7.5,18.1C7.6,20.2 11.9,19.9 11.7,17.8C11.6,15.7 11.2,7.4 11.1,5.3C11,3.7 7.8,3.9 7.9,5.5Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M5.1,10.7C5.1,11.4 5.1,14.4 5.1,15.1" fill="none" stroke="#eaf4ff" stroke-opacity="0.6" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M6.6,25.6C6.4,26.3 5.5,28.7 5.6,30.2C5.7,31.7 6.7,33.3 7.2,34.7C7.8,36.1 8.4,37.9 8.6,38.5C8.9,42.6 17.1,42 16.8,37.9C16.9,37.3 17.2,35.5 17.4,33.9C17.6,32.4 18.2,30.2 18.1,28.7C18,27.1 17.1,25.5 16.9,24.8C16.5,19.7 6.2,20.4 6.6,25.6Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M6.6,25.6C6.4,26.3 5.5,28.7 5.6,30.2C5.7,31.7 6.7,33.3 7.2,34.7C7.8,36.1 8.4,37.9 8.6,38.5C8.9,42.6 17.1,42 16.8,37.9C16.9,37.3 17.2,35.5 17.4,33.9C17.6,32.4 18.2,30.2 18.1,28.7C18,27.1 17.1,25.5 16.9,24.8C16.5,19.7 6.2,20.4 6.6,25.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M6.6,25.6C6.4,26.3 5.5,28.7 5.6,30.2C5.7,31.7 6.7,33.3 7.2,34.7C7.8,36.1 8.4,37.9 8.6,38.5C8.9,42.6 17.1,42 16.8,37.9C16.9,37.3 17.2,35.5 17.4,33.9C17.6,32.4 18.2,30.2 18.1,28.7C18,27.1 17.1,25.5 16.9,24.8C16.5,19.7 6.2,20.4 6.6,25.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M7.1,30.1C7.3,30.8 8.4,33.8 8.7,34.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.55" stroke-width="0.8" stroke-linecap="round"/>
+<path d="M17.7,28.7C17.6,29.6 17.1,33.1 17,34" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M13.9,26.1C13.8,26.9 13.5,29.2 13.5,31C13.4,32.8 13.5,35.9 13.5,36.8" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M13.1,26.1C13,27 12.7,29.2 12.7,31C12.6,32.8 12.7,35.9 12.7,36.9" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.2,26.2C12.1,27 11.8,29.3 11.8,31.1C11.7,32.9 11.8,36 11.8,37" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.9,28.3L12.3,35.1" fill="none" stroke="#070605" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.9,28.3L12.3,35.1" fill="none" stroke="#1e1b18" stroke-width="0.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7.9,37.9C8.1,39.1 8.9,42.9 9.1,45C9.3,47.2 9.2,49.9 9.2,50.9C9.5,55.3 18.2,54.6 17.9,50.3C17.8,49.3 17.2,46.6 17.2,44.5C17.1,42.3 17.3,38.5 17.4,37.3C17,32.5 7.5,33.2 7.9,37.9Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M7.9,37.9C8.1,39.1 8.9,42.9 9.1,45C9.3,47.2 9.2,49.9 9.2,50.9C9.5,55.3 18.2,54.6 17.9,50.3C17.8,49.3 17.2,46.6 17.2,44.5C17.1,42.3 17.3,38.5 17.4,37.3C17,32.5 7.5,33.2 7.9,37.9Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M7.9,37.9C8.1,39.1 8.9,42.9 9.1,45C9.3,47.2 9.2,49.9 9.2,50.9C9.5,55.3 18.2,54.6 17.9,50.3C17.8,49.3 17.2,46.6 17.2,44.5C17.1,42.3 17.3,38.5 17.4,37.3C17,32.5 7.5,33.2 7.9,37.9Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<g transform="translate(12.8,41.3) rotate(-4.1)">
+<path d="M-3.8,0 L3.8,0 M-3.7,2.8 L3.7,2.8" fill="none" stroke="#05070a" stroke-width="0.9" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,22.1) rotate(-4.1)">
+<path d="M-5.4,0.2 L-6.2,0.4 M5.4,0.2 L6.2,0.4" fill="none" stroke="#14181d" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-5.6 C3.6,-5.6 5.4,-3.4 5.4,-0.4 C5.4,2.8 3.2,5 0,5.6 C-3.2,5 -5.4,2.8 -5.4,-0.4 C-5.4,-3.4 -3.6,-5.6 0,-5.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M0,-3.8 C2.4,-3.8 3.6,-2.2 3.6,-0.2 C3.6,2 2,3.4 0,3.8 C-2,3.4 -3.6,2 -3.6,-0.2 C-3.6,-2.2 -2.4,-3.8 0,-3.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-2.6,-2.6 C-1.4,-3.4 0,-3.5 0.8,-3.4" fill="none" stroke="#eaf4ff" stroke-width="0.6" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(13.4,50) rotate(-4.1)">
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C7.4,3 7.6,6.6 6.8,8 L-4.4,8 C-5.2,6.6 -5,3 -4.7,2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-4.7,6.4 L7.1,6.4 L6.8,8 L-4.4,8 Z" fill="#07090d" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-4.4,-1 L4.4,-1 L4.7,2 C7.4,3 7.6,6.6 6.8,8 L-4.4,8 C-5.2,6.6 -5,3 -4.7,2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-3,2.2 C-0.8,0.8 3.2,0.8 5.4,2.2 L6.2,5.6 L-3.8,5.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-1.8,2.6 C0.2,1.8 2.2,1.8 3.6,2.4" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-18,52.4 C-14.9,53.6 -11.9,53.6 -8.8,52.4" fill="none" stroke="#04060b" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-18,52.4 C-14.9,53.6 -11.9,53.6 -8.8,52.4" fill="none" stroke="#3a2618" stroke-width="1.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.4,54.6 L-19.8,55.2" fill="none" stroke="#04060b" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.4,54.6 L-19.8,55.2" fill="none" stroke="#9aa3ad" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-19.8,55.2 L-17.4,55.2 M-19.8,55.2 L-18.1,56.9 M-19.8,55.2 L-19.8,57.6 M-19.8,55.2 L-21.5,56.9 M-19.8,55.2 L-22.2,55.2 M-19.8,55.2 L-21.5,53.5 M-19.8,55.2 L-19.8,52.8 M-19.8,55.2 L-18.1,53.5 " fill="none" stroke="#04060b" stroke-width="1.1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-19.8,55.2 L-17.4,55.2 M-19.8,55.2 L-18.1,56.9 M-19.8,55.2 L-19.8,57.6 M-19.8,55.2 L-21.5,56.9 M-19.8,55.2 L-22.2,55.2 M-19.8,55.2 L-21.5,53.5 M-19.8,55.2 L-19.8,52.8 M-19.8,55.2 L-18.1,53.5 " fill="none" stroke="#cfd8e0" stroke-width="0.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="-19.8" cy="55.2" r="0.8" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<path d="M8.8,52.4 C11.9,53.6 14.9,53.6 18,52.4" fill="none" stroke="#04060b" stroke-width="2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.8,52.4 C11.9,53.6 14.9,53.6 18,52.4" fill="none" stroke="#3a2618" stroke-width="1.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.4,54.6 L19.8,55.2" fill="none" stroke="#04060b" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.4,54.6 L19.8,55.2" fill="none" stroke="#9aa3ad" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.8,55.2 L22.2,55.2 M19.8,55.2 L21.5,56.9 M19.8,55.2 L19.8,57.6 M19.8,55.2 L18.1,56.9 M19.8,55.2 L17.4,55.2 M19.8,55.2 L18.1,53.5 M19.8,55.2 L19.8,52.8 M19.8,55.2 L21.5,53.5 " fill="none" stroke="#04060b" stroke-width="1.1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.8,55.2 L22.2,55.2 M19.8,55.2 L21.5,56.9 M19.8,55.2 L19.8,57.6 M19.8,55.2 L18.1,56.9 M19.8,55.2 L17.4,55.2 M19.8,55.2 L18.1,53.5 M19.8,55.2 L19.8,52.8 M19.8,55.2 L21.5,53.5 " fill="none" stroke="#cfd8e0" stroke-width="0.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="19.8" cy="55.2" r="0.8" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-8.1,-68 L8.1,-68 L14.4,-64 C17.3,-62 18.2,-57 17.3,-52 C15.4,-46 12.3,-40 11.7,-33 C12.4,-29 14.3,-24 16.6,-20 L17.1,-15 C11.5,-14 5.8,-13 0,-12 C-5.7,-13 -11.5,-14 -17.1,-15 L-16.4,-20 C-14.3,-24 -12.4,-29 -11.7,-33 C-12.3,-40 -15.4,-46 -17.3,-52 C-18.2,-57 -17.3,-62 -14.4,-64 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-8.1,-68 L8.1,-68 L14.4,-64 C17.3,-62 18.2,-57 17.3,-52 C15.4,-46 12.3,-40 11.7,-33 C12.4,-29 14.3,-24 16.6,-20 L17.1,-15 C11.5,-14 5.8,-13 0,-12 C-5.7,-13 -11.5,-14 -17.1,-15 L-16.4,-20 C-14.3,-24 -12.4,-29 -11.7,-33 C-12.3,-40 -15.4,-46 -17.3,-52 C-18.2,-57 -17.3,-62 -14.4,-64 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<ellipse cx="0" cy="-36" rx="12" ry="3.5" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)"/>
+<path d="M-9.8,-31.4 C-5,-30.6 5,-30.6 9.8,-31.4 L10.3,-27.6 C5.4,-26.8 -5.4,-26.8 -10.3,-27.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-9.8,-31.4 C-5,-30.6 5,-30.6 9.8,-31.4 L10.3,-27.6 C5.4,-26.8 -5.4,-26.8 -10.3,-27.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-8.9,-30.5 C-5.1,-29.9 -0.9,-29.8 -0.5,-29.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-30.6 L0,-27" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9.8,-30.8 L10.1,-28" fill="none" stroke="#bdd280" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.6,-35.4 C-4.3,-34.6 4.4,-34.6 8.6,-35.4 L9.1,-31.6 C4.8,-30.8 -4.7,-30.8 -9.1,-31.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-8.6,-35.4 C-4.3,-34.6 4.4,-34.6 8.6,-35.4 L9.1,-31.6 C4.8,-30.8 -4.7,-30.8 -9.1,-31.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-7.8,-34.5 C-4.4,-33.9 -0.8,-33.8 -0.5,-33.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-34.6 L0,-31" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.6,-34.8 L8.9,-32" fill="none" stroke="#bdd280" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.5,-39.4 C-4.2,-38.6 4.2,-38.6 8.5,-39.4 L7.9,-35.6 C4.2,-34.8 -4.2,-34.8 -7.9,-35.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-8.5,-39.4 C-4.2,-38.6 4.2,-38.6 8.5,-39.4 L7.9,-35.6 C4.2,-34.8 -4.2,-34.8 -7.9,-35.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-7.4,-38.5 C-4.2,-37.9 -0.8,-37.8 -0.5,-37.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0,-38.6 L0,-35" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.2,-38.8 L7.8,-36" fill="none" stroke="#bdd280" stroke-width="0.5" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-13.5,-65 C-7.2,-66.8 7.2,-66.8 13.5,-65 C16.9,-60 17.8,-53.6 15.7,-48.4 C13.7,-43.8 10.8,-40.8 8.3,-39.4 C4.8,-38.6 2.4,-37.7 0,-36.6 C-2.4,-37.7 -4.8,-38.6 -8.3,-39.4 C-10.8,-40.8 -13.7,-43.8 -15.7,-48.4 C-17.8,-53.6 -16.9,-60 -13.5,-65 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-13.5,-65 C-7.2,-66.8 7.2,-66.8 13.5,-65 C16.9,-60 17.8,-53.6 15.7,-48.4 C13.7,-43.8 10.8,-40.8 8.3,-39.4 C4.8,-38.6 2.4,-37.7 0,-36.6 C-2.4,-37.7 -4.8,-38.6 -8.3,-39.4 C-10.8,-40.8 -13.7,-43.8 -15.7,-48.4 C-17.8,-53.6 -16.9,-60 -13.5,-65 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-14.3,-48.6 C-9.4,-43.4 -4.3,-43.6 -0.7,-46.6 M14.3,-48.6 C9.4,-43.4 4.3,-43.6 0.7,-46.6" fill="none" stroke="#000000" stroke-width="3" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-8" cy="-56" rx="7" ry="5" fill="url(#marshal-0-brim-duster-poncho-fem-idle-sheen)" opacity="0.55"/>
+<path d="M0,-65.6 L0,-37.2" fill="none" stroke="#04060b" stroke-width="0.55" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-0.5,-65.2 L-0.5,-38" fill="none" stroke="#b8cadb" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-14.5,-50 C-9.5,-44.6 -4.3,-44.8 -0.5,-47.6" fill="none" stroke="#04060b" stroke-width="0.55" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M14.5,-50 C9.5,-44.6 4.3,-44.8 0.5,-47.6" fill="none" stroke="#04060b" stroke-width="0.55" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-13.2,-49 C-9.3,-45.6 -5.3,-45.6 -1.8,-47.2" fill="none" stroke="#dfe9f4" stroke-width="0.4" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12.3,-60.8 C-9.1,-62.8 -5.4,-63.2 -2.2,-62.4" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M15.5,-58.4 C16.4,-54 15.2,-50 13.2,-46.2" fill="none" stroke="#bdd280" stroke-width="0.75" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="0" cy="-54" r="3.4" fill="#070c12" stroke="#6f8aa3" stroke-width="0.6"/>
+<circle cx="0" cy="-54" r="3.4" fill="none" stroke="#04060b" stroke-width="0.3"/>
+<circle cx="0" cy="-54" r="1.9" fill="#1e1b18"/>
+<path d="M-12.7,-27.9 C-5.7,-26.9 5.7,-26.9 12.7,-27.9 L15.4,-22.6 C6.5,-21.4 -6.5,-21.4 -15.4,-22.6 Z" fill="#131822" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-12.5,-26.9 C-5.8,-26 5.8,-26 12.5,-26.9" fill="none" stroke="#3a4656" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12,-27.4 L-7.6,-27 L-8.9,-21.4 L-13.8,-21.9 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M12,-27.4 L7.6,-27 L8.9,-21.4 L13.8,-21.9 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-12.5,-25.2 L-8.1,-24.9 M12.5,-25.2 L8.1,-24.9" fill="none" stroke="#04060b" stroke-width="0.4" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx="0.9" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.6"/>
+<rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx="0.4" fill="#1e1b18"/>
+<path d="M-4.9,-22 L4.9,-22 L4.1,-14 L0,-11.6 L-4.1,-14 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-5.1,-22.4 L-15.3,-23 C-17.8,-19 -18.5,-15 -18.3,-10.8 L-8.6,-9.2 C-7,-12.8 -6,-18 -5.1,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-5.1,-22.4 L-15.3,-23 C-17.8,-19 -18.5,-15 -18.3,-10.8 L-8.6,-9.2 C-7,-12.8 -6,-18 -5.1,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M5.1,-22.4 L15.3,-23 C17.8,-19 18.5,-15 18.3,-10.8 L8.6,-9.2 C7,-12.8 6,-18 5.1,-22.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-15,-21.4 C-12,-21.2 -8.8,-21 -6.2,-20.8" fill="none" stroke="#eaf4ff" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-16.3,-17 L-7.1,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M16.3,-17 L7.1,-16" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17,-20.6 C17.9,-17 18.2,-14 18,-11.4" fill="none" stroke="#bdd280" stroke-width="0.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-7" cy="-53" rx="6.4" ry="5" fill="url(#marshal-0-brim-duster-poncho-fem-idle-sheen)" opacity="0.5"/>
+<ellipse cx="7" cy="-53" rx="6.4" ry="5" fill="#000" opacity="0.12"/>
+<path d="M-13.5,-51 C-11.3,-44.8 -4.5,-44 -0.9,-47.6 M13.5,-51 C11.3,-44.8 4.5,-44 0.9,-47.6" fill="none" stroke="#04060b" stroke-width="0.6" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-12.3,-50.6 C-10.2,-45.8 -4.9,-45.2 -1.8,-47.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.35" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.3,-64.6 C-12.2,-68.6 -12.1,-72.6 -10.8,-75.4 C-5.4,-73.2 5.4,-73.2 10.8,-75.4 C12.1,-72.6 12.2,-68.6 11.3,-64.6 C6.3,-67 -6.3,-67 -11.3,-64.6 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-10.4,-74 C-5.4,-72 5.4,-72 10.4,-74" fill="none" stroke="#6d5a47" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-5.4,-67.2 C-9,-68.2 -13.1,-67.8 -16.2,-66.2 C-19,-56 -16.7,-40 -18.2,-28 L-28.1,31 Q-25.7,33.4 -22.8,33.6 Q-19.4,33.6 -17.5,33 L-8.6,-28 C-6.9,-40 -6.8,-54 -5.4,-67.2 Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(1.1,1.3)"/>
+<path d="M-5.4,-67.2 C-9,-68.2 -13.1,-67.8 -16.2,-66.2 C-19,-56 -16.7,-40 -18.2,-28 L-28.1,31 Q-25.7,33.4 -22.8,33.6 Q-19.4,33.6 -17.5,33 L-8.6,-28 C-6.9,-40 -6.8,-54 -5.4,-67.2 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-5.4,-67.2 C-9,-68.2 -13.1,-67.8 -16.2,-66.2 C-19,-56 -16.7,-40 -18.2,-28 L-28.1,31 Q-25.7,33.4 -22.8,33.6 Q-19.4,33.6 -17.5,33 L-8.6,-28 C-6.9,-40 -6.8,-54 -5.4,-67.2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.55"/>
+<path d="M-11.5,-40 C-16.8,-20 -22.9,0 -24.1,30.6" fill="none" stroke="#251a12" stroke-width="0.8" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.1,-62 C-17.9,-50 -15.5,-38 -17,-29 L-27.1,29.6" fill="none" stroke="#6d5a47" stroke-width="0.6" stroke-opacity="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.6,-28 L-17.5,33" fill="none" stroke="#372b21" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.4,-67.2 C9,-68.2 13.1,-67.8 16.2,-66.2 C19,-56 16.7,-40 18.2,-28 L28.1,31 Q25.7,33.4 22.8,33.6 Q19.4,33.6 17.5,33 L8.6,-28 C6.9,-40 6.8,-54 5.4,-67.2 Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(1.1,1.3)"/>
+<path d="M5.4,-67.2 C9,-68.2 13.1,-67.8 16.2,-66.2 C19,-56 16.7,-40 18.2,-28 L28.1,31 Q25.7,33.4 22.8,33.6 Q19.4,33.6 17.5,33 L8.6,-28 C6.9,-40 6.8,-54 5.4,-67.2 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M5.4,-67.2 C9,-68.2 13.1,-67.8 16.2,-66.2 C19,-56 16.7,-40 18.2,-28 L28.1,31 Q25.7,33.4 22.8,33.6 Q19.4,33.6 17.5,33 L8.6,-28 C6.9,-40 6.8,-54 5.4,-67.2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.55"/>
+<path d="M11.5,-40 C16.8,-20 22.9,0 24.1,30.6" fill="none" stroke="#251a12" stroke-width="0.8" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8,-40 L16.8,31.6" fill="none" stroke="#6d5a47" stroke-width="0.6" stroke-opacity="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.6,-28 L17.5,33" fill="none" stroke="#372b21" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-9.9,-67.8 L-14.9,-67 L-14.4,-52.4 L-11.5,-49.6 L-10.9,-56 Z" fill="#6d5a47" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-9.9,-67.8 L-14.9,-67 L-14.4,-52.4 L-11.5,-49.6 L-10.9,-56 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.5"/>
+<path d="M-10.3,-66.8 L-11.5,-56.2 L-11.8,-50.6" fill="none" stroke="#372b21" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9.9,-67.8 L14.9,-67 L14.4,-52.4 L11.5,-49.6 L10.9,-56 Z" fill="#6d5a47" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M9.9,-67.8 L14.9,-67 L14.4,-52.4 L11.5,-49.6 L10.9,-56 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.5"/>
+<path d="M10.3,-66.8 L11.5,-56.2 L11.8,-50.6" fill="none" stroke="#372b21" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10,-51 L10.7,-48.6 L13,-48.9 L11.4,-46.8 L12.5,-44.7 L10.4,-45 L9.1,-42.6 L8.5,-45 L6.2,-44.7 L7.7,-46.8 L6.5,-48.9 L8.8,-48.6 Z" fill="#d9a842" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<circle cx="10.8" cy="-51" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="14.4" cy="-48.9" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="14.4" cy="-44.7" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="10.8" cy="-42.6" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="7.2" cy="-44.7" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<circle cx="7.2" cy="-48.9" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
+<path d="M7.4,-48.1 L9,-48.5 L9.9,-50.2" fill="none" stroke="#fbe3a0" stroke-width="0.45" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="10.8" cy="-46.8" r="1.5" fill="#7a5418" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-17.3,-27.6 Q0,-22.4 17.3,-27.6 L20,-22.6 Q0,-17.2 -20,-22.6 Z" fill="#3a2618" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-17.3,-26.4 Q0,-21.2 17.3,-26.4" fill="none" stroke="#6a4630" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="-17" y="-26.6" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="-14.4" y="-26.4" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="-11.8" y="-26.2" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="-9.2" y="-26" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="-6.6" y="-25.9" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="3.8" y="-25.9" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="6.4" y="-25.9" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="9" y="-26.1" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="11.5" y="-26.2" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<rect x="14.2" y="-26.4" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<path d="M-3,-24.2 L3,-24.2 L3.6,-19.4 L-3.6,-19.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<path d="M-1.7,-23 L1.7,-23 L1.9,-20.6 L-1.9,-20.6 Z" fill="none" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-2.5,-23.6 L2.5,-23.6" fill="none" stroke="#ffffff" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-6.4,-14.6 L-7.5,-8" fill="none" stroke="#04060b" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-6.4,-14.6 L-7.5,-8" fill="none" stroke="#3a2618" stroke-width="1.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-6.8,-9.2 C-6.7,-13.4 -9.1,-16.4 -13.4,-16.8 L-15.8,-14.2 C-13.3,-13.2 -12.5,-11 -12.9,-8.6 Z" fill="#8a5a34" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-6.3,-9.6 L-6,-12.4 L-4.1,-13.2 L-4.7,-9.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-7.2,-9.6 L-12.4,-8.6 L-12.7,-7 L-7.3,-7.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-8.4,-10.6 C-8.5,-13 -10.3,-15 -13,-15.6" fill="none" stroke="#c08a5a" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-4.9,-8 L-13.6,-7.4 C-14.4,-2 -13.9,4 -12.5,9.6 C-11.3,11.6 -8.5,11.8 -7.6,10 C-6.1,4 -5.2,-2 -4.9,-8 Z" fill="#3a2618" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-6.4,-6 C-6.8,-1 -7.6,4 -8.5,8.8" fill="none" stroke="#6a4630" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M-5.9,-5.6 L-13.5,-5.2" fill="none" stroke="#7a5418" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M9,5.6 L-6.4,5.8" fill="none" stroke="#04060b" stroke-width="1.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-11.4,-5.3) rotate(3.6)">
+<path d="M9,5.6 L-6.4,5.8" fill="none" stroke="#3a2618" stroke-width="1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<circle cx="-18.1" cy="-9.3" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M6.4,-14.6 L7.5,-8" fill="none" stroke="#04060b" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M6.4,-14.6 L7.5,-8" fill="none" stroke="#3a2618" stroke-width="1.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M6.8,-9.2 C6.7,-13.4 9.1,-16.4 13.4,-16.8 L15.8,-14.2 C13.3,-13.2 12.5,-11 12.9,-8.6 Z" fill="#8a5a34" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M6.3,-9.6 L6,-12.4 L4.1,-13.2 L4.7,-9.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M7.2,-9.6 L12.4,-8.6 L12.7,-7 L7.3,-7.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M8.4,-10.6 C8.5,-13 10.3,-15 13,-15.6" fill="none" stroke="#c08a5a" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M4.9,-8 L13.6,-7.4 C14.4,-2 13.9,4 12.5,9.6 C11.3,11.6 8.5,11.8 7.6,10 C6.1,4 5.2,-2 4.9,-8 Z" fill="#3a2618" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M6.4,-6 C6.8,-1 7.6,4 8.5,8.8" fill="none" stroke="#6a4630" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M5.9,-5.6 L13.5,-5.2" fill="none" stroke="#7a5418" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M-9,5.6 L6.4,5.8" fill="none" stroke="#04060b" stroke-width="1.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(11.4,-5.3) rotate(-3.6)">
+<path d="M-9,5.6 L6.4,5.8" fill="none" stroke="#3a2618" stroke-width="1" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<circle cx="18.1" cy="-9.3" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
+<g data-acc="holster">
+<rect x="9.8" y="-21" width="4" height="18" rx="0.8" fill="#3a2a1c" stroke="#0a0d12" stroke-width="0.9"/>
+<rect x="9.8" y="-20" width="4" height="6" rx="1" fill="#1c1f24" stroke="#0a0d12" stroke-width="0.8"/>
+<rect x="8.3" y="-15" width="7" height="16" rx="2" fill="#3a2a1c" stroke="#0a0d12" stroke-width="1"/>
+<path d="M10.8,-12.5 L16.4,-12.5" fill="none" stroke="#615549" stroke-width="0.6" stroke-linecap="round"/>
+<rect x="6.3" y="-5" width="11" height="2.4" rx="0.8" fill="#2e2216" stroke="#0a0d12" stroke-width="0.8"/>
+<circle cx="11.8" cy="-3.8" r="0.7" fill="#d9a441"/>
+</g>
+<g data-acc="thigh">
+<g transform="translate(-11.4,-5.32) rotate(3.62)">
+<rect x="-6.8" y="-1" width="13.6" height="2" rx="0.6" fill="#3a2a1c" stroke="#0a0d12" stroke-width="0.8"/>
+<rect x="-6.4" y="5" width="12.8" height="2" rx="0.6" fill="#3a2a1c" stroke="#0a0d12" stroke-width="0.8"/>
+<rect x="-6" y="-2" width="8" height="10" rx="1.5" fill="#4a4f2a" stroke="#0a0d12" stroke-width="1"/>
+<rect x="-6" y="-2" width="8" height="3.2" rx="1.2" fill="#3b3f22" stroke="#0a0d12" stroke-width="0.8"/>
+<rect x="-2.8" y="-0.6" width="1.6" height="1.4" rx="0.4" fill="#1c1f24"/>
+<path d="M-5.9,4.2 L1.2,4.2" fill="none" stroke="#30331b" stroke-width="0.5" stroke-linecap="round"/>
+</g>
+</g>
+<path d="M-25.2,-63.6C-25.4,-62.6 -26.3,-59.7 -26.5,-57.3C-26.8,-54.9 -26.9,-52.2 -26.8,-49.3C-26.8,-46.4 -26.5,-42.6 -26.3,-39.6C-26.2,-36.7 -26.1,-32.9 -26.1,-31.6C-26.5,-26.5 -16.4,-25.6 -15.9,-30.7C-15.7,-31.5 -15.3,-33.2 -14.8,-35.4C-14.3,-37.6 -13.2,-41.3 -12.9,-43.9C-12.6,-46.6 -12.9,-48.2 -12.8,-51.3C-12.8,-54.4 -12.5,-60.6 -12.4,-62.5C-11.9,-68.9 -24.6,-70 -25.2,-63.6ZM-26.2,-31.1C-26.4,-30.3 -27.3,-28.3 -27.2,-26.3C-27.2,-24.3 -26.5,-22.3 -26.1,-19.1C-25.6,-15.9 -24.7,-9.1 -24.4,-7.1C-24.4,-3.6 -17.4,-3.6 -17.4,-7.1C-17.3,-8.7 -16.8,-13.7 -16.4,-16.7C-16,-19.7 -15.3,-22.7 -15.2,-25.1C-15.1,-27.5 -15.8,-30.1 -15.9,-31.1C-15.9,-36.2 -26.2,-36.2 -26.2,-31.1Z" fill="#000" opacity="0.55" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(1.8,1.6)"/>
+<path d="M-25.2,-63.6C-25.4,-62.6 -26.3,-59.7 -26.5,-57.3C-26.8,-54.9 -26.9,-52.2 -26.8,-49.3C-26.8,-46.4 -26.5,-42.6 -26.3,-39.6C-26.2,-36.7 -26.1,-32.9 -26.1,-31.6C-26.5,-26.5 -16.4,-25.6 -15.9,-30.7C-15.7,-31.5 -15.3,-33.2 -14.8,-35.4C-14.3,-37.6 -13.2,-41.3 -12.9,-43.9C-12.6,-46.6 -12.9,-48.2 -12.8,-51.3C-12.8,-54.4 -12.5,-60.6 -12.4,-62.5C-11.9,-68.9 -24.6,-70 -25.2,-63.6ZM-26.2,-31.1C-26.4,-30.3 -27.3,-28.3 -27.2,-26.3C-27.2,-24.3 -26.5,-22.3 -26.1,-19.1C-25.6,-15.9 -24.7,-9.1 -24.4,-7.1C-24.4,-3.6 -17.4,-3.6 -17.4,-7.1C-17.3,-8.7 -16.8,-13.7 -16.4,-16.7C-16,-19.7 -15.3,-22.7 -15.2,-25.1C-15.1,-27.5 -15.8,-30.1 -15.9,-31.1C-15.9,-36.2 -26.2,-36.2 -26.2,-31.1Z" fill="none" stroke="#04060b" stroke-width="2.2" stroke-linejoin="round"/>
+<path d="M-25.2,-63.6C-25.4,-62.6 -26.3,-59.7 -26.5,-57.3C-26.8,-54.9 -26.9,-52.2 -26.8,-49.3C-26.8,-46.4 -26.5,-42.6 -26.3,-39.6C-26.2,-36.7 -26.1,-32.9 -26.1,-31.6C-26.5,-26.5 -16.4,-25.6 -15.9,-30.7C-15.7,-31.5 -15.3,-33.2 -14.8,-35.4C-14.3,-37.6 -13.2,-41.3 -12.9,-43.9C-12.6,-46.6 -12.9,-48.2 -12.8,-51.3C-12.8,-54.4 -12.5,-60.6 -12.4,-62.5C-11.9,-68.9 -24.6,-70 -25.2,-63.6ZM-26.2,-31.1C-26.4,-30.3 -27.3,-28.3 -27.2,-26.3C-27.2,-24.3 -26.5,-22.3 -26.1,-19.1C-25.6,-15.9 -24.7,-9.1 -24.4,-7.1C-24.4,-3.6 -17.4,-3.6 -17.4,-7.1C-17.3,-8.7 -16.8,-13.7 -16.4,-16.7C-16,-19.7 -15.3,-22.7 -15.2,-25.1C-15.1,-27.5 -15.8,-30.1 -15.9,-31.1C-15.9,-36.2 -26.2,-36.2 -26.2,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)"/>
+<path d="M-25.2,-63.6C-25.4,-62.6 -26.3,-59.7 -26.5,-57.3C-26.8,-54.9 -26.9,-52.2 -26.8,-49.3C-26.8,-46.4 -26.5,-42.6 -26.3,-39.6C-26.2,-36.7 -26.1,-32.9 -26.1,-31.6C-26.5,-26.5 -16.4,-25.6 -15.9,-30.7C-15.7,-31.5 -15.3,-33.2 -14.8,-35.4C-14.3,-37.6 -13.2,-41.3 -12.9,-43.9C-12.6,-46.6 -12.9,-48.2 -12.8,-51.3C-12.8,-54.4 -12.5,-60.6 -12.4,-62.5C-11.9,-68.9 -24.6,-70 -25.2,-63.6ZM-26.2,-31.1C-26.4,-30.3 -27.3,-28.3 -27.2,-26.3C-27.2,-24.3 -26.5,-22.3 -26.1,-19.1C-25.6,-15.9 -24.7,-9.1 -24.4,-7.1C-24.4,-3.6 -17.4,-3.6 -17.4,-7.1C-17.3,-8.7 -16.8,-13.7 -16.4,-16.7C-16,-19.7 -15.3,-22.7 -15.2,-25.1C-15.1,-27.5 -15.8,-30.1 -15.9,-31.1C-15.9,-36.2 -26.2,-36.2 -26.2,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M-25.4,-58.6C-25.6,-57.7 -26.3,-55 -26.5,-52.9C-26.7,-50.8 -26.8,-48.9 -26.7,-46C-26.7,-43.1 -26.2,-37.2 -26.1,-35.5C-26.6,-30.2 -15.9,-29.3 -15.5,-34.6C-15.1,-35.9 -13.8,-40.4 -13.4,-42.5C-13.1,-44.6 -13.5,-44.6 -13.4,-47.1C-13.3,-49.6 -13.1,-55.8 -13.1,-57.5C-12.5,-63.7 -24.9,-64.8 -25.4,-58.6Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-25.4,-58.6C-25.6,-57.7 -26.3,-55 -26.5,-52.9C-26.7,-50.8 -26.8,-48.9 -26.7,-46C-26.7,-43.1 -26.2,-37.2 -26.1,-35.5C-26.6,-30.2 -15.9,-29.3 -15.5,-34.6C-15.1,-35.9 -13.8,-40.4 -13.4,-42.5C-13.1,-44.6 -13.5,-44.6 -13.4,-47.1C-13.3,-49.6 -13.1,-55.8 -13.1,-57.5C-12.5,-63.7 -24.9,-64.8 -25.4,-58.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-25.4,-58.6C-25.6,-57.7 -26.3,-55 -26.5,-52.9C-26.7,-50.8 -26.8,-48.9 -26.7,-46C-26.7,-43.1 -26.2,-37.2 -26.1,-35.5C-26.6,-30.2 -15.9,-29.3 -15.5,-34.6C-15.1,-35.9 -13.8,-40.4 -13.4,-42.5C-13.1,-44.6 -13.5,-44.6 -13.4,-47.1C-13.3,-49.6 -13.1,-55.8 -13.1,-57.5C-12.5,-63.7 -24.9,-64.8 -25.4,-58.6Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-24.9,-52.8C-25,-51.6 -25.1,-47 -25.2,-45.8" fill="none" stroke="#eaf4ff" stroke-opacity="0.6" stroke-width="1.1" stroke-linecap="round"/>
+<path d="M-13.8,-47.2C-13.8,-46.4 -13.8,-43.3 -13.8,-42.5" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-20.6,-52.4C-20.6,-51 -20.5,-47 -20.7,-44.3C-20.9,-41.6 -21.4,-37.6 -21.6,-36.3" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-19.8,-52.3C-19.8,-51 -19.7,-46.9 -19.9,-44.2C-20.1,-41.5 -20.6,-37.5 -20.8,-36.2" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-18.9,-52.2C-18.9,-50.9 -18.8,-46.8 -19,-44.1C-19.2,-41.5 -19.7,-37.5 -19.9,-36.1" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-20.9,-48.5C-21.1,-46.3 -21.7,-37.4 -21.9,-35.1C-22.1,-33.2 -18.2,-32.8 -18,-34.8C-17.5,-35.3 -15.7,-36.7 -15.2,-37.9C-14.6,-39.1 -14.3,-40.2 -14.6,-41.9C-15,-43.6 -16.8,-47.2 -17.2,-48.2C-17,-50.1 -20.8,-50.4 -20.9,-48.5Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M-13.9,-46.2Q-19.6,-44.7 -25.1,-47.2" fill="none" stroke="#04060b" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-26.5,-28.7C-26.5,-28 -27,-26.5 -27,-24.7C-26.9,-22.9 -26.2,-20.1 -25.9,-17.8C-25.5,-15.4 -25.1,-11.7 -24.9,-10.5C-24.9,-6.5 -17.1,-6.5 -17.1,-10.5C-16.8,-12.7 -15.7,-20.6 -15.5,-23.6C-15.3,-26.6 -15.7,-27.9 -15.8,-28.7C-15.8,-34 -26.5,-34 -26.5,-28.7Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M-26.5,-28.7C-26.5,-28 -27,-26.5 -27,-24.7C-26.9,-22.9 -26.2,-20.1 -25.9,-17.8C-25.5,-15.4 -25.1,-11.7 -24.9,-10.5C-24.9,-6.5 -17.1,-6.5 -17.1,-10.5C-16.8,-12.7 -15.7,-20.6 -15.5,-23.6C-15.3,-26.6 -15.7,-27.9 -15.8,-28.7C-15.8,-34 -26.5,-34 -26.5,-28.7Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-26.5,-28.7C-26.5,-28 -27,-26.5 -27,-24.7C-26.9,-22.9 -26.2,-20.1 -25.9,-17.8C-25.5,-15.4 -25.1,-11.7 -24.9,-10.5C-24.9,-6.5 -17.1,-6.5 -17.1,-10.5C-16.8,-12.7 -15.7,-20.6 -15.5,-23.6C-15.3,-26.6 -15.7,-27.9 -15.8,-28.7C-15.8,-34 -26.5,-34 -26.5,-28.7Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-25.5,-24.7C-25.3,-23.5 -24.6,-18.9 -24.4,-17.8" fill="none" stroke="#eaf4ff" stroke-opacity="0.5" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M-20.8,-23.9L-20.8,-11.4" fill="none" stroke="#070605" stroke-width="1.1" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(-20.8,-7.1) rotate(0)">
+<path d="M-4.6,-2.6 L4.6,-2.6 L4.9,0.6 L-4.9,0.6 Z" fill="#0a0f16" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-4.2,-1.9 L4.2,-1.9" fill="none" stroke="#6f8aa3" stroke-width="0.35" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-20.8,-16.2) rotate(0)">
+<rect x="-3.2" y="-2.7" width="6.4" height="5.4" rx="0.9" fill="#0a0f16" stroke="#04060b" stroke-width="0.5"/>
+<rect x="-2.2" y="-1.7" width="4.4" height="3.4" rx="0.4" fill="#1e1b18"/>
+</g>
+<g transform="translate(-20.8,-7.1) rotate(0) scale(0.82 1.1) translate(0 -1)">
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-2.2,7.5 L-2.3,12.3 M0,7.3 L0,12.9 M2.2,7.5 L2.3,12.3" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4,7.8 C-1.4,7.2 1.4,7.2 4,7.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M3.6,1.8 C6,3.4 6.1,7.4 4.4,10.4 C3.6,11.3 2.2,11.1 2,10 C2.9,7.8 3.1,5.4 2.3,3.4 Z" fill="#23272c" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M4.6,3.6 C5.2,5.6 5,7.6 4.2,9.4" fill="none" stroke="#eaf4ff" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M12.4,-62.5C12.5,-60.6 12.8,-54.4 12.8,-51.3C12.9,-48.2 12.6,-46.6 12.9,-43.9C13.2,-41.3 14.3,-37.6 14.8,-35.4C15.3,-33.2 15.7,-31.5 15.9,-30.7C16.4,-25.6 26.5,-26.5 26.1,-31.6C26.1,-32.9 26.2,-36.7 26.3,-39.6C26.5,-42.6 26.8,-46.4 26.8,-49.3C26.9,-52.2 26.8,-54.9 26.5,-57.3C26.3,-59.7 25.4,-62.6 25.2,-63.6C24.6,-70 11.9,-68.9 12.4,-62.5ZM15.9,-31.1C15.8,-30.1 15.1,-27.5 15.2,-25.1C15.3,-22.7 16,-19.7 16.4,-16.7C16.8,-13.7 17.3,-8.7 17.4,-7.1C17.4,-3.6 24.4,-3.6 24.4,-7.1C24.7,-9.1 25.6,-15.9 26.1,-19.1C26.5,-22.3 27.2,-24.3 27.2,-26.3C27.3,-28.3 26.4,-30.3 26.2,-31.1C26.2,-36.2 15.9,-36.2 15.9,-31.1Z" fill="#000" opacity="0.55" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(-1.8,1.6)"/>
+<path d="M12.4,-62.5C12.5,-60.6 12.8,-54.4 12.8,-51.3C12.9,-48.2 12.6,-46.6 12.9,-43.9C13.2,-41.3 14.3,-37.6 14.8,-35.4C15.3,-33.2 15.7,-31.5 15.9,-30.7C16.4,-25.6 26.5,-26.5 26.1,-31.6C26.1,-32.9 26.2,-36.7 26.3,-39.6C26.5,-42.6 26.8,-46.4 26.8,-49.3C26.9,-52.2 26.8,-54.9 26.5,-57.3C26.3,-59.7 25.4,-62.6 25.2,-63.6C24.6,-70 11.9,-68.9 12.4,-62.5ZM15.9,-31.1C15.8,-30.1 15.1,-27.5 15.2,-25.1C15.3,-22.7 16,-19.7 16.4,-16.7C16.8,-13.7 17.3,-8.7 17.4,-7.1C17.4,-3.6 24.4,-3.6 24.4,-7.1C24.7,-9.1 25.6,-15.9 26.1,-19.1C26.5,-22.3 27.2,-24.3 27.2,-26.3C27.3,-28.3 26.4,-30.3 26.2,-31.1C26.2,-36.2 15.9,-36.2 15.9,-31.1Z" fill="none" stroke="#04060b" stroke-width="2.2" stroke-linejoin="round"/>
+<path d="M12.4,-62.5C12.5,-60.6 12.8,-54.4 12.8,-51.3C12.9,-48.2 12.6,-46.6 12.9,-43.9C13.2,-41.3 14.3,-37.6 14.8,-35.4C15.3,-33.2 15.7,-31.5 15.9,-30.7C16.4,-25.6 26.5,-26.5 26.1,-31.6C26.1,-32.9 26.2,-36.7 26.3,-39.6C26.5,-42.6 26.8,-46.4 26.8,-49.3C26.9,-52.2 26.8,-54.9 26.5,-57.3C26.3,-59.7 25.4,-62.6 25.2,-63.6C24.6,-70 11.9,-68.9 12.4,-62.5ZM15.9,-31.1C15.8,-30.1 15.1,-27.5 15.2,-25.1C15.3,-22.7 16,-19.7 16.4,-16.7C16.8,-13.7 17.3,-8.7 17.4,-7.1C17.4,-3.6 24.4,-3.6 24.4,-7.1C24.7,-9.1 25.6,-15.9 26.1,-19.1C26.5,-22.3 27.2,-24.3 27.2,-26.3C27.3,-28.3 26.4,-30.3 26.2,-31.1C26.2,-36.2 15.9,-36.2 15.9,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)"/>
+<path d="M12.4,-62.5C12.5,-60.6 12.8,-54.4 12.8,-51.3C12.9,-48.2 12.6,-46.6 12.9,-43.9C13.2,-41.3 14.3,-37.6 14.8,-35.4C15.3,-33.2 15.7,-31.5 15.9,-30.7C16.4,-25.6 26.5,-26.5 26.1,-31.6C26.1,-32.9 26.2,-36.7 26.3,-39.6C26.5,-42.6 26.8,-46.4 26.8,-49.3C26.9,-52.2 26.8,-54.9 26.5,-57.3C26.3,-59.7 25.4,-62.6 25.2,-63.6C24.6,-70 11.9,-68.9 12.4,-62.5ZM15.9,-31.1C15.8,-30.1 15.1,-27.5 15.2,-25.1C15.3,-22.7 16,-19.7 16.4,-16.7C16.8,-13.7 17.3,-8.7 17.4,-7.1C17.4,-3.6 24.4,-3.6 24.4,-7.1C24.7,-9.1 25.6,-15.9 26.1,-19.1C26.5,-22.3 27.2,-24.3 27.2,-26.3C27.3,-28.3 26.4,-30.3 26.2,-31.1C26.2,-36.2 15.9,-36.2 15.9,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M13.1,-57.5C13.1,-55.8 13.3,-49.6 13.4,-47.1C13.5,-44.6 13.1,-44.6 13.4,-42.5C13.8,-40.4 15.1,-35.9 15.5,-34.6C15.9,-29.3 26.6,-30.2 26.1,-35.5C26.2,-37.2 26.7,-43.1 26.7,-46C26.8,-48.9 26.7,-50.8 26.5,-52.9C26.3,-55 25.6,-57.7 25.4,-58.6C24.9,-64.8 12.5,-63.7 13.1,-57.5Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M13.1,-57.5C13.1,-55.8 13.3,-49.6 13.4,-47.1C13.5,-44.6 13.1,-44.6 13.4,-42.5C13.8,-40.4 15.1,-35.9 15.5,-34.6C15.9,-29.3 26.6,-30.2 26.1,-35.5C26.2,-37.2 26.7,-43.1 26.7,-46C26.8,-48.9 26.7,-50.8 26.5,-52.9C26.3,-55 25.6,-57.7 25.4,-58.6C24.9,-64.8 12.5,-63.7 13.1,-57.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M13.1,-57.5C13.1,-55.8 13.3,-49.6 13.4,-47.1C13.5,-44.6 13.1,-44.6 13.4,-42.5C13.8,-40.4 15.1,-35.9 15.5,-34.6C15.9,-29.3 26.6,-30.2 26.1,-35.5C26.2,-37.2 26.7,-43.1 26.7,-46C26.8,-48.9 26.7,-50.8 26.5,-52.9C26.3,-55 25.6,-57.7 25.4,-58.6C24.9,-64.8 12.5,-63.7 13.1,-57.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M15,-47.3C15,-46.5 15,-43.4 15,-42.6" fill="none" stroke="#eaf4ff" stroke-opacity="0.6" stroke-width="1.1" stroke-linecap="round"/>
+<path d="M26.1,-52.9C26.2,-51.7 26.3,-47.1 26.3,-45.9" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M20.6,-52.4C20.6,-51 20.5,-47 20.7,-44.3C20.9,-41.6 21.4,-37.6 21.6,-36.3" fill="none" stroke="#000000" stroke-width="2.4" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.8,-52.3C19.8,-51 19.7,-46.9 19.9,-44.2C20.1,-41.5 20.6,-37.5 20.8,-36.2" fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M18.9,-52.2C18.9,-50.9 18.8,-46.8 19,-44.1C19.2,-41.5 19.7,-37.5 19.9,-36.1" fill="none" stroke="#eaf4ff" stroke-width="0.7" stroke-opacity="0.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.2,-48.2C16.8,-47.2 15,-43.6 14.6,-41.9C14.3,-40.2 14.6,-39.1 15.2,-37.9C15.7,-36.7 17.5,-35.3 18,-34.8C18.2,-32.8 22.1,-33.2 21.9,-35.1C21.7,-37.4 21.1,-46.3 20.9,-48.5C20.8,-50.4 17,-50.1 17.2,-48.2Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M15.2,-42C15.2,-41.3 15.6,-38.6 15.7,-38" fill="none" stroke="#eaf4ff" stroke-opacity="0.75" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M25.1,-47.2Q19.6,-44.7 13.9,-46.2" fill="none" stroke="#04060b" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M15.8,-28.7C15.7,-27.9 15.3,-26.6 15.5,-23.6C15.7,-20.6 16.8,-12.7 17.1,-10.5C17.1,-6.5 24.9,-6.5 24.9,-10.5C25.1,-11.7 25.5,-15.4 25.9,-17.8C26.2,-20.1 26.9,-22.9 27,-24.7C27,-26.5 26.5,-28 26.5,-28.7C26.5,-34 15.8,-34 15.8,-28.7Z" fill="#000" opacity="0.45" filter="url(#marshal-0-brim-duster-poncho-fem-idle-ao)" transform="translate(0.9,1.3)"/>
+<path d="M15.8,-28.7C15.7,-27.9 15.3,-26.6 15.5,-23.6C15.7,-20.6 16.8,-12.7 17.1,-10.5C17.1,-6.5 24.9,-6.5 24.9,-10.5C25.1,-11.7 25.5,-15.4 25.9,-17.8C26.2,-20.1 26.9,-22.9 27,-24.7C27,-26.5 26.5,-28 26.5,-28.7C26.5,-34 15.8,-34 15.8,-28.7Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M15.8,-28.7C15.7,-27.9 15.3,-26.6 15.5,-23.6C15.7,-20.6 16.8,-12.7 17.1,-10.5C17.1,-6.5 24.9,-6.5 24.9,-10.5C25.1,-11.7 25.5,-15.4 25.9,-17.8C26.2,-20.1 26.9,-22.9 27,-24.7C27,-26.5 26.5,-28 26.5,-28.7C26.5,-34 15.8,-34 15.8,-28.7Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M26.6,-24.7C26.4,-23.5 25.7,-18.9 25.5,-17.8" fill="none" stroke="#bdd280" stroke-opacity="0.8" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M20.8,-23.9L20.8,-11.4" fill="none" stroke="#070605" stroke-width="1.1" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(20.8,-7.1) rotate(0)">
+<path d="M-4.6,-2.6 L4.6,-2.6 L4.9,0.6 L-4.9,0.6 Z" fill="#0a0f16" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-4.2,-1.9 L4.2,-1.9" fill="none" stroke="#6f8aa3" stroke-width="0.35" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(20.8,-7.1) rotate(0) scale(0.82 1.1) translate(0 -1)">
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z" fill="#23272c" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-2.2,7.5 L-2.3,12.3 M0,7.3 L0,12.9 M2.2,7.5 L2.3,12.3" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4,7.8 C-1.4,7.2 1.4,7.2 4,7.8" fill="none" stroke="#eaf4ff" stroke-width="0.45" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-3.6,1.8 C-6,3.4 -6.1,7.4 -4.4,10.4 C-3.6,11.3 -2.2,11.1 -2,10 C-2.9,7.8 -3.1,5.4 -2.3,3.4 Z" fill="#23272c" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-4.6,3.6 C-5.2,5.6 -5,7.6 -4.2,9.4" fill="none" stroke="#eaf4ff" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-26.1,-62.7C-26.3,-61.7 -27.2,-58.9 -27.5,-56.6C-27.8,-54.3 -27.8,-51.7 -27.7,-48.8C-27.7,-46 -27.2,-42.3 -27.1,-39.4C-26.9,-36.6 -26.7,-32.9 -26.7,-31.6C-27.1,-26.1 -16,-25.1 -15.6,-30.6C-15.4,-31.4 -14.9,-33.1 -14.4,-35.2C-13.9,-37.3 -12.8,-40.9 -12.5,-43.4C-12.1,-46 -12.5,-47.6 -12.5,-50.6C-12.4,-53.6 -12.2,-59.7 -12.1,-61.5C-11.5,-68.4 -25.5,-69.7 -26.1,-62.7Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-26.1,-62.7C-26.3,-61.7 -27.2,-58.9 -27.5,-56.6C-27.8,-54.3 -27.8,-51.7 -27.7,-48.8C-27.7,-46 -27.2,-42.3 -27.1,-39.4C-26.9,-36.6 -26.7,-32.9 -26.7,-31.6C-27.1,-26.1 -16,-25.1 -15.6,-30.6C-15.4,-31.4 -14.9,-33.1 -14.4,-35.2C-13.9,-37.3 -12.8,-40.9 -12.5,-43.4C-12.1,-46 -12.5,-47.6 -12.5,-50.6C-12.4,-53.6 -12.2,-59.7 -12.1,-61.5C-11.5,-68.4 -25.5,-69.7 -26.1,-62.7Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M-26.1,-62.7C-26.3,-61.7 -27.2,-58.9 -27.5,-56.6C-27.8,-54.3 -27.8,-51.7 -27.7,-48.8C-27.7,-46 -27.2,-42.3 -27.1,-39.4C-26.9,-36.6 -26.7,-32.9 -26.7,-31.6C-27.1,-26.1 -16,-25.1 -15.6,-30.6C-15.4,-31.4 -14.9,-33.1 -14.4,-35.2C-13.9,-37.3 -12.8,-40.9 -12.5,-43.4C-12.1,-46 -12.5,-47.6 -12.5,-50.6C-12.4,-53.6 -12.2,-59.7 -12.1,-61.5C-11.5,-68.4 -25.5,-69.7 -26.1,-62.7Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-25.9,-56.4C-25.9,-55.2 -26.2,-51.5 -26.2,-48.7C-26.1,-45.8 -25.6,-40.9 -25.5,-39.3" fill="none" stroke="#6d5a47" stroke-opacity="0.22" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M-12.9,-50.6C-12.9,-49.4 -12.5,-46 -12.9,-43.5C-13.2,-40.9 -14.5,-36.6 -14.8,-35.2" fill="none" stroke="#bdd280" stroke-opacity="0.4" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M-26.9,-31.1C-27.1,-30.5 -28.1,-29 -28.1,-27.6C-28.1,-26.1 -27.3,-24.6 -26.8,-22.2C-26.2,-19.9 -25.2,-14.8 -24.9,-13.3C-24.9,-9.5 -17.1,-9.5 -17.1,-13.3C-16.9,-14.5 -16.4,-18.2 -16,-20.5C-15.6,-22.7 -14.8,-24.9 -14.7,-26.7C-14.6,-28.4 -15.3,-30.4 -15.4,-31.1C-15.4,-36.8 -26.9,-36.8 -26.9,-31.1Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-26.9,-31.1C-27.1,-30.5 -28.1,-29 -28.1,-27.6C-28.1,-26.1 -27.3,-24.6 -26.8,-22.2C-26.2,-19.9 -25.2,-14.8 -24.9,-13.3C-24.9,-9.5 -17.1,-9.5 -17.1,-13.3C-16.9,-14.5 -16.4,-18.2 -16,-20.5C-15.6,-22.7 -14.8,-24.9 -14.7,-26.7C-14.6,-28.4 -15.3,-30.4 -15.4,-31.1C-15.4,-36.8 -26.9,-36.8 -26.9,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M-26.9,-31.1C-27.1,-30.5 -28.1,-29 -28.1,-27.6C-28.1,-26.1 -27.3,-24.6 -26.8,-22.2C-26.2,-19.9 -25.2,-14.8 -24.9,-13.3C-24.9,-9.5 -17.1,-9.5 -17.1,-13.3C-16.9,-14.5 -16.4,-18.2 -16,-20.5C-15.6,-22.7 -14.8,-24.9 -14.7,-26.7C-14.6,-28.4 -15.3,-30.4 -15.4,-31.1C-15.4,-36.8 -26.9,-36.8 -26.9,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M-26.5,-27.6C-26.3,-26.7 -25.4,-23.1 -25.2,-22.2" fill="none" stroke="#6d5a47" stroke-opacity="0.18" stroke-width="1" stroke-linecap="round"/>
+<path d="M-15.1,-26.7C-15.3,-25.6 -16.2,-21.5 -16.4,-20.5" fill="none" stroke="#bdd280" stroke-opacity="0.35" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(-20.8,-31.1) rotate(5)">
+<path d="M-4,-1 C-1.4,0.6 1.4,0.6 4,-1" fill="none" stroke="#251a12" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-20.8,-13.8) rotate(0)">
+<path d="M-6,-2 C-2,-2.8 2,-2.8 6,-2 L6.6,2.2 C2,1.4 -2,1.4 -6.6,2.2 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-20.8,-13.8) rotate(0)">
+<path d="M-5.8,-1.2 C-2,-2 2,-2 5.8,-1.2" fill="none" stroke="#6d5a47" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(-20.8,-13.8) rotate(0)">
+<path d="M-6.2,1.2 C-2,0.5 2,0.5 6.2,1.2" fill="none" stroke="#372b21" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M12.1,-61.5C12.2,-59.7 12.4,-53.6 12.5,-50.6C12.5,-47.6 12.1,-46 12.5,-43.4C12.8,-40.9 13.9,-37.3 14.4,-35.2C14.9,-33.1 15.4,-31.4 15.6,-30.6C16,-25.1 27.1,-26.1 26.7,-31.6C26.7,-32.9 26.9,-36.6 27.1,-39.4C27.2,-42.3 27.7,-46 27.7,-48.8C27.8,-51.7 27.8,-54.3 27.5,-56.6C27.2,-58.9 26.3,-61.7 26.1,-62.7C25.5,-69.7 11.5,-68.4 12.1,-61.5Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M12.1,-61.5C12.2,-59.7 12.4,-53.6 12.5,-50.6C12.5,-47.6 12.1,-46 12.5,-43.4C12.8,-40.9 13.9,-37.3 14.4,-35.2C14.9,-33.1 15.4,-31.4 15.6,-30.6C16,-25.1 27.1,-26.1 26.7,-31.6C26.7,-32.9 26.9,-36.6 27.1,-39.4C27.2,-42.3 27.7,-46 27.7,-48.8C27.8,-51.7 27.8,-54.3 27.5,-56.6C27.2,-58.9 26.3,-61.7 26.1,-62.7C25.5,-69.7 11.5,-68.4 12.1,-61.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M12.1,-61.5C12.2,-59.7 12.4,-53.6 12.5,-50.6C12.5,-47.6 12.1,-46 12.5,-43.4C12.8,-40.9 13.9,-37.3 14.4,-35.2C14.9,-33.1 15.4,-31.4 15.6,-30.6C16,-25.1 27.1,-26.1 26.7,-31.6C26.7,-32.9 26.9,-36.6 27.1,-39.4C27.2,-42.3 27.7,-46 27.7,-48.8C27.8,-51.7 27.8,-54.3 27.5,-56.6C27.2,-58.9 26.3,-61.7 26.1,-62.7C25.5,-69.7 11.5,-68.4 12.1,-61.5Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M14,-50.7C14,-49.5 14,-44.8 14,-43.6" fill="none" stroke="#6d5a47" stroke-opacity="0.22" stroke-width="1.3" stroke-linecap="round"/>
+<path d="M27.1,-56.5C27.1,-55.3 27.4,-51.7 27.3,-48.8C27.3,-45.9 26.8,-41 26.7,-39.4" fill="none" stroke="#bdd280" stroke-opacity="0.4" stroke-width="0.6" stroke-linecap="round"/>
+<path d="M15.4,-31.1C15.3,-30.4 14.6,-28.4 14.7,-26.7C14.8,-24.9 15.6,-22.7 16,-20.5C16.4,-18.2 16.9,-14.5 17.1,-13.3C17.1,-9.5 24.9,-9.5 24.9,-13.3C25.2,-14.8 26.2,-19.9 26.8,-22.2C27.3,-24.6 28.1,-26.1 28.1,-27.6C28.1,-29 27.1,-30.5 26.9,-31.1C26.9,-36.8 15.4,-36.8 15.4,-31.1Z" fill="#3d2c1e" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M15.4,-31.1C15.3,-30.4 14.6,-28.4 14.7,-26.7C14.8,-24.9 15.6,-22.7 16,-20.5C16.4,-18.2 16.9,-14.5 17.1,-13.3C17.1,-9.5 24.9,-9.5 24.9,-13.3C25.2,-14.8 26.2,-19.9 26.8,-22.2C27.3,-24.6 28.1,-26.1 28.1,-27.6C28.1,-29 27.1,-30.5 26.9,-31.1C26.9,-36.8 15.4,-36.8 15.4,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)"/>
+<path d="M15.4,-31.1C15.3,-30.4 14.6,-28.4 14.7,-26.7C14.8,-24.9 15.6,-22.7 16,-20.5C16.4,-18.2 16.9,-14.5 17.1,-13.3C17.1,-9.5 24.9,-9.5 24.9,-13.3C25.2,-14.8 26.2,-19.9 26.8,-22.2C27.3,-24.6 28.1,-26.1 28.1,-27.6C28.1,-29 27.1,-30.5 26.9,-31.1C26.9,-36.8 15.4,-36.8 15.4,-31.1Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-cyl)"/>
+<path d="M16.3,-26.7C16.5,-25.6 17.4,-21.5 17.6,-20.5" fill="none" stroke="#6d5a47" stroke-opacity="0.18" stroke-width="1" stroke-linecap="round"/>
+<path d="M27.7,-27.6C27.5,-26.7 26.6,-23.1 26.4,-22.2" fill="none" stroke="#bdd280" stroke-opacity="0.35" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="translate(20.8,-31.1) rotate(-5)">
+<path d="M-4,-1 C-1.4,0.6 1.4,0.6 4,-1" fill="none" stroke="#251a12" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(20.8,-13.8) rotate(0)">
+<path d="M-6,-2 C-2,-2.8 2,-2.8 6,-2 L6.6,2.2 C2,1.4 -2,1.4 -6.6,2.2 Z" fill="#3d2c1e" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+</g>
+<g transform="translate(20.8,-13.8) rotate(0)">
+<path d="M-5.8,-1.2 C-2,-2 2,-2 5.8,-1.2" fill="none" stroke="#6d5a47" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(20.8,-13.8) rotate(0)">
+<path d="M-6.2,1.2 C-2,0.5 2,0.5 6.2,1.2" fill="none" stroke="#372b21" stroke-width="0.5" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<ellipse cx="-18.4" cy="-50" rx="7" ry="3.4" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)"/>
+<ellipse cx="18.4" cy="-50" rx="7" ry="3.4" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)"/>
+<g transform="translate(-12.4,-64) scale(0.9) translate(14,64)">
+<g transform="rotate(-1.1 -12 -65)">
+<path d="M-5,-63.4 C-4.4,-66.6 -4.6,-69 -5.6,-70.6 C-11,-72.2 -18.2,-71.8 -23.6,-69.4 C-29.4,-66.6 -33.4,-61.4 -34.6,-54.4 L-35.4,-45.6 L-30,-47.4 L-24,-50 L-18.6,-53.2 L-13.4,-56.6 L-8.6,-60.2 L-5,-63.4 Z" fill="#4a3622" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-5,-63.4 C-4.4,-66.6 -4.6,-69 -5.6,-70.6 C-11,-72.2 -18.2,-71.8 -23.6,-69.4 C-29.4,-66.6 -33.4,-61.4 -34.6,-54.4 L-35.4,-45.6 L-30,-47.4 L-24,-50 L-18.6,-53.2 L-13.4,-56.6 L-8.6,-60.2 L-5,-63.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.7"/>
+<path d="M-35.4,-46.8 L-30,-48.6 L-24,-51.2 L-18.6,-54.4 L-13.4,-57.8 L-8.6,-61.4" fill="none" stroke="#291e13" stroke-width="2" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35.4,-48.8 L-30,-50.6 L-24,-53.2 L-18.6,-56.4 L-13.4,-59.8 L-8.6,-63.4" fill="none" stroke="#04060b" stroke-width="2.2" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35.4,-48.8 L-30,-50.6 L-24,-53.2 L-18.6,-56.4 L-13.4,-59.8 L-8.6,-63.4" fill="none" stroke="#352a1f" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35,-49 L-29.6,-52 L-23.6,-53.4 L-18.2,-57.8 L-13,-60 L-8.2,-64.8" fill="none" stroke="#776c59" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35.4,-51.6 L-30,-53.4 L-24,-56 L-18.6,-59.2 L-13.4,-62.6 L-8.6,-66.2" fill="none" stroke="#04060b" stroke-width="1.4" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35.4,-51.6 L-30,-53.4 L-24,-56 L-18.6,-59.2 L-13.4,-62.6 L-8.6,-66.2" fill="none" stroke="#bfae8d" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-22,-68 C-25,-62 -26,-56 -25.4,-49.8 M-15,-69 C-16.6,-64 -16.4,-59 -15.4,-55.4" fill="none" stroke="#291e13" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-7,-69.8 C-12,-71 -18.6,-70.6 -23,-68.4" fill="none" stroke="#84725c" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35.4,-45.6 l0.3,2.6 M-33.6,-46.2 l0.3,2.6 M-31.7,-46.8 l0.3,2.6 M-30,-47.4 l0.3,2.6 M-28,-48.3 l0.3,2.6 M-25.9,-49.2 l0.3,2.6 M-24,-50 l0.3,2.6 M-22.2,-51.1 l0.3,2.6 M-20.3,-52.2 l0.3,2.6 M-18.6,-53.2 l0.3,2.6 M-16.8,-54.4 l0.3,2.6 M-15.1,-55.5 l0.3,2.6 M-13.4,-56.6 l0.3,2.6 M-11.8,-57.8 l0.3,2.6 M-10.1,-59 l0.3,2.6 M-8.6,-60.2 l0.3,2.6 M-7.4,-61.3 l0.3,2.6 M-6.2,-62.4 l0.3,2.6 " fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-35.4,-45.6 l0.3,2.6 M-33.6,-46.2 l0.3,2.6 M-31.7,-46.8 l0.3,2.6 M-30,-47.4 l0.3,2.6 M-28,-48.3 l0.3,2.6 M-25.9,-49.2 l0.3,2.6 M-24,-50 l0.3,2.6 M-22.2,-51.1 l0.3,2.6 M-20.3,-52.2 l0.3,2.6 M-18.6,-53.2 l0.3,2.6 M-16.8,-54.4 l0.3,2.6 M-15.1,-55.5 l0.3,2.6 M-13.4,-56.6 l0.3,2.6 M-11.8,-57.8 l0.3,2.6 M-10.1,-59 l0.3,2.6 M-8.6,-60.2 l0.3,2.6 M-7.4,-61.3 l0.3,2.6 M-6.2,-62.4 l0.3,2.6 " fill="none" stroke="#84725c" stroke-width="0.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<g transform="translate(12.4,-64) scale(0.9) translate(-14,64)">
+<g transform="rotate(1.1 12 -65)">
+<path d="M5,-63.4 C4.4,-66.6 4.6,-69 5.6,-70.6 C11,-72.2 18.2,-71.8 23.6,-69.4 C29.4,-66.6 33.4,-61.4 34.6,-54.4 L35.4,-45.6 L30,-47.4 L24,-50 L18.6,-53.2 L13.4,-56.6 L8.6,-60.2 L5,-63.4 Z" fill="#4a3622" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M5,-63.4 C4.4,-66.6 4.6,-69 5.6,-70.6 C11,-72.2 18.2,-71.8 23.6,-69.4 C29.4,-66.6 33.4,-61.4 34.6,-54.4 L35.4,-45.6 L30,-47.4 L24,-50 L18.6,-53.2 L13.4,-56.6 L8.6,-60.2 L5,-63.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.7"/>
+<path d="M35.4,-46.8 L30,-48.6 L24,-51.2 L18.6,-54.4 L13.4,-57.8 L8.6,-61.4" fill="none" stroke="#291e13" stroke-width="2" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.4,-48.8 L30,-50.6 L24,-53.2 L18.6,-56.4 L13.4,-59.8 L8.6,-63.4" fill="none" stroke="#04060b" stroke-width="2.2" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.4,-48.8 L30,-50.6 L24,-53.2 L18.6,-56.4 L13.4,-59.8 L8.6,-63.4" fill="none" stroke="#352a1f" stroke-width="1.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35,-49 L29.6,-52 L23.6,-53.4 L18.2,-57.8 L13,-60 L8.2,-64.8" fill="none" stroke="#776c59" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.4,-51.6 L30,-53.4 L24,-56 L18.6,-59.2 L13.4,-62.6 L8.6,-66.2" fill="none" stroke="#04060b" stroke-width="1.4" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.4,-51.6 L30,-53.4 L24,-56 L18.6,-59.2 L13.4,-62.6 L8.6,-66.2" fill="none" stroke="#bfae8d" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M22,-68 C25,-62 26,-56 25.4,-49.8 M15,-69 C16.6,-64 16.4,-59 15.4,-55.4" fill="none" stroke="#291e13" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7,-69.8 C12,-71 18.6,-70.6 23,-68.4" fill="none" stroke="#84725c" stroke-width="0.7" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.4,-45.6 l-0.3,2.6 M33.6,-46.2 l-0.3,2.6 M31.7,-46.8 l-0.3,2.6 M30,-47.4 l-0.3,2.6 M28,-48.3 l-0.3,2.6 M25.9,-49.2 l-0.3,2.6 M24,-50 l-0.3,2.6 M22.2,-51.1 l-0.3,2.6 M20.3,-52.2 l-0.3,2.6 M18.6,-53.2 l-0.3,2.6 M16.8,-54.4 l-0.3,2.6 M15.1,-55.5 l-0.3,2.6 M13.4,-56.6 l-0.3,2.6 M11.8,-57.8 l-0.3,2.6 M10.1,-59 l-0.3,2.6 M8.6,-60.2 l-0.3,2.6 M7.4,-61.3 l-0.3,2.6 M6.2,-62.4 l-0.3,2.6 " fill="none" stroke="#04060b" stroke-width="1" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M35.4,-45.6 l-0.3,2.6 M33.6,-46.2 l-0.3,2.6 M31.7,-46.8 l-0.3,2.6 M30,-47.4 l-0.3,2.6 M28,-48.3 l-0.3,2.6 M25.9,-49.2 l-0.3,2.6 M24,-50 l-0.3,2.6 M22.2,-51.1 l-0.3,2.6 M20.3,-52.2 l-0.3,2.6 M18.6,-53.2 l-0.3,2.6 M16.8,-54.4 l-0.3,2.6 M15.1,-55.5 l-0.3,2.6 M13.4,-56.6 l-0.3,2.6 M11.8,-57.8 l-0.3,2.6 M10.1,-59 l-0.3,2.6 M8.6,-60.2 l-0.3,2.6 M7.4,-61.3 l-0.3,2.6 M6.2,-62.4 l-0.3,2.6 " fill="none" stroke="#84725c" stroke-width="0.5" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<g transform="translate(8.2,-57.4) rotate(0) scale(0.077)">
+<g data-finish="patch">
+<path d="M0,-46 L34,-32 L47.2,-2 C47.2,24 26,40 0,48 C-26,40 -47.2,24 -47.2,-2 L-34,-32 Z" fill="#23261c" stroke="#15170f" stroke-width="7"/>
+<path d="M0,-35.88 L31.1,-24.96 L36.8,-1.56 C36.8,18.72 20.2,31.2 0,37.44 C-20.2,31.2 -36.8,18.72 -36.8,-1.56 L-31.1,-24.96 Z" fill="#1c2f5a" opacity="0.85"/>
+<path d="M0,-35.88 L31.1,-24.96 L36.8,-1.56 C36.8,18.72 20.2,31.2 0,37.44 C-20.2,31.2 -36.8,18.72 -36.8,-1.56 L-31.1,-24.96 Z" fill="none" stroke="#f2f6fa" stroke-width="1.6" stroke-dasharray="4 3" opacity="0.8"/>
+<path d="M0,-46 L34,-32 L47.2,-2 C47.2,24 26,40 0,48 C-26,40 -47.2,24 -47.2,-2 L-34,-32 Z" fill="none" stroke="#000000" stroke-width="1" opacity="0.35" transform="scale(0.93)"/>
+<g transform="scale(6.2)">
+<path d="M-5,1.2 L0,-3.6 L5,1.2" fill="none" stroke="#f2f6fa" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-3.5,3.6 L3.5,3.6" stroke="#f2f6fa" stroke-width="1.1" stroke-linecap="round"/>
+<circle cy="0.6" r="1" fill="#f2f6fa"/>
+</g>
+</g>
+</g>
+<g transform="rotate(-1.1 -12 -65)">
+<g transform="translate(-24.4,-56) rotate(0) scale(0.062)">
+<g data-finish="patch">
+<path d="M0,-46 L40,-32 L40,-2 C40,24 22,40 0,48 C-22,40 -40,24 -40,-2 L-40,-32 Z" fill="#23261c" stroke="#15170f" stroke-width="7"/>
+<path d="M0,-35.88 L31.2,-24.96 L31.2,-1.56 C31.2,18.72 17.16,31.2 0,37.44 C-17.16,31.2 -31.2,18.72 -31.2,-1.56 L-31.2,-24.96 Z" fill="#1c2f5a" opacity="0.85"/>
+<g transform="scale(6.2)">
+<path d="M-4.2,1.2 L0,-3.6 L4.2,1.2" fill="none" stroke="#f2f6fa" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-3,3.6 L3,3.6" stroke="#f2f6fa" stroke-width="1.1" stroke-linecap="round"/>
+<circle cy="0.6" r="1" fill="#f2f6fa"/>
+</g>
+</g>
+</g>
+</g>
+<g transform="translate(-23.8,-23.9) rotate(0) scale(0.044)">
+<g data-finish="patch">
+<path d="M0,-46 L40,-32 L40,-2 C40,24 22,40 0,48 C-22,40 -40,24 -40,-2 L-40,-32 Z" fill="#23261c" stroke="#15170f" stroke-width="7"/>
+<path d="M0,-35.88 L31.2,-24.96 L31.2,-1.56 C31.2,18.72 17.16,31.2 0,37.44 C-17.16,31.2 -31.2,18.72 -31.2,-1.56 L-31.2,-24.96 Z" fill="#1c2f5a" opacity="0.85"/>
+<g transform="scale(6.2)">
+<path d="M-4.2,1.2 L0,-3.6 L4.2,1.2" fill="none" stroke="#f2f6fa" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-3,3.6 L3,3.6" stroke="#f2f6fa" stroke-width="1.1" stroke-linecap="round"/>
+<circle cy="0.6" r="1" fill="#f2f6fa"/>
+</g>
+</g>
+</g>
+<path d="M-3.5,-74.6 L3.5,-74.6 L4.1,-65.4 L-4,-65.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-3.7,-73.6 C-1.8,-70.6 1.8,-70.6 3.7,-73.6 L3.9,-69.4 C1.8,-68.4 -1.8,-68.4 -3.9,-69.4 Z" fill="#70432c" opacity="0.5"/>
+<path d="M-4.9,-71.6 L4.9,-71.6 L5.2,-66 L-5.2,-66 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<ellipse cx="0" cy="-67.8" rx="7" ry="2.6" fill="url(#marshal-0-brim-duster-poncho-fem-idle-shade)"/>
+<path d="M-8.6,-70.4 C-4.5,-68.7 4.5,-68.7 8.6,-70.4 L13.7,-64.6 C7.3,-62.4 -7.3,-62.4 -13.7,-64.6 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-11.2,-67.4 C-5.4,-65.6 5.4,-65.6 11.2,-67.4" fill="none" stroke="#04060b" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.1,-69.6 C-4.5,-68.2 -0.9,-68 1.4,-68" fill="none" stroke="#f4faff" stroke-width="0.55" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9.2,-69.6 L13.1,-65" fill="none" stroke="#bdd280" stroke-width="0.55" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<g data-acc="screen">
+<g transform="translate(-20.84,-19.11) rotate(0.01)">
+<rect x="-5" y="-6.96" width="10" height="7.2" rx="1.2" fill="#1c1f24" stroke="#0a0d12" stroke-width="1"/>
+<rect x="-3.8" y="-5.86" width="7.6" height="5" rx="0.6" fill="#05080c" stroke="#0a0d12" stroke-width="0.6"/>
+<path d="M5,-5.16 L6,-5.16 M5,-3.36 L6,-3.36" fill="none" stroke="#8a96a4" stroke-width="0.5" stroke-linecap="round"/>
+</g>
+</g>
+<g data-acc="tags">
+<path d="M-6,-70 C-5,-63 -2,-57 0,-55 C2,-57 5,-63 6,-70" fill="none" stroke="#0a0d12" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M-6,-70 C-5,-63 -2,-57 0,-55 C2,-57 5,-63 6,-70" fill="none" stroke="#a8b4c0" stroke-width="0.6" stroke-linecap="round"/>
+<g transform="rotate(8 -0.8 -55.4)">
+<rect x="-2.3" y="-55.4" width="3" height="5" rx="1" fill="#d8dde4" stroke="#0a0d12" stroke-width="0.8"/>
+<path d="M-1.5,-53.4 L-0.1,-53.4 M-1.5,-52.2 L-0.5,-52.2" fill="none" stroke="#8a96a4" stroke-width="0.35" stroke-linecap="round"/>
+</g>
+<g transform="rotate(-6 0.7 -54.8)">
+<rect x="-0.8" y="-54.8" width="3" height="5" rx="1" fill="#d8dde4" stroke="#0a0d12" stroke-width="0.8"/>
+<path d="M0,-52.8 L1.4,-52.8 M0,-51.6 L1,-51.6" fill="none" stroke="#8a96a4" stroke-width="0.35" stroke-linecap="round"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-glow">
+<g>
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
+<g filter="url(#marshal-0-brim-duster-poncho-fem-idle-glow)" fill="#ffc94a" stroke="#ffc94a">
+<rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
+</g>
+<g fill="#fff0cc" stroke="#fff0cc" opacity="0.9">
+<rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
+</g>
+<g filter="url(#marshal-0-brim-duster-poncho-fem-idle-glow)" fill="#ffc94a" stroke="#ffc94a">
+<circle cx="10.8" cy="-46.8" r="0.8"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<circle cx="10.8" cy="-46.8" r="0.8"/>
+</g>
+<g data-acc="antenna">
+<circle cx="24" cy="-112" r="1.2" fill="#ffc94a"/>
+</g>
+<g data-acc="screen">
+<g transform="translate(-20.84,-19.11) rotate(0.01)">
+<rect x="-3.8" y="-5.86" width="7.6" height="5" rx="0.6" fill="#ffc94a" opacity="0.8"/>
+<path d="M-2.8,-2.56 L-1,-4.16 L0.6,-3.16 L2.8,-4.96" fill="none" stroke="#ffffff" stroke-width="0.45" stroke-linecap="round"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-head">
+<g transform="translate(0,1.3) translate(0,-67) scale(0.95) translate(0,67)">
+<g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<path d="M-7.3,-81.6 C-8.3,-86 -7.7,-92.9 0,-94 C7.7,-92.9 8.3,-86 7.3,-81.6 C6.1,-80.6 -6.1,-80.6 -7.3,-81.6 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.45"/>
+<path d="M-9.3,-87 C-9.5,-80 -9.1,-74 -9.3,-67.4 C-9,-66 -7.8,-66 -7.5,-67.4 C-7.7,-74 -7.3,-80 -7.5,-87 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-7.2,-88.7 C-7.4,-80 -7,-74 -7.2,-67.4 C-6.9,-66 -5.7,-66 -5.4,-67.4 C-5.6,-74 -5.2,-80 -5.4,-88.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-5.1,-90 C-5.3,-80 -4.9,-74 -5.1,-67.4 C-4.8,-66 -3.6,-66 -3.3,-67.4 C-3.5,-74 -3.1,-80 -3.3,-90 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-3,-90.7 C-3.2,-80 -2.8,-74 -3,-67.4 C-2.7,-66 -1.5,-66 -1.2,-67.4 C-1.4,-74 -1,-80 -1.2,-90.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-0.9,-91 C-1.1,-80 -0.7,-74 -0.9,-67.4 C-0.6,-66 0.6,-66 0.9,-67.4 C0.7,-74 1.1,-80 0.9,-91 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M1.2,-90.7 C1,-80 1.4,-74 1.2,-67.4 C1.5,-66 2.7,-66 3,-67.4 C2.8,-74 3.2,-80 3,-90.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M3.3,-90 C3.1,-80 3.5,-74 3.3,-67.4 C3.6,-66 4.8,-66 5.1,-67.4 C4.9,-74 5.3,-80 5.1,-90 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M5.4,-88.7 C5.2,-80 5.6,-74 5.4,-67.4 C5.7,-66 6.9,-66 7.2,-67.4 C7,-74 7.4,-80 7.2,-88.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M7.5,-87 C7.3,-80 7.7,-74 7.5,-67.4 C7.8,-66 9,-66 9.3,-67.4 C9.1,-74 9.5,-80 9.3,-87 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-7.8,-86.4 C-9.8,-87 -11.4,-86 -11.6,-84 L-11.6,-79.2 C-11.4,-77.4 -9.8,-76.6 -7.8,-77.2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-8.6,-85 C-9.8,-85.2 -10.6,-84.4 -10.6,-83.2 L-10.6,-80 C-10.6,-78.8 -9.8,-78.2 -8.6,-78.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M-9.4,-86.6 L-9,-90" fill="none" stroke="#04060b" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-9.4,-86.6 L-9,-90" fill="none" stroke="#3a4048" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7.8,-86.4 C9.8,-87 11.4,-86 11.6,-84 L11.6,-79.2 C11.4,-77.4 9.8,-76.6 7.8,-77.2 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M8.6,-85 C9.8,-85.2 10.6,-84.4 10.6,-83.2 L10.6,-80 C10.6,-78.8 9.8,-78.2 8.6,-78.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
+<path d="M9.4,-86.6 L9,-90" fill="none" stroke="#04060b" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9.4,-86.6 L9,-90" fill="none" stroke="#3a4048" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-6.8,-83.6 C-8.6,-84.4 -9.3,-82 -8.7,-79.8 C-8,-78.2 -7,-77.4 -6.1,-77.8 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-skin)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M6.8,-83.6 C8.6,-84.4 9.3,-82 8.7,-79.8 C8,-78.2 7,-77.4 6.1,-77.8 Z" fill="#915f3d" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
+<path d="M-7,-84 C-6.9,-79 -5.6,-75.5 -3.9,-73.3 C-2.7,-71.8 -1.3,-71.2 0,-71.2 C1.3,-71.2 2.7,-71.8 3.9,-73.3 C5.6,-75.5 6.9,-79 7,-84 C6.7,-89.5 3.8,-91.6 0,-91.6 C-3.8,-91.6 -6.7,-89.5 -7,-84 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-skin)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M1.5,-91.2 C4.8,-90.6 7,-88.4 7,-84 C6.9,-79 5.6,-75.5 3.9,-73.3 C2.7,-71.8 1.5,-71.3 0.6,-71.2 C3,-74 4.7,-78 4.5,-84 C4.2,-87.6 2.9,-89.8 1.5,-91.2 Z" fill="#70432c" opacity="0.35"/>
+<ellipse cx="-3.2" cy="-87.4" rx="3.2" ry="2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-sheen)"/>
+<ellipse cx="-3.1" cy="-82.3" rx="2.3" ry="1.2" fill="#70432c" opacity="0.16"/>
+<path d="M-4.8,-81.6 Q-3,-83.9 -1.3,-81.75 Q-2.9,-79.9 -4.8,-81.6 Z" fill="#ece6de"/>
+<circle cx="-3" cy="-81.65" r="1.1" fill="#66bbff"/>
+<circle cx="-3" cy="-81.65" r="1.1" fill="none" stroke="#2e5473" stroke-width="0.2"/>
+<circle cx="-3" cy="-81.65" r="0.48" fill="#050505"/>
+<circle cx="-3.3" cy="-82.05" r="0.22" fill="#fff"/>
+<path d="M-5,-81.75 Q-3,-84.4 -1.1,-81.95 Q-3,-83.7 -5,-81.75 Z" fill="#9c6943"/>
+<path d="M-5.1,-81.65 Q-3,-84 -1.1,-81.85" fill="none" stroke="#1a100c" stroke-width="0.65" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-5,-81.85 L-5.7,-82.4 M-4.6,-82.55 L-5,-83.2 M-4,-83.05 L-4.2,-83.7" fill="none" stroke="#1a100c" stroke-width="0.28" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-4.2,-80.95 Q-2.9,-80.35 -1.7,-80.95" fill="none" stroke="#70432c" stroke-width="0.25" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-5.5,-84.1 C-4.5,-85.9 -2.5,-86.1 -1.3,-85.1 L-1.4,-84.8 C-2.6,-85.5 -4.3,-85.4 -5.4,-83.9 Z" fill="#22150d"/>
+<ellipse cx="3.1" cy="-82.3" rx="2.3" ry="1.2" fill="#70432c" opacity="0.16"/>
+<path d="M4.8,-81.6 Q3,-83.9 1.3,-81.75 Q2.9,-79.9 4.8,-81.6 Z" fill="#ece6de"/>
+<circle cx="3.2" cy="-81.65" r="1.1" fill="#66bbff"/>
+<circle cx="3.2" cy="-81.65" r="1.1" fill="none" stroke="#2e5473" stroke-width="0.2"/>
+<circle cx="3.2" cy="-81.65" r="0.48" fill="#050505"/>
+<circle cx="2.9" cy="-82.05" r="0.22" fill="#fff"/>
+<path d="M5,-81.75 Q3,-84.4 1.1,-81.95 Q3,-83.7 5,-81.75 Z" fill="#9c6943"/>
+<path d="M5.1,-81.65 Q3,-84 1.1,-81.85" fill="none" stroke="#1a100c" stroke-width="0.65" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5,-81.85 L5.7,-82.4 M4.6,-82.55 L5,-83.2 M4,-83.05 L4.3,-83.7" fill="none" stroke="#1a100c" stroke-width="0.28" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4.2,-80.95 Q2.9,-80.35 1.7,-80.95" fill="none" stroke="#70432c" stroke-width="0.25" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.5,-84.1 C4.5,-85.9 2.5,-86.1 1.3,-85.1 L1.4,-84.8 C2.6,-85.5 4.3,-85.4 5.4,-83.9 Z" fill="#22150d"/>
+<path d="M0.9,-82 C1.1,-80 1.4,-78.2 1.6,-77" fill="none" stroke="#70432c" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-0.5,-80.6 L-0.4,-77.8" fill="none" stroke="#d2ae8f" stroke-width="0.45" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="0.5" cy="-76.1" rx="1.9" ry="0.55" fill="#70432c" opacity="0.35"/>
+<path d="M-1.5,-76.7 C-0.8,-75.9 0.8,-75.9 1.5,-76.7" fill="none" stroke="#70432c" stroke-width="0.45" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-4.2" cy="-78.2" rx="1.7" ry="1" fill="#c17655" opacity="0.3"/>
+<ellipse cx="4.2" cy="-78.2" rx="1.7" ry="1" fill="#c17655" opacity="0.22"/>
+<ellipse cx="-4.8" cy="-79.6" rx="1.9" ry="0.7" fill="#fff" opacity="0.1"/>
+<path d="M-5.6,-78.4 C-4.7,-77 -3.7,-76.4 -2.9,-76.2" fill="none" stroke="#70432c" stroke-width="0.3" stroke-opacity="0.18" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.6,-78.4 C4.7,-77 3.7,-76.4 2.9,-76.2" fill="none" stroke="#70432c" stroke-width="0.3" stroke-opacity="0.26" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-2,-74 C-1.3,-74.9 -0.5,-74.9 0,-74.4 C0.5,-74.9 1.3,-74.9 2,-74 C0.9,-73.75 -0.9,-73.75 -2,-74 Z" fill="#9f5c47"/>
+<path d="M-1.9,-73.9 C-0.9,-73.7 0.9,-73.7 1.9,-73.9 C1.2,-72.3 -1.2,-72.3 -1.9,-73.9 Z" fill="#b56951"/>
+<path d="M-2,-74 C-0.9,-73.6 0.9,-73.6 2,-74" fill="none" stroke="#492c1d" stroke-width="0.4" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="0.5" cy="-73.1" rx="1" ry="0.32" fill="#fff" opacity="0.22"/>
+<path d="M7.1,-87 C7.4,-84 7,-80 6,-77 M5.9,-76.4 C5.1,-74.8 4.4,-73.6 3.5,-72.8" fill="none" stroke="#bdd280" stroke-width="0.4" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-9.4,-87.6 C-4,-86.6 4,-86.6 9.4,-87.6 L9.4,-83.8 C4,-82.6 -4,-82.6 -9.4,-83.8 Z" fill="#000" opacity="0.28"/>
+<g transform="scale(0.9,1)">
+<path d="M-9.2,-79.6 C-5.6,-78.8 -2.4,-80.4 0,-80.6 C2.4,-80.4 5.6,-78.8 9.2,-79.6 L9.6,-75 C9,-71 6.6,-68.6 3.6,-67.2 L0,-62.2 L-3.6,-67.2 C-6.6,-68.6 -9,-71 -9.6,-75 Z" fill="#2c1d18" stroke="#04060b" stroke-width="0.9" stroke-linejoin="round"/>
+<path d="M-9.2,-79.6 C-5.6,-78.8 -2.4,-80.4 0,-80.6 C2.4,-80.4 5.6,-78.8 9.2,-79.6 L9.6,-75 C9,-71 6.6,-68.6 3.6,-67.2 L0,-62.2 L-3.6,-67.2 C-6.6,-68.6 -9,-71 -9.6,-75 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.6"/>
+<circle cx="-6" cy="-76.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="-3" cy="-76.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="0" cy="-76.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="3" cy="-76.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="6" cy="-76.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="-4.5" cy="-72.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="-1.5" cy="-72.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="1.5" cy="-72.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<circle cx="4.5" cy="-72.4" r="0.45" fill="#766c69" opacity="0.75"/>
+<path d="M0,-80.4 C0.6,-77.6 1.6,-75.6 2.6,-74.6 M-6.4,-73.6 C-4,-71.6 -1.6,-69.6 0,-63.6 M6.4,-73.6 C4,-71.6 1.6,-69.6 0,-63.6" fill="none" stroke="#160f0c" stroke-width="0.55" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.4,-78.6 C-8.8,-75 -7.6,-72 -5,-70" fill="none" stroke="#766c69" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.8,-78 C9,-74.6 8,-71.6 5.6,-69.4" fill="none" stroke="#bdd280" stroke-width="0.45" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path d="M-21.6,-91.8 C-18,-95.2 -9,-96 0,-96 C9,-96 18,-95.2 21.6,-91.8 C16,-89.4 -16,-89.4 -21.6,-91.8 Z" fill="#261d15" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-8.8,-90.4 C-9.6,-95.4 -9,-100.4 -6.4,-102.8 C-3.6,-101.4 -1.6,-101 0,-101.8 C1.6,-101 3.6,-101.4 6.4,-102.8 C9,-100.4 9.6,-95.4 8.8,-90.4 Z" fill="#453526" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
+<path d="M-8.8,-90.4 C-9.6,-95.4 -9,-100.4 -6.4,-102.8 C-3.6,-101.4 -1.6,-101 0,-101.8 C1.6,-101 3.6,-101.4 6.4,-102.8 C9,-100.4 9.6,-95.4 8.8,-90.4 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.35"/>
+<path d="M0,-101.6 L0,-96.4" fill="none" stroke="#261d15" stroke-width="0.7" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-7.6,-91.6 C-8.4,-95.4 -7.8,-99.4 -5.8,-101.6" fill="none" stroke="#7a6955" stroke-width="0.6" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.4,-92 C9,-95.4 8.6,-98.8 7.2,-101" fill="none" stroke="#bdd280" stroke-width="0.5" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-8.9,-93.6 C-4,-92.8 4,-92.8 8.9,-93.6 L8.9,-91 C4,-90.2 -4,-90.2 -8.9,-91 Z" fill="#2e2a25" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
+<circle cx="-6.6" cy="-92" r="1.2" fill="url(#marshal-0-brim-duster-poncho-fem-idle-steel)" stroke="#04060b" stroke-width="0.4"/>
+<path d="M-22,-93 C-19.4,-89.8 -14,-89.2 0,-89.4 C14,-89.2 19.4,-89.8 22,-93 C22.4,-90.2 19.4,-86.8 0,-86.4 C-19.4,-86.8 -22.4,-90.2 -22,-93 Z" fill="#453526" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
+<path d="M-22,-93 C-19.4,-89.8 -14,-89.2 0,-89.4 C14,-89.2 19.4,-89.8 22,-93 C22.4,-90.2 19.4,-86.8 0,-86.4 C-19.4,-86.8 -22.4,-90.2 -22,-93 Z" fill="url(#marshal-0-brim-duster-poncho-fem-idle-weave)" opacity="0.35"/>
+<path d="M-21,-91.6 C-18,-88.8 -12,-88.2 -2,-88.2" fill="none" stroke="#7a6955" stroke-width="0.55" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M2,-86.8 C12,-87 18.4,-88 21.2,-90.4" fill="none" stroke="#bdd280" stroke-width="0.5" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/>
+<g data-acc="plume">
+<path d="M-1.2,-101 Q-2.8,-116.75 -13.3,-110" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M-1.2,-101 Q-2.8,-116.75 -13.3,-110" fill="none" stroke="#42403e" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M1.2,-101 Q2.8,-116.75 13.3,-110" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M1.2,-101 Q2.8,-116.75 13.3,-110" fill="none" stroke="#42403e" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M-0.9,-101 Q-2.1,-119.97 -9.97,-114.56" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M-0.9,-101 Q-2.1,-119.97 -9.97,-114.56" fill="none" stroke="#181614" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M0.9,-101 Q2.1,-119.97 9.98,-114.56" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M0.9,-101 Q2.1,-119.97 9.98,-114.56" fill="none" stroke="#181614" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M-0.6,-101 Q-1.4,-122.26 -6.65,-118.25" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M-0.6,-101 Q-1.4,-122.26 -6.65,-118.25" fill="none" stroke="#42403e" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M0.6,-101 Q1.4,-122.26 6.65,-118.25" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M0.6,-101 Q1.4,-122.26 6.65,-118.25" fill="none" stroke="#42403e" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M-0.3,-101 Q-0.7,-123.64 -3.32,-121.06" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M-0.3,-101 Q-0.7,-123.64 -3.32,-121.06" fill="none" stroke="#181614" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M0.3,-101 Q0.7,-123.64 3.33,-121.06" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M0.3,-101 Q0.7,-123.64 3.33,-121.06" fill="none" stroke="#181614" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M0,-101 Q0,-124.1 0,-123" fill="none" stroke="#0a0d12" stroke-width="3.2" stroke-linecap="round"/>
+<path d="M0,-101 Q0,-124.1 0,-123" fill="none" stroke="#42403e" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="-2.2" y="-102.6" width="4.4" height="3.4" rx="0.8" fill="#77797b" stroke="#0a0d12" stroke-width="0.9"/>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-visor">
+<g transform="translate(0,1.3) translate(0,-67) scale(0.95) translate(0,67)">
+<g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<g filter="url(#marshal-0-brim-duster-poncho-fem-idle-glow)" fill="#66bbff" opacity="0.55">
+<circle cx="-3" cy="-81.6" r="1.54"/>
+<circle cx="3.2" cy="-81.6" r="1.54"/>
+</g>
+<g filter="url(#marshal-0-brim-duster-poncho-fem-idle-glow)" fill="#ffc94a" stroke="#ffc94a">
+<circle cx="-10.6" cy="-81.6" r="0.55"/>
+<circle cx="10.6" cy="-81.6" r="0.55"/>
+</g>
+<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
+<circle cx="-10.6" cy="-81.6" r="0.55"/>
+<circle cx="10.6" cy="-81.6" r="0.55"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+</svg>

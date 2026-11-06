@@ -77,9 +77,10 @@ import { WARDROBE_THEMES, THEME_TABLES } from "../../../data/wardrobe-themes/ind
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
 import exo from "./exo.js";
+import marshal from "./marshal.js";
 
 /** Art modules, one per data theme, in the data registry's order; frozen through. */
-const ART_THEMES = deepFreeze([issue, exo]);
+const ART_THEMES = deepFreeze([issue, exo, marshal]);
 
 /**
  * The stock rig layers a frame may hide (shape.hides), and what each removes:
