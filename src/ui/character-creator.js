@@ -502,22 +502,37 @@ function pixelRatio(ctx) {
   return m ? Math.hypot(m.a, m.b) || 1 : 1;
 }
 
-let _figure = null;
+// The preview is the rig's own figure (the showroom's), decoded to a bitmap
+// by the raster cache. A new look takes a few frames to decode; until it
+// lands the last decoded figure stays on screen, so a change of look never
+// blanks the preview and no hand-drawn stand-in is needed. Only the first
+// figure of a session has nothing before it.
+let _figure = null; // the look asked for: { key, defs, markup, asked, decodeMs }
+let _shown = null; // the last look that decoded, and the scale it decoded at
+
+/** The preview's figure: the look asked for, the one on screen, and how long the last one took to decode (ms). */
+export function previewFigure() {
+  return { wanted: _figure?.key ?? null, shown: _shown?.key ?? null, decodeMs: _shown?.decodeMs ?? null };
+}
 
 /**
  * Draw the customised agent centred on (cx, cy), `h` px tall, posed for the
- * field being edited. Returns false while the bitmap is still decoding so the
- * caller can fall back.
+ * field being edited: the look asked for once it has decoded, the last
+ * decoded look until then.
  */
 function drawAgentFigure(ctx, ch, cx, cy, h, stage = IDLE_STAGE) {
   const key = `${stage.pose}:${stage.peek ? 1 : 0}:${lookKey(ch)}`;
-  if (!_figure || _figure.key !== key) _figure = { key, ...agentMarkup(ch, stage) };
-  const s = h / AGENT_VIEW.full[3];
-  const img = getLayerImage(`legacy-agent:${key}`, AGENT_VIEW.full, _figure.defs, _figure.markup, s * pixelRatio(ctx));
-  if (!img) return false;
-  const w = AGENT_VIEW.full[2] * s;
+  if (!_figure || _figure.key !== key) _figure = { key, ...agentMarkup(ch, stage), asked: performance.now() };
+  const scale = (h / AGENT_VIEW.full[3]) * pixelRatio(ctx);
+  let img = getLayerImage(`legacy-agent:${key}`, AGENT_VIEW.full, _figure.defs, _figure.markup, scale);
+  if (img) {
+    if (_shown?.key !== key) _shown = { ..._figure, scale, decodeMs: performance.now() - _figure.asked };
+  } else if (_shown) {
+    img = getLayerImage(`legacy-agent:${_shown.key}`, AGENT_VIEW.full, _shown.defs, _shown.markup, _shown.scale);
+  }
+  if (!img) return;
+  const w = (AGENT_VIEW.full[2] / AGENT_VIEW.full[3]) * h;
   ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
-  return true;
 }
 
 // Option tiles preview the character as it would look with that option. Both
@@ -563,520 +578,6 @@ function drawOptionTile(ctx, curCat, idx, ch, sig, x, y, size) {
   if (img) ctx.drawImage(img, x, y, size, size);
 }
 
-// ── Character preview (fully parameterized — no game state) ──
-
-export function renderCharacterPreview(
-  ctx,
-  cx,
-  cy,
-  palette,
-  armor,
-  character,
-  skin,
-  now,
-  loadout,
-  scale,
-  helmet,
-  visor,
-  shoulder,
-  skinTone,
-  hairStyle,
-  eyeColor,
-) {
-  const s = scale || 1;
-  const helmetStyle = helmet || HELMET_STYLES[0];
-  const visorStyle = visor || VISOR_STYLES[0];
-  const shoulderStyle = shoulder || SHOULDER_STYLES[0];
-  const faceTone = skinTone || SKIN_TONES[0];
-  const hair = hairStyle || HAIR_STYLES[0];
-  const eyes = eyeColor || EYE_COLORS[0];
-  const rotAngle = now * 0.001;
-  const breathe = Math.sin(now * 0.002) * 2;
-  const stance = Math.sin(now * 0.0012) * 2.5;
-
-  ctx.save();
-  ctx.translate(cx, cy + breathe);
-  ctx.scale(s, s);
-
-  // ── Armor body ──
-  const armorW = 52;
-  const armorH = 70;
-
-  // ── Holographic platform ──
-  const platY = armorH / 2 + 20;
-  // Outer glow ring
-  ctx.save();
-  ctx.globalAlpha = 0.15 + 0.08 * Math.sin(now * 0.002);
-  ctx.strokeStyle = palette.accent;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(0, platY, 44, 12, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-  // Inner rotating grid disc
-  ctx.save();
-  ctx.globalAlpha = 0.06;
-  ctx.fillStyle = palette.accent;
-  ctx.beginPath();
-  ctx.ellipse(0, platY, 38, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  // Grid lines on disc
-  ctx.save();
-  ctx.globalAlpha = 0.1;
-  ctx.strokeStyle = palette.accent;
-  ctx.lineWidth = 0.5;
-  for (let gi = -3; gi <= 3; gi++) {
-    const gOff = gi * 10;
-    const gW = Math.sqrt(Math.max(0, 38 * 38 - gOff * gOff));
-    ctx.beginPath();
-    ctx.moveTo(gOff, platY - (gW * 10) / 38);
-    ctx.lineTo(gOff, platY + (gW * 10) / 38);
-    ctx.stroke();
-  }
-  ctx.restore();
-  // Rotating tick marks on edge
-  ctx.save();
-  ctx.globalAlpha = 0.25;
-  ctx.strokeStyle = palette.accent;
-  ctx.lineWidth = 1.5;
-  for (let ti = 0; ti < 8; ti++) {
-    const ta = rotAngle + (ti * Math.PI) / 4;
-    const tx1 = Math.cos(ta) * 36;
-    const ty1 = platY + Math.sin(ta) * 9.5;
-    const tx2 = Math.cos(ta) * 42;
-    const ty2 = platY + Math.sin(ta) * 11;
-    ctx.beginPath();
-    ctx.moveTo(tx1, ty1);
-    ctx.lineTo(tx2, ty2);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // Shadow underneath
-  ctx.fillStyle = "rgba(0,0,0,0.3)";
-  ctx.beginPath();
-  ctx.ellipse(0, platY, 30, 8, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Legs
-  ctx.fillStyle = palette.dark;
-  ctx.fillRect(-14, armorH / 2 - 5, 10, 25);
-  ctx.fillRect(4, armorH / 2 - 5, 10, 25);
-  // Boots
-  ctx.fillStyle = palette.primary;
-  ctx.beginPath();
-  ctx.roundRect(-16, armorH / 2 + 16, 14, 8, 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.roundRect(2, armorH / 2 + 16, 14, 8, 2);
-  ctx.fill();
-  // Boot sole accent
-  ctx.fillStyle = palette.accent + "44";
-  ctx.fillRect(-15, armorH / 2 + 22, 12, 2);
-  ctx.fillRect(3, armorH / 2 + 22, 12, 2);
-
-  // Knee pads
-  ctx.fillStyle = palette.primary + "88";
-  ctx.beginPath();
-  ctx.ellipse(-9, armorH / 2 + 2, 6, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(9, armorH / 2 + 2, 6, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Main torso
-  ctx.fillStyle = palette.primary;
-  ctx.beginPath();
-  ctx.roundRect(-armorW / 2, -armorH / 2, armorW, armorH, 6);
-  ctx.fill();
-
-  // Armor style details
-  if (armor.id === "recon") {
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(-armorW / 2, -armorH / 2, armorW, armorH, 6);
-    ctx.clip();
-    ctx.strokeStyle = palette.accent + "44";
-    ctx.lineWidth = 1;
-    for (let i = -3; i < 5; i++) {
-      ctx.beginPath();
-      ctx.moveTo(-armorW / 2 + i * 12, -armorH / 2);
-      ctx.lineTo(-armorW / 2 + i * 12 + armorH, armorH / 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-  } else if (armor.id === "heavy") {
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(-armorW / 2 - 6, -armorH / 2 - 2, armorW + 12, 14);
-    ctx.fillRect(-armorW / 2 - 4, -armorH / 2 + 10, 12, 8);
-    ctx.fillRect(armorW / 2 - 8, -armorH / 2 + 10, 12, 8);
-  } else if (armor.id === "stealth") {
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
-    ctx.fillRect(-armorW / 2 + 3, -armorH / 2 + 3, armorW - 6, armorH - 6);
-    ctx.strokeStyle = palette.accent + "33";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, -armorH / 2);
-    ctx.lineTo(0, armorH / 2);
-    ctx.stroke();
-  } else if (armor.id === "tech") {
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(-armorW / 2 + 4, 8, 14, 10);
-    ctx.fillRect(armorW / 2 - 18, 8, 14, 10);
-    ctx.fillStyle = palette.accent + "66";
-    ctx.fillRect(-armorW / 2 + 6, 10, 4, 6);
-    ctx.fillRect(armorW / 2 - 10, 10, 4, 6);
-  }
-
-  // Center accent stripe
-  ctx.fillStyle = palette.accent;
-  ctx.globalAlpha = 0.35 + 0.15 * Math.sin(now * 0.004);
-  ctx.fillRect(-2, -armorH / 2 + 8, 4, armorH - 16);
-  ctx.globalAlpha = 1;
-
-  // Belt
-  ctx.fillStyle = palette.dark;
-  ctx.fillRect(-armorW / 2 + 2, armorH / 2 - 10, armorW - 4, 6);
-  ctx.fillStyle = palette.accent + "88";
-  ctx.beginPath();
-  ctx.arc(0, armorH / 2 - 7, 4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Chest emblem glow
-  ctx.save();
-  ctx.globalAlpha = 0.15 + 0.1 * Math.sin(now * 0.005);
-  ctx.fillStyle = palette.accent;
-  ctx.beginPath();
-  ctx.arc(0, -10, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  // Collar / neck
-  ctx.fillStyle = palette.dark;
-  ctx.fillRect(-10, -armorH / 2 - 6, 20, 8);
-
-  // Helmet (shape varies by helmetStyle)
-  const helmY = -armorH / 2 - 28;
-  ctx.fillStyle = palette.primary;
-  if (helmetStyle.id === "wide") {
-    ctx.beginPath();
-    ctx.ellipse(0, helmY, 22, 17, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (helmetStyle.id === "angular") {
-    ctx.beginPath();
-    ctx.moveTo(-18, helmY + 10);
-    ctx.lineTo(-14, helmY - 14);
-    ctx.lineTo(14, helmY - 14);
-    ctx.lineTo(18, helmY + 10);
-    ctx.lineTo(10, helmY + 16);
-    ctx.lineTo(-10, helmY + 16);
-    ctx.closePath();
-    ctx.fill();
-  } else if (helmetStyle.id === "mohawk") {
-    ctx.beginPath();
-    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
-    ctx.fill();
-    // Crest ridge
-    ctx.fillStyle = palette.dark;
-    ctx.beginPath();
-    ctx.moveTo(-2, helmY - 18);
-    ctx.lineTo(2, helmY - 22);
-    ctx.lineTo(2, helmY + 2);
-    ctx.lineTo(-2, helmY + 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = palette.accent + "aa";
-    ctx.fillRect(-1, helmY - 20, 2, 20);
-  } else if (helmetStyle.id === "crested") {
-    ctx.beginPath();
-    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
-    ctx.fill();
-    // Forward fin
-    ctx.fillStyle = palette.accent;
-    ctx.beginPath();
-    ctx.moveTo(0, helmY - 18);
-    ctx.lineTo(20, helmY - 4);
-    ctx.lineTo(16, helmY + 2);
-    ctx.lineTo(0, helmY - 4);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    // standard dome
-    ctx.beginPath();
-    ctx.arc(0, helmY, 18, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Visor (shape varies by visorStyle)
-  // Face/hair are visible through open/slit visors; full-face visor covers them.
-  if (visorStyle.id !== "fullface") {
-    ctx.fillStyle = faceTone.color;
-    ctx.beginPath();
-    ctx.ellipse(0, helmY + 3, 12, 11, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = faceTone.shadow;
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.ellipse(0, helmY + 8, 10, 5, 0, 0, Math.PI);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    if (hair.id !== "none") {
-      ctx.fillStyle = hair.color;
-      if (hair.id === "coil") {
-        for (let i = -2; i <= 2; i++) {
-          ctx.beginPath();
-          ctx.arc(i * 5, helmY - 8 + (i % 2) * 2, 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (hair.id === "braid") {
-        ctx.beginPath();
-        ctx.ellipse(-8, helmY - 5, 7, 4, -0.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(-14, helmY + 8, 3, 12, -0.25, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.beginPath();
-        ctx.ellipse(0, helmY - 8, hair.id === "buzz" ? 10 : 13, hair.id === "white" ? 5 : 7, 0, Math.PI, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.fillStyle = eyes.color;
-    ctx.shadowColor = eyes.color;
-    ctx.shadowBlur = 5;
-    ctx.fillRect(-6, helmY + 1, 3, 2);
-    ctx.fillRect(3, helmY + 1, 3, 2);
-    ctx.shadowBlur = 0;
-  }
-
-  ctx.fillStyle = palette.accent;
-  if (visorStyle.id === "slit") {
-    ctx.globalAlpha = 0.75 + 0.2 * Math.sin(now * 0.003);
-    ctx.fillRect(-12, helmY - 1, 24, 3);
-    ctx.globalAlpha = 1;
-  } else if (visorStyle.id === "fullface") {
-    ctx.globalAlpha = 0.7 + 0.15 * Math.sin(now * 0.003);
-    ctx.beginPath();
-    ctx.ellipse(0, helmY, 15, 14, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    // Reflective sheen
-    ctx.fillStyle = "#ffffff";
-    ctx.globalAlpha = 0.25;
-    ctx.beginPath();
-    ctx.ellipse(-6, helmY - 5, 4, 2, -0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  } else if (visorStyle.id === "split") {
-    ctx.globalAlpha = 0.7 + 0.2 * Math.sin(now * 0.003);
-    ctx.beginPath();
-    ctx.ellipse(-7, helmY + 2, 5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(7, helmY + 2, 5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  } else if (visorStyle.id === "glow") {
-    const glowPulse = 0.5 + 0.5 * Math.sin(now * 0.006);
-    ctx.shadowColor = palette.accent;
-    ctx.shadowBlur = 8 + 4 * glowPulse;
-    ctx.globalAlpha = 0.85 + 0.15 * glowPulse;
-    ctx.fillRect(-13, helmY, 26, 4);
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-  } else {
-    // standard wide visor
-    ctx.globalAlpha = 0.6 + 0.2 * Math.sin(now * 0.003);
-    ctx.beginPath();
-    ctx.ellipse(0, helmY + 2, 14, 7, 0, 0, Math.PI);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    // Visor glint
-    ctx.fillStyle = "#ffffff";
-    ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.ellipse(-5, helmY - 1, 4, 2, -0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-
-  // Arms
-  ctx.fillStyle = palette.primary;
-  ctx.fillRect(-armorW / 2 - 10, -armorH / 2 + 8, 10, 40);
-  ctx.fillRect(armorW / 2, -armorH / 2 + 8, 10, 40);
-  // Hands
-  ctx.fillStyle = faceTone.color;
-  ctx.fillRect(-armorW / 2 - 8, -armorH / 2 + 46, 8, 8);
-  ctx.fillRect(armorW / 2 + 2, -armorH / 2 + 46, 8, 8);
-
-  // Shoulder pads / guards (varies by shoulderStyle)
-  const shY = -armorH / 2 + 4;
-  const shLX = -armorW / 2 - 5;
-  const shRX = armorW / 2 + 5;
-  if (shoulderStyle.id === "pads") {
-    ctx.fillStyle = palette.primary;
-    ctx.beginPath();
-    ctx.ellipse(shLX, shY, 10, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(shRX, shY, 10, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = palette.accent + "66";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(shLX, shY, 10, 7, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(shRX, shY, 10, 7, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (shoulderStyle.id === "spikes") {
-    ctx.fillStyle = palette.dark;
-    // Left spikes
-    ctx.beginPath();
-    ctx.moveTo(shLX - 10, shY + 4);
-    ctx.lineTo(shLX - 12, shY - 8);
-    ctx.lineTo(shLX - 4, shY - 2);
-    ctx.lineTo(shLX - 6, shY - 10);
-    ctx.lineTo(shLX + 2, shY - 4);
-    ctx.lineTo(shLX + 4, shY + 4);
-    ctx.closePath();
-    ctx.fill();
-    // Right spikes (mirror)
-    ctx.beginPath();
-    ctx.moveTo(shRX + 10, shY + 4);
-    ctx.lineTo(shRX + 12, shY - 8);
-    ctx.lineTo(shRX + 4, shY - 2);
-    ctx.lineTo(shRX + 6, shY - 10);
-    ctx.lineTo(shRX - 2, shY - 4);
-    ctx.lineTo(shRX - 4, shY + 4);
-    ctx.closePath();
-    ctx.fill();
-  } else if (shoulderStyle.id === "pauldrons") {
-    ctx.fillStyle = palette.dark;
-    // Trapezoidal plates
-    ctx.beginPath();
-    ctx.moveTo(shLX - 12, shY - 8);
-    ctx.lineTo(shLX + 4, shY - 6);
-    ctx.lineTo(shLX + 6, shY + 10);
-    ctx.lineTo(shLX - 10, shY + 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(shRX + 12, shY - 8);
-    ctx.lineTo(shRX - 4, shY - 6);
-    ctx.lineTo(shRX - 6, shY + 10);
-    ctx.lineTo(shRX + 10, shY + 10);
-    ctx.closePath();
-    ctx.fill();
-    // Accent trim
-    ctx.fillStyle = palette.accent + "aa";
-    ctx.fillRect(shLX - 10, shY - 6, 14, 2);
-    ctx.fillRect(shRX - 4, shY - 6, 14, 2);
-  } else if (shoulderStyle.id === "armored") {
-    ctx.fillStyle = palette.primary;
-    ctx.fillRect(shLX - 11, shY - 6, 14, 14);
-    ctx.fillRect(shRX - 3, shY - 6, 14, 14);
-    ctx.fillStyle = palette.dark;
-    ctx.fillRect(shLX - 11, shY - 6, 14, 3);
-    ctx.fillRect(shRX - 3, shY - 6, 14, 3);
-    ctx.fillStyle = palette.accent + "88";
-    ctx.fillRect(shLX - 9, shY - 2, 2, 8);
-    ctx.fillRect(shRX + 7, shY - 2, 2, 8);
-  }
-  // "none" draws nothing.
-
-  // ── Badge ──
-  // The same composed SVG insignia the showroom and the agent rig draw, so the
-  // Legacy figure wears exactly what was picked.
-  if (character?.badge?.placements?.length) {
-    const layer = badgeLayer(character);
-    const size = 26;
-    const img = getLayerImage(layer.id, BADGE_BOX, "", layer.markup, (size / 108) * pixelRatio(ctx));
-    if (img) ctx.drawImage(img, -8 - size / 2, -armorH / 2 + 12 - size / 2, size, size);
-  }
-
-  // ── Weapon (right hand) ──
-  const wpnX = armorW / 2 + 6;
-  const wpnY = -armorH / 2 + 30 + stance * 0.25;
-  const skinColors = {
-    default: "#556677",
-    carbon: "#222222",
-    chrome: "#aabbcc",
-    ember: "#aa4400",
-    frost: "#4488bb",
-    toxic: "#339933",
-  };
-  ctx.fillStyle = skinColors[skin.id] || "#556677";
-  ctx.fillRect(wpnX, wpnY, 6, 30);
-  ctx.fillStyle = palette.accent;
-  ctx.globalAlpha = 0.6 + 0.3 * Math.sin(now * 0.006);
-  ctx.fillRect(wpnX + 1, wpnY - 4, 4, 6);
-  ctx.globalAlpha = 1;
-
-  // ── Class-specific visual traits ──
-  if (loadout) {
-    if (loadout.id === "gunslinger") {
-      ctx.fillStyle = "#664422";
-      ctx.fillRect(-armorW / 2 - 4, 4, 6, 14);
-      ctx.fillRect(armorW / 2 - 2, 4, 6, 14);
-      ctx.strokeStyle = palette.accent + "44";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 3; i++) {
-        const ly = -armorH / 2 + 20 + i * 18;
-        ctx.beginPath();
-        ctx.moveTo(armorW / 2 + 18, ly);
-        ctx.lineTo(armorW / 2 + 28 + i * 4, ly);
-        ctx.stroke();
-      }
-    } else if (loadout.id === "enforcer") {
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-armorW / 2 - 14, -armorH / 2 + 4, 14, 12);
-      ctx.fillRect(armorW / 2, -armorH / 2 + 4, 14, 12);
-      ctx.strokeStyle = palette.primary;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.roundRect(
-        -armorW / 2 - 2,
-        -armorH / 2 - 2,
-        armorW + 4,
-        armorH + 4,
-        8,
-      );
-      ctx.stroke();
-    } else if (loadout.id === "phantom") {
-      ctx.globalAlpha = 0.12;
-      ctx.fillStyle = palette.accent;
-      const ghostOff = 8 + Math.sin(now * 0.003) * 3;
-      ctx.beginPath();
-      ctx.roundRect(-armorW / 2 + ghostOff, -armorH / 2, armorW, armorH, 6);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < 4; i++) {
-        const px = armorW / 2 + 14 + i * 8;
-        const py = Math.sin(now * 0.004 + i) * 10;
-        ctx.fillStyle = palette.accent;
-        ctx.globalAlpha = 0.3 - i * 0.06;
-        ctx.beginPath();
-        ctx.arc(px, py, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  // ── Rotating energy ring ──
-  ctx.strokeStyle = palette.accent + "22";
-  ctx.lineWidth = 1;
-  for (let r = 0; r < 2; r++) {
-    ctx.beginPath();
-    ctx.arc(0, 0, 60 + r * 12, rotAngle + r, rotAngle + r + Math.PI * 1.2);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
 // ── Main character creator screen ──
 
 export function renderCharacterCreator(
@@ -1094,17 +595,8 @@ export function renderCharacterCreator(
   const cat = creatorCategory;
   const char = character;
   const palette = pieceOf(char, "color");
-  const skinTone = pieceOf(char, "skinTone");
-  const hairStyle = hairOf(char);
-  const eyeColor = pieceOf(char, "eye");
-  const armor = pieceOf(char, "armor");
-  const skin = pieceOf(char, "weaponSkin");
   const loadout = pieceOf(char, "loadout");
-  const origin = pieceOf(char, "backstory");
-  const voice = pieceOf(char, "voice");
   const helmet = pieceOf(char, "helmet");
-  const visor = pieceOf(char, "visor");
-  const shoulder = pieceOf(char, "shoulder");
   const categories = CREATOR_CATEGORIES;
 
   // Full-screen dark backdrop
@@ -1253,26 +745,7 @@ export function renderCharacterCreator(
     const prevScale = isMobile
       ? 1.0
       : Math.max(1.2, Math.min(2.4, (prevBottom - prevTop - 70) / 150));
-    if (!drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150)) {
-      renderCharacterPreview(
-        ctx,
-        prevCX,
-        prevCY,
-        palette,
-        armor,
-        char,
-        skin,
-        now,
-        loadout,
-        prevScale,
-        helmet,
-        visor,
-        shoulder,
-        skinTone,
-        hairStyle,
-        eyeColor,
-      );
-    }
+    drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150);
 
     // Styled nameplate (name step)
     const npText = char.name || "Agent";
@@ -1493,26 +966,7 @@ export function renderCharacterCreator(
     Math.min((L.previewW - 48) / 120, (prevH - 96) / 150),
   );
   const prevCY = L.contentY + prevH / 2 - 10;
-  if (!drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150, stageFor(curCat.key, char))) {
-    renderCharacterPreview(
-      ctx,
-      prevCX,
-      prevCY,
-      palette,
-      armor,
-      char,
-      skin,
-      now,
-      loadout,
-      prevScale,
-      helmet,
-      visor,
-      shoulder,
-      skinTone,
-      hairStyle,
-      eyeColor,
-    );
-  }
+  drawAgentFigure(ctx, char, prevCX, prevCY, prevScale * 150, stageFor(curCat.key, char));
 
   // ── Scan-line overlay ──
   ctx.save();

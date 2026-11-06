@@ -553,6 +553,117 @@ test("legacy GEAR FACE tab picks a war paint colour by key and by swatch", async
   expect(await page.evaluate(() => window.ccDebug.game.character.accessories.face)).toBe("warpaint");
 });
 
+/**
+ * Install window.__preview in the page: the canvas preview panel's figure
+ * area (above the nameplate) read off the game canvas. `sample()` gives the
+ * count of lit pixels (the figure: the panel behind it is near black) and a
+ * coarse luminance grid to compare looks by.
+ */
+const installPreviewProbe = (page) =>
+  page.evaluate(async () => {
+    const cc = await import("/src/ui/character-creator.js");
+    const g = window.ccDebug.game;
+    const region = () => {
+      const w = g.canvas.width;
+      const h = g.canvas.height;
+      const L = cc.getCreatorLayout(w, h, g.isTouchDevice && w < 700, g.isTouchDevice);
+      return { x: Math.round(L.contentX + L.listW + L.contentGap), y: Math.round(L.contentY), w: Math.round(L.previewW), h: Math.round(L.panelH - 40) };
+    };
+    window.__preview = {
+      figure: cc.previewFigure,
+      sample() {
+        const r = region();
+        const d = g.renderer.ctx.getImageData(r.x, r.y, r.w, r.h).data;
+        let lit = 0;
+        const B = 8;
+        const cols = Math.floor(r.w / B);
+        const grid = new Array(cols * Math.floor(r.h / B)).fill(0);
+        for (let y = 0; y < r.h; y++) {
+          for (let x = 0; x < r.w; x++) {
+            const i = (y * r.w + x) * 4;
+            const m = Math.max(d[i], d[i + 1], d[i + 2]);
+            if (m > 90) lit++;
+            const cell = Math.floor(y / B) * cols + Math.floor(x / B);
+            if (cell < grid.length) grid[cell] += (d[i] + d[i + 1] + d[i + 2]) / 3 / (B * B);
+          }
+        }
+        return { lit, grid };
+      },
+      /**
+       * Resolves once the look asked for is the one on screen. Checked from
+       * the next frame on: the game draws (and asks for the look) first.
+       */
+      settled: () =>
+        new Promise((resolve) => {
+          const tick = () => {
+            const f = cc.previewFigure();
+            if (f.wanted && f.wanted === f.shown) requestAnimationFrame(() => resolve(f));
+            else requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }),
+    };
+  });
+
+const gridDiff = (a, b) => a.reduce((t, v, i) => t + Math.abs(v - b[i]), 0) / a.length;
+
+test("canvas creator preview shows a theme frame", async ({ page }) => {
+  await openLegacyCreator(page);
+  await legacyTab(page, "armor");
+  await installPreviewProbe(page);
+  await page.evaluate(() => window.__preview.settled());
+  const base = await page.evaluate(() => window.__preview.sample());
+  // Two frames of the same look differ only by the panel's animation: the noise floor.
+  await page.waitForTimeout(250);
+  const again = await page.evaluate(() => window.__preview.sample());
+  await page.evaluate(() => {
+    window.ccDebug.game.character.frame = "diving";
+  });
+  const f = await page.evaluate(() => window.__preview.settled());
+  expect(f.shown).toContain(".diving.");
+  const diving = await page.evaluate(() => window.__preview.sample());
+  const noise = gridDiff(base.grid, again.grid);
+  const change = gridDiff(base.grid, diving.grid);
+  console.log(`canvas preview: theme frame changes the figure by ${change.toFixed(2)} (noise ${noise.toFixed(2)})`);
+  expect(base.lit).toBeGreaterThan(1000);
+  expect(change).toBeGreaterThan(Math.max(2, noise * 4));
+  await page.screenshot({ path: "screenshots/legacy-preview-theme-frame.png" });
+});
+
+test("canvas creator preview never blanks while a new look decodes", async ({ page }) => {
+  await openLegacyCreator(page);
+  await legacyTab(page, "shoulder");
+  await installPreviewProbe(page);
+  await page.evaluate(() => window.__preview.settled());
+  const base = (await page.evaluate(() => window.__preview.sample())).lit;
+  // Each look is new to the raster cache, so each one decodes while the last stays up.
+  const runs = await page.evaluate(async () => {
+    const g = window.ccDebug.game;
+    const out = [];
+    for (const [frame, helmet] of [["exo", "cockpit"], ["duster", "brim"], ["lamellar", "kabuto"], ["clockwork", "clockface"], ["spacesuit", "bubble"], ["vestment", "hood"]]) {
+      g.character.frame = frame;
+      g.character.helmet = helmet;
+      const t0 = performance.now();
+      let frames = 0;
+      let minLit = Infinity;
+      await new Promise((resolve) => {
+        const tick = () => {
+          frames++;
+          minLit = Math.min(minLit, window.__preview.sample().lit);
+          const f = window.__preview.figure();
+          if (f.wanted === f.shown) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      out.push({ frame, frames, waitMs: Math.round(performance.now() - t0), decodeMs: Math.round(window.__preview.figure().decodeMs), minLit });
+    }
+    return out;
+  });
+  for (const r of runs) console.log(`canvas preview: ${r.frame} decoded in ${r.decodeMs} ms (${r.frames} frames on the last look)`);
+  for (const r of runs) expect(r.minLit, `${r.frame}: the preview never empties`).toBeGreaterThan(base * 0.3);
+});
+
 test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) => {
   await openLegacyCreator(page);
   const strip = await page.evaluate(async () => {
