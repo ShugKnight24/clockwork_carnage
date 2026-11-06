@@ -1643,6 +1643,7 @@ function forearmAxis({ el, wr }) {
  * `size` is the badge diameter at that point. Helmet mounts (crown, browL,
  * sideL) and the helmet badge (`helmet`, null for a helmet with no place for
  * one) are seated on the given helmet's shell (its art's anchors); `seats`
+ * (from its data entry)
  * says which accessory seats the helmet takes (helmetSeats), `faceSlots`
  * which face slots show (helmetFaceSlots; both on a bare-headed peek).
  */

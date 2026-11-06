@@ -23,7 +23,7 @@
  *       map: the rig splits glow per limb (the fallen agent leaves out the
  *       light of the arm trapped under the body).
  *
- *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors, seats?, faceSlots? } }
+ *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors } }
  *     paint: the whole head under the helmet (not called for a face peek,
  *       which the rig draws bare). `front` is the head, `glow` its lit parts.
  *       K is the rig's helmet kit; none of it knows a helmet id, so all a
@@ -60,16 +60,9 @@
  *       whips mount on. `badge` is where the helmet wears the player's badge,
  *       `{ x, y, rot, size }` (size: the badge's diameter), or `false` for a
  *       head with no place for one.
- *     seats: which accessory seats the helmet takes, words from HELMET_SEATS
- *       mapped to booleans; a seat left out is taken. A helmet that already
- *       wears what a seat holds (the Centurion's crest) turns it off, and
- *       the helmet-slot accessory for that seat is not drawn on it.
- *     faceSlots: on a helmet that shows the face (its entry says
- *       `face: true`), which face slots it leaves room for, words from
- *       FACE_SLOTS mapped to booleans; a slot left out has room. A helmet
- *       that covers the eyes or the jaw (the LED mask's band and shell)
- *       turns that slot off, and the item worn there is kept but not drawn.
- *       A closed helmet hides both slots and declares none.
+ *     Which accessory seats a helmet takes (`seats`) and which face slots
+ *       it leaves room for (`faceSlots`) are on its data entry, not here
+ *       (src/data/wardrobe-themes/index.js documents both).
  *
  *   shoulders: { [id]: { paint(c, s, K) -> markup, maxShoulderScale? } }
  *     paint: one shoulder, drawn for the right side and mirrored for the
@@ -108,7 +101,7 @@
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
-import { WARDROBE_THEMES, THEME_TABLES, FACE_HELMETS } from "../../../data/wardrobe-themes/index.js";
+import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS } from "../../../data/wardrobe-themes/index.js";
 import { ACCESSORIES, FACE_SLOTS, TINT_HEX } from "../../../data/accessories.js";
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
@@ -178,50 +171,10 @@ export function shoulderArt(id) {
   return art;
 }
 
-/**
- * The accessory seats on a helmet (helmet art `seats`), and the helmet-slot
- * gear each holds (src/data/accessories.js `seat`):
- *   crown — on top of the shell (a plume)
- *   brow  — on the forehead above the visor (night vision)
- *   side  — on the side rail and over the ears (lamps, whips, a headset)
- */
-export const HELMET_SEATS = Object.freeze(["crown", "brow", "side"]);
-
-/**
- * Which accessory seats a helmet takes: every seat, unless its art turns one off.
- * @param {string} id helmet id
- * @returns {Record<string, boolean>}
- */
-export function helmetSeats(id) {
-  const seats = helmetArt(id).seats || {};
-  return Object.fromEntries(HELMET_SEATS.map((seat) => [seat, seats[seat] !== false]));
-}
-
-/**
- * Which face slots (FACE_SLOTS: eyes, face) show under a helmet: none under
- * one that hides the face, else every slot its art leaves room for.
- * @param {string} id helmet id
- * @returns {Record<string, boolean>}
- */
-export function helmetFaceSlots(id) {
-  const open = FACE_HELMETS.has(id);
-  const slots = helmetArt(id).faceSlots || {};
-  return Object.fromEntries(FACE_SLOTS.map((slot) => [slot, open && slots[slot] !== false]));
-}
-
-/**
- * Why a face slot does not show under a helmet, for the creator's note:
- * "hidden" under a helmet that hides the face, "room" under an open one
- * with no room for the slot, null when it shows.
- * @param {string} id helmet id
- * @param {string} slot a word from FACE_SLOTS
- * @returns {"hidden"|"room"|null}
- */
-export function faceSlotBlock(id, slot) {
-  if (!FACE_SLOTS.includes(slot)) throw new Error(`faceSlotBlock: "${slot}" is not a face slot (${FACE_SLOTS.join(", ")})`);
-  if (!FACE_HELMETS.has(id)) return "hidden";
-  return helmetFaceSlots(id)[slot] ? null : "room";
-}
+// The helmets' accessory seats and face room live on their data entries
+// (src/data/wardrobe-themes/index.js), where the data layer can read them;
+// re-exported here for the art's readers.
+export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock } from "../../../data/wardrobe-themes/index.js";
 
 /**
  * Whether a frame replaces one of the rig's stock layers.
@@ -272,6 +225,21 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
     for (const [id, theme] of seen) if (!art.has(id)) errors.push(`${table}: "${id}" (theme "${theme}") has no art`);
     for (const [id, theme] of art) if (!seen.has(id)) errors.push(`${table}: art "${id}" (theme "${theme}") has no entry`);
   }
+  // Seats and face room, on the data entries.
+  for (const t of themes) {
+    for (const e of t.helmets || []) {
+      for (const [seat, on] of Object.entries(e.seats || {})) {
+        if (!HELMET_SEATS.includes(seat)) errors.push(`helmets: "${e.id}" seats unknown seat "${seat}" (${HELMET_SEATS.join(", ")})`);
+        else if (typeof on !== "boolean") errors.push(`helmets: "${e.id}" seats.${seat} is not true or false`);
+      }
+      if (!("faceSlots" in e)) continue;
+      if (e.face !== true) errors.push(`helmets: "${e.id}" declares faceSlots but hides the face (its entry has no face: true)`);
+      for (const [slot, on] of Object.entries(e.faceSlots || {})) {
+        if (!FACE_SLOTS.includes(slot)) errors.push(`helmets: "${e.id}" faceSlots unknown slot "${slot}" (${FACE_SLOTS.join(", ")})`);
+        else if (typeof on !== "boolean") errors.push(`helmets: "${e.id}" faceSlots.${slot} is not true or false`);
+      }
+    }
+  }
   const dataIds = themes.map((t) => t.id);
   const artIds = artThemes.map((t) => t.id);
   for (const id of dataIds) if (!artIds.includes(id)) errors.push(`theme "${id}" has no art module`);
@@ -295,17 +263,8 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
           if (!Number.isFinite(badge?.[key])) errors.push(`helmets: "${id}" anchors.badge.${key} is not a finite number (or set badge: false)`);
         }
       }
-      for (const [seat, on] of Object.entries(a.seats || {})) {
-        if (!HELMET_SEATS.includes(seat)) errors.push(`helmets: "${id}" seats unknown seat "${seat}" (${HELMET_SEATS.join(", ")})`);
-        else if (typeof on !== "boolean") errors.push(`helmets: "${id}" seats.${seat} is not true or false`);
-      }
-      if ("faceSlots" in a) {
-        const entry = themes.flatMap((d) => d.helmets || []).find((e) => e.id === id);
-        if (entry && entry.face !== true) errors.push(`helmets: "${id}" declares faceSlots but hides the face (its entry has no face: true)`);
-        for (const [slot, on] of Object.entries(a.faceSlots || {})) {
-          if (!FACE_SLOTS.includes(slot)) errors.push(`helmets: "${id}" faceSlots unknown slot "${slot}" (${FACE_SLOTS.join(", ")})`);
-          else if (typeof on !== "boolean") errors.push(`helmets: "${id}" faceSlots.${slot} is not true or false`);
-        }
+      for (const key of ["seats", "faceSlots"]) {
+        if (key in a) errors.push(`helmets: art "${id}" declares ${key}, which belongs on its data entry`);
       }
     }
     for (const [id, a] of Object.entries(t.shoulders || {})) {

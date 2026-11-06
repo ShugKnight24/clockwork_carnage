@@ -1,11 +1,11 @@
 // Eyes and face slots: drawn on the face only where it shows and the helmet
-// leaves the slot room (helmet art faceSlots), fitted to the feminine jaw,
+// leaves the slot room (its entry's faceSlots), fitted to the feminine jaw,
 // placed by a helmet that layers its own face (K.faceAccessories), and on
 // every renderer that draws the head. A fixture open helmet that never asks
 // for them is added, for this file only, to pin the rig's fallback.
 import { describe, it, expect, vi } from "vitest";
 import { buildAgentParts, buildAgentSvg, buildCastModel, HELMET_KIT } from "../../src/rendering/svg-art/agent-rig.js";
-import { helmetFaceSlots, HELMET_ART } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
+import { helmetFaceSlots } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import { FACE_HELMETS } from "../../src/data/wardrobe-themes/index.js";
 import { FACE_SLOTS } from "../../src/data/accessories.js";
 import { HELMET_STYLES } from "../../src/data/cosmetics.js";
@@ -75,12 +75,12 @@ describe("eyes and face slots", () => {
 });
 
 describe("face room per helmet (faceSlots)", () => {
-  it("a helmet that shows the face takes both slots unless its art turns one off; a closed one takes none", () => {
+  it("a helmet that shows the face takes both slots unless its entry turns one off; a closed one takes none", () => {
     for (const { id } of HELMET_STYLES) {
       const room = helmetFaceSlots(id);
       expect(Object.keys(room), id).toEqual([...FACE_SLOTS]);
       if (!FACE_HELMETS.has(id)) expect(room, id).toEqual({ eyes: false, face: false });
-      else for (const slot of FACE_SLOTS) expect(room[slot], `${id} ${slot}`).toBe(HELMET_ART[id].faceSlots?.[slot] !== false);
+      else for (const slot of FACE_SLOTS) expect(room[slot], `${id} ${slot}`).toBe(HELMET_STYLES.find((e) => e.id === id).faceSlots?.[slot] !== false);
     }
     expect(helmetFaceSlots("wide")).toEqual({ eyes: true, face: true });
     expect(helmetFaceSlots("mohawk")).toEqual({ eyes: true, face: true });

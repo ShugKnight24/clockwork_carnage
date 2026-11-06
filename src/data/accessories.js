@@ -28,8 +28,8 @@ export const ACCESSORY_SLOTS = [
 /**
  * The slots worn on the face itself. Drawn only where the face shows (a
  * helmet whose entry says `face: true`, or a peek), and only where that
- * helmet leaves room for the slot (its art's `faceSlots`, see
- * src/rendering/svg-art/wardrobe-themes/index.js). Under a closed helmet the
+ * helmet leaves room for the slot (its entry's `faceSlots`, see
+ * src/data/wardrobe-themes/index.js). Under a closed helmet the
  * pick is kept but not drawn.
  */
 export const FACE_SLOTS = Object.freeze(["eyes", "face"]);
@@ -50,7 +50,7 @@ export const ACCESSORIES = {
     { id: "canister", name: "Chrono Canister", desc: "Glowing energy cell at the hip", tier: 2 },
   ],
   // Helmet gear sits on one of the helmet's seats (`seat`: crown, brow or
-  // side, HELMET_SEATS in src/rendering/svg-art/wardrobe-themes/index.js); a
+  // side, HELMET_SEATS in src/data/wardrobe-themes/index.js); a
   // helmet that turns a seat off does not draw the gear that needs it.
   helmet: [
     NONE,

@@ -257,7 +257,6 @@ export default {
     // The badge is a maker's mark on the bezel at half past ten.
     clockface: {
       anchors: { top: -101.2, half: 12.8, rail: -82.4, badge: { x: -7.9, y: -90.3, rot: -10, size: 3.2 } },
-      seats: { crown: false, brow: false },
       paint: clockface,
     },
   },

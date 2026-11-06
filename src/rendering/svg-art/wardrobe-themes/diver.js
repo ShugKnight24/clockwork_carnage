@@ -287,7 +287,6 @@ export default {
     // side ports. The badge is stamped on the dome above the left port.
     porthole: {
       anchors: { top: -100, half: 15.6, rail: -84.6, badge: { x: -10.4, y: -91.6, rot: -20, size: 3.8 } },
-      seats: { crown: false, brow: false },
       paint: porthole,
     },
   },

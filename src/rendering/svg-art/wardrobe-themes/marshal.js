@@ -332,9 +332,8 @@ export default {
     // shows. A plume rides in the crown's dent; the comm cups are the side
     // rail (lamps, whips, a headset over them). Night vision has no brow to
     // seat on under the brim.
-    // The bandana is up over the nose and jaw: eyewear fits over it, nothing
-    // else worn on the face shows.
-    brim: { anchors: { top: -101.8, half: 11.6, rail: -81.8, badge: false }, seats: { brow: false }, faceSlots: { face: false }, paint: brim },
+    // Its seats and face room are on the data entry.
+    brim: { anchors: { top: -101.8, half: 11.6, rail: -81.8, badge: false }, paint: brim },
   },
   shoulders: {
     poncho: { paint: poncho },

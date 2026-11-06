@@ -295,7 +295,6 @@ export default {
     // sides at the eyes. The badge is pinned on the clasp under the chin.
     hood: {
       anchors: { top: -101.4, half: 14.4, rail: -82, badge: { x: 0, y: -64.6, rot: 0, size: 3.6 } },
-      seats: { crown: false, brow: false },
       paint: hood,
     },
   },

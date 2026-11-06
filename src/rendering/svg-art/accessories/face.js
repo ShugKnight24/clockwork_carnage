@@ -4,7 +4,7 @@
  * 3.2; brows near -84.4; nose -80..-76; mouth -74; cheeks out to x ±7.2),
  * returned as `face`, with lights in `glow` (the rig blooms them). The rig
  * draws them only where the face shows and the helmet leaves the slot room
- * (its art's faceSlots), shaped to the feminine jaw like the face under them.
+ * (its entry's faceSlots), shaped to the feminine jaw like the face under them.
  * Like every painter, an id comes from K.uid and its markup goes to K.defs.
  */
 

@@ -20,7 +20,7 @@ vi.mock("../../src/data/wardrobe-themes/issue.js", async (importOriginal) => {
     default: {
       ...issue,
       frames: [...issue.frames, entry("frame-fixture")],
-      helmets: [...issue.helmets, entry("anchor-fixture"), entry("badgeless-fixture")],
+      helmets: [...issue.helmets, { ...entry("anchor-fixture"), seats: { brow: false } }, entry("badgeless-fixture")],
       shoulders: [...issue.shoulders, entry("shoulder-fixture"), entry("capped-fixture")],
     },
   };
@@ -49,7 +49,7 @@ vi.mock("../../src/rendering/svg-art/wardrobe-themes/issue.js", async (importOri
       },
       helmets: {
         ...issue.helmets,
-        "anchor-fixture": { anchors: ANCHORS, seats: { brow: false }, paint: head("anchor") },
+        "anchor-fixture": { anchors: ANCHORS, paint: head("anchor") },
         "badgeless-fixture": { anchors: { ...ANCHORS, badge: false }, paint: head("badgeless") },
       },
       shoulders: {

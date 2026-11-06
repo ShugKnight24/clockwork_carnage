@@ -71,8 +71,8 @@ const SHELLS = {
     "M0,-95.8 C8.2,-95.8 12,-90.2 11.8,-82.6 L11.2,-76.2 C10.6,-72.4 8,-69.6 4.4,-68.4 " +
     "L0,-67.8 L-4.4,-68.4 C-8,-69.6 -10.6,-72.4 -11.2,-76.2 L-11.8,-82.6 C-12,-90.2 -8.2,-95.8 0,-95.8 Z",
 };
-/** A helmet's art: its anchors, a painter that is given them, and the accessory seats it turns off. */
-const helmet = (anchors, draw, seats) => ({ anchors, paint: (c, K) => draw(c, K, anchors), ...(seats && { seats }) });
+/** A helmet's art: its anchors and a painter that is given them. */
+const helmet = (anchors, draw) => ({ anchors, paint: (c, K) => draw(c, K, anchors) });
 /** Where every Field Issue helmet wears the badge: high on the left of the dome. */
 const BADGE = { x: -8.6, y: -90, rot: -8, size: 4.6 };
 /** Anchors for a shell `top`, `half` wide, with the side rail at `rail`. */
@@ -107,7 +107,7 @@ const HELMETS = {
     }),
   ),
   // Centurion: painted bristle crest front-to-back, cheek guard rivets.
-  // The crest takes the crown, so a plume does not seat there.
+  // The crest takes the crown (its entry's seats).
   mohawk: helmet(
     at(-95, 11.7),
     openHelm(
@@ -120,7 +120,6 @@ const HELMETS = {
         line("M-2,-96 C-2.6,-100 -2,-103.6 -0.4,-105.8", K.mix(c.pal.primary, "#ffffff", 0.5), 0.45, 0.7) +
         `<g fill="#9fb2c4"><circle cx="-8.4" cy="-74" r=".55"/><circle cx="8.4" cy="-74" r=".55"/><circle cx="-9.2" cy="-78.2" r=".55"/><circle cx="9.2" cy="-78.2" r=".55"/></g>`,
     ),
-    { crown: false },
   ),
   // Vanguard: swept cheek fins and a forward crest blade.
   crested: helmet(

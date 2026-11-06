@@ -313,9 +313,8 @@ export default {
     // vision straps on over the hair), side gear on the holo band's ends at
     // the ear jacks. Nothing holds a plume on bare hair, and the rig draws
     // no helmet badge on a face that shows.
-    // The holo band lies across the eyes and the shell over the mouth and
-    // jaw: no room for eyewear or anything else worn on the face.
-    ledmask: { anchors: { top: -95, half: 10.6, rail: -82.4, badge: false }, seats: { crown: false }, faceSlots: { eyes: false, face: false }, paint: ledmask },
+    // Its seats and face room are on the data entry.
+    ledmask: { anchors: { top: -95, half: 10.6, rail: -82.4, badge: false }, paint: ledmask },
   },
   shoulders: {
     spikepad: { paint: spikepad },

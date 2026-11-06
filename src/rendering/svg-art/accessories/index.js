@@ -10,7 +10,7 @@
  * (../id-scope.js): scoped ids and the figure's defs, which come back as
  * `defs` for the rig to put in the figure's <defs>.
  * Helmet gear needs its `seat` on the helmet (A.seats, from the helmet's
- * art); a helmet that turns that seat off does not wear it.
+ * data entry); a helmet that turns that seat off does not wear it.
  * Eyes and face items (FACE_SLOTS) are drawn only where A.faceSlots says the
  * slot shows: a closed helmet hides both, an open one may leave no room for
  * one (helmetFaceSlots in ../wardrobe-themes/index.js). The rig places

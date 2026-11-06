@@ -338,7 +338,6 @@ export default {
     // meets the wing (fukigaeshi). The badge is a mon on the left wing.
     kabuto: {
       anchors: { top: -98.4, half: 13, rail: -87, badge: { x: -15.6, y: -86.8, rot: -12, size: 3.8 } },
-      seats: { crown: false, brow: false },
       paint: kabuto,
     },
   },

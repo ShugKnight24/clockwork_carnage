@@ -17,13 +17,17 @@ export default {
   /**
    * Helmets. `face: true`: an open helmet, the face shows under it.
    * `visor: false`: the head has no visor to fit, so the pick is neither drawn
-   * nor counted (see takesVisor in src/data/cosmetics.js).
+   * nor counted (see takesVisor in src/data/cosmetics.js). `seats` and
+   * `faceSlots`: the accessory seats and face slots the helmet turns off
+   * (see src/data/wardrobe-themes/index.js).
    */
   helmets: [
     { id: "standard", name: "Standard Dome", desc: "Regulation sphere shell", tier: 1 },
     { id: "wide", name: "Bastion", desc: "Wide reinforced dome", tier: 2, bonuses: { maxHealthAdd: 10 }, face: true },
     { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2, bonuses: { armorAdd: 3 } },
-    { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 }, face: true },
+    { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 }, face: true,
+      // The crest takes the crown, so a plume does not seat there.
+      seats: { crown: false } },
     { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { maxStaminaAdd: 20, moveSpeedAdd: 0.1 } },
     { id: "ordnance", name: "Ordnance", desc: "Faceted gunner's helm with targeting spine", tier: 3, bonuses: { armorAdd: 4, maxHealthAdd: 8 } },
     { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },

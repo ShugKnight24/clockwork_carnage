@@ -163,7 +163,8 @@ describe("helmets", () => {
       expect(Object.isFrozen(art)).toBe(true);
       expect(Object.isFrozen(art.anchors)).toBe(true);
       if (art.anchors.badge) expect(Object.isFrozen(art.anchors.badge)).toBe(true);
-      if (art.seats) expect(Object.isFrozen(art.seats)).toBe(true);
+      expect(art.seats, "seats belong on the data entry").toBeUndefined();
+      expect(art.faceSlots, "faceSlots belong on the data entry").toBeUndefined();
     }
   });
 
@@ -174,7 +175,9 @@ describe("helmets", () => {
       expect(helmetSeats(id), id).toEqual({ crown: id !== "mohawk", brow: true, side: true });
       expect(rigAnchors(STAND, [0, 0], "standing", id).seats, id).toEqual(helmetSeats(id));
     }
-    expect(HELMET_ART.mohawk.seats).toEqual({ crown: false });
+    const mohawk = HELMET_STYLES.find((e) => e.id === "mohawk");
+    expect(mohawk.seats).toEqual({ crown: false });
+    expect(Object.isFrozen(mohawk.seats)).toBe(true);
   });
 
   it("every helmet accessory names the seat it needs", () => {
@@ -487,7 +490,7 @@ describe("validateWardrobe", () => {
   const art = (hides = []) => ({ shape: { width: 1, shoulder: 1, hides }, layers: () => ({ under: "", legs: "", torso: "", arms: "", glow: "" }) });
   const theme = (id, frames, helmets = [], shoulders = []) => ({ id, name: id, frames: frames.map(entry), helmets: helmets.map(entry), shoulders: shoulders.map(entry) });
   const BADGE = { x: -8.6, y: -90, rot: -8, size: 4.6 };
-  const helm = (anchors = { top: -95, half: 11.2, rail: -86.4, badge: BADGE }, seats) => ({ paint: () => ({ front: "", glow: "" }), anchors, ...(seats && { seats }) });
+  const helm = (anchors = { top: -95, half: 11.2, rail: -86.4, badge: BADGE }) => ({ paint: () => ({ front: "", glow: "" }), anchors });
   const pad = (extra = {}) => ({ paint: () => "", ...extra });
 
   it("reports a duplicate id across themes", () => {
@@ -577,21 +580,29 @@ describe("validateWardrobe", () => {
     expect(run(null)).toHaveLength(4);
   });
 
-  it("reports an unknown seat word or a seat that is not true or false", () => {
-    const run = (seats) => validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: helm(undefined, seats) } }]);
+  /** A theme with one helmet entry `h`, its extra fields given. */
+  const withHelmet = (extra) => [{ id: "a", name: "a", frames: [], shoulders: [], helmets: [{ ...entry("h"), ...extra }] }];
+
+  it("reports an unknown seat word or a seat that is not true or false, on the data entry", () => {
+    const run = (seats) => validateWardrobe(withHelmet({ seats }), [{ id: "a", helmets: { h: helm() } }]);
     expect(run({ crown: false, side: true })).toEqual([]);
     expect(run({ crown: false, chin: false })).toEqual([expect.stringMatching(/"h" seats unknown seat "chin"/)]);
     expect(run({ brow: "no" })).toEqual([expect.stringMatching(/"h" seats\.brow is not true or false/)]);
   });
 
   it("reports an unknown faceSlots word, one that is not true or false, and faceSlots on a helmet that hides the face", () => {
-    const open = (id) => ({ id: "a", name: "a", frames: [], shoulders: [], helmets: [{ ...entry(id), face: true }] });
-    const run = (faceSlots, themes = [open("h")]) => validateWardrobe(themes, [{ id: "a", helmets: { h: { ...helm(), faceSlots } } }]);
+    const run = (faceSlots, face = true) => validateWardrobe(withHelmet({ face, faceSlots }), [{ id: "a", helmets: { h: helm() } }]);
     expect(run({ eyes: false })).toEqual([]);
     expect(run({ eyes: true, face: false })).toEqual([]);
     expect(run({ eyes: false, chin: false })).toEqual([expect.stringMatching(/"h" faceSlots unknown slot "chin"/)]);
     expect(run({ face: "no" })).toEqual([expect.stringMatching(/"h" faceSlots\.face is not true or false/)]);
-    expect(run({ eyes: false }, [theme("a", [], ["h"])])).toEqual([expect.stringMatching(/"h" declares faceSlots but hides the face/)]);
+    expect(run({ eyes: false }, false)).toEqual([expect.stringMatching(/"h" declares faceSlots but hides the face/)]);
+  });
+
+  it("reports seats or faceSlots declared on a helmet's art: they belong on its data entry", () => {
+    const run = (art) => validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: { ...helm(), ...art } } }]);
+    expect(run({ seats: { crown: false } })).toEqual([expect.stringMatching(/art "h" declares seats, which belongs on its data entry/)]);
+    expect(run({ faceSlots: { eyes: false } })).toEqual([expect.stringMatching(/art "h" declares faceSlots, which belongs on its data entry/)]);
   });
 
   it("reports a shoulder without art, shoulder art without an entry, and one filed under another theme", () => {

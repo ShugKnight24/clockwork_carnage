@@ -326,7 +326,6 @@ export default {
     // glass (K.faceAccessories), so the glass and its glare lie over them.
     bubble: {
       anchors: { top: -99.6, half: 13, rail: -70, badge: false },
-      seats: { crown: false, brow: false, side: false },
       paint: bubble,
     },
   },

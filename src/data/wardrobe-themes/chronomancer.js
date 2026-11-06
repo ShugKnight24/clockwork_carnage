@@ -8,6 +8,8 @@ export default {
   name: "Chronomancer",
   frames: [{ id: "vestment", name: "Vestment", desc: "Split ritual robe, clock tabard, hourglass, rune gauntlets", tier: 2 }],
   // The face is lost in the hood's shadow but for the eyes: no visor.
-  helmets: [{ id: "hood", name: "Chrono Hood", desc: "Deep hood, eyes alight, a clock-ring halo", tier: 3, visor: false }],
+  helmets: [{ id: "hood", name: "Chrono Hood", desc: "Deep hood, eyes alight, a clock-ring halo", tier: 3, visor: false,
+      // The halo rings the peak and the hollow fills the brow.
+      seats: { crown: false, brow: false } }],
   shoulders: [{ id: "mantle", name: "Mantle", desc: "Rune-engraved ceremonial collar plates with tassels", tier: 2 }],
 };
