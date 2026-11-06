@@ -5,10 +5,13 @@ import { buildAgentParts, buildCastModel, rigAnchors } from "../../src/rendering
 import { STAND, ARMED, FALLEN, armJoints } from "../../src/rendering/svg-art/models/hero.js";
 import { DEFAULT_CHARACTER } from "../../src/data/cosmetics.js";
 import { cloneLook } from "../../src/core/character-fields.js";
+import { idScope } from "../../src/rendering/svg-art/id-scope.js";
 
 const LOOK = { pal: { primary: "#3a6ea5", accent: "#00e5ff", dark: "#0b1a2a" }, cape: ["#aa3333", "#882222", "#551111", "#220505"], energy: "#00e5ff", armor: "standard" };
 const POSES = [[STAND, "standing"], [ARMED, "armed"], [FALLEN, "fallen"]];
 
+// Painters may define gradients through K.uid / K.defs; that two figures on
+// one page keep their ids apart is tested in wardrobe-scoped-ids.test.js.
 describe("accessory painters", () => {
   it("every item has a painter that returns strings in every pose", () => {
     for (const { id: slot } of ACCESSORY_SLOTS) {
@@ -16,11 +19,9 @@ describe("accessory painters", () => {
         const paint = PAINTERS_BY_SLOT[slot][item.id];
         expect(paint, `${slot}.${item.id}`).toBeTypeOf("function");
         for (const [P, pose] of POSES) {
-          const out = paint(rigAnchors(P, [0, 0], pose), LOOK);
+          const out = paint(rigAnchors(P, [0, 0], pose), LOOK, idScope().kit(`acc-${slot}-${item.id}`));
           const all = Object.values(out).join("");
           expect(all.length, `${slot}.${item.id}/${pose}`).toBeGreaterThan(40);
-          expect(all).not.toMatch(/\bid="/);
-          expect(all, `${slot}.${item.id}/${pose}`).not.toMatch(/url\(#/);
           expect(all, `${slot}.${item.id}/${pose}`).not.toMatch(/NaN|undefined/);
         }
       }

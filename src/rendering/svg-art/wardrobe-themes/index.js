@@ -60,6 +60,13 @@
  *       piece (a large piece that would swamp a broad frame caps it); the
  *       rig draws it at min(frame shoulder, maxShoulderScale).
  *
+ *   Every kit (frames', helmets', shoulders', and the accessory painters'
+ *   in ../accessories/) also has K.uid(name) and K.defs(markup), from
+ *   ../id-scope.js: a piece that needs its own gradient, clip, mask or
+ *   pattern defines it with K.defs under an id from K.uid and refers to it
+ *   as url(#${K.uid(name)}). Ids come out scoped to the figure and the
+ *   piece, so figures sharing a page never collide. Never write a bare id.
+ *
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */

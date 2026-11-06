@@ -56,6 +56,7 @@ import { frameShape, frameLayers } from "./frames.js";
 import { CANDY, CANDY_HI, AMBER } from "./frame-kit.js";
 import { frameHides, helmetArt, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
 import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
+import { idScope } from "./id-scope.js";
 import { realizeMarkup, realizeDefs, realFilters, swapGradient, sheen, contactShadow, volumetric, realHex, SOFT_HIGHLIGHTS } from "./models/realistic.js";
 import { clamp } from "../../utils/math.js";
 import { hexRgb, rgbHex, mixHexClamped } from "../../utils/color.js";
@@ -1016,11 +1017,12 @@ const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, r
 
 /**
  * Head assembly: the helmet's painter, or for a face peek the bare head.
+ * `scope` is the figure's idScope (scoped ids and defs for the painter).
  * @returns {{ front: string, glow: string }}
  */
-function head(c, peek) {
+function head(c, peek, scope) {
   if (peek) return { front: hairBack(c) + face(c) + hair(c, false), glow: eyeGlow(c, 0.45) };
-  return helmetArt(c.helmet).paint(c, HELMET_KIT);
+  return helmetArt(c.helmet).paint(c, { ...HELMET_KIT, ...scope.kit(`helmet-${c.helmet}`) });
 }
 
 /** Eye glow: chrono-augmented irises, visible faintly through a visor. */
@@ -1045,11 +1047,11 @@ const SOFT_CAP = "none";
 /**
  * One shoulder piece, drawn on side `s` (-1 left, 1 right) at the arm's
  * tilt, through its art's painter (wardrobe-themes/index.js documents the
- * kit). `id` defaults to the look's pick.
+ * kit). `scope` is the figure's idScope.
  */
-function shoulder(c, s, tilt, id = c.shoulder) {
+function shoulder(c, s, tilt, scope, id = c.shoulder) {
   const rot = (inner) => `<g transform="rotate(${f(tilt)} ${f(s * 12)} -65)">${inner}</g>`;
-  const K = { M: s < 0 ? mirror : (d) => d, rot, lit: s < 0, pauldron: (side) => pauldron(side, tilt), mix };
+  const K = { M: s < 0 ? mirror : (d) => d, rot, lit: s < 0, pauldron: (side) => pauldron(side, tilt), mix, ...scope.kit(`shoulder-${id}`) };
   return shoulderArt(id).paint(c, s, K);
 }
 
@@ -1603,6 +1605,7 @@ const collarOf = (c, showFace, map, plate = true) =>
  */
 export function buildAgentParts(character, { pose = "idle", peek = false } = {}) {
   const c = resolve(character || {});
+  const scope = idScope();
   const armed = pose === "hero";
   const B = c.fem ? BUILDS.fem : BUILDS.masc;
   const P = buildPose(armed ? ARMED : STAND, B);
@@ -1635,7 +1638,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   // wardrobe-themes/index.js, which says what each word removes): a coat
   // over the chest kit, a hood over the collar, a skirt over the hip plates,
   // sleeves over the limbs' light.
-  const fr = frameLayers(c.frame, P, c, { mix });
+  const fr = frameLayers(c.frame, P, c, { mix, ...scope.kit(`frame-${c.frame}`) });
   const fs = frameShape(c.frame);
   const hides = (what) => frameHides(c.frame, what);
   const collar = collarOf(c, showFace, map, !hides("collar"));
@@ -1646,7 +1649,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const shoulderAt = (s, t) => {
     if (hides("shoulders")) return "";
     const id = fs.bareRight && s > 0 ? SOFT_CAP : c.shoulder;
-    const inner = shoulder(c, s, t, id);
+    const inner = shoulder(c, s, t, scope, id);
     const k = Math.min(fs.shoulder, shoulderArt(id).maxShoulderScale ?? Infinity) * B.shoulder;
     const dx = s * 20 * (B.sh - 1);
     return `<g transform="translate(${f(s * 14 + dx)},-64) scale(${f(k)}) translate(${f(-s * 14)},64)">${inner}</g>`;
@@ -1675,7 +1678,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
   const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
-  const h = head(c, peek);
+  const h = head(c, peek, scope);
   const helmBadge = wears(c, "helmet") && A.helmet && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
@@ -1685,8 +1688,11 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const W = (m) => (B.scale === 1 || !m ? m : `<g transform="translate(0,58) scale(${B.scale}) translate(0,-58)">${m}</g>`);
   const neckLift = f(-126 * (B.scale - 1));
   const headFem = (m) => `<g transform="translate(0,${neckLift}) translate(0,-67) scale(${B.head}) translate(0,67)">${m}</g>`;
+  // Every painter has run: the figure's defs are the rig's and the pieces'.
+  const pieceDefs = scope.markup() + acc.defs;
   return {
-    defs: defs(c),
+    defs: defs(c) + pieceDefs,
+    pieceDefs,
     width: (ARMOR_WIDTH[c.armor] || 1) * fs.width,
     shadow: `<ellipse cx="0" cy="58.6" rx="${armed ? 44 : 38}" ry="4.8" fill="url(#shade)"/>`,
     back: W(kit.back + acc.back),
@@ -1850,7 +1856,7 @@ function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
   const u = px ? Math.max(v[2] / px[0], v[3] / px[1]) : v[2] / (v[2] >= 140 ? 450 : 64);
   const pad = v[2] * 0.25;
   const box = [f(v[0] - pad), f(v[1] - pad), f(v[2] + pad * 2), f(v[3] + pad * 2)];
-  const fdefs = realAgentDefs(c) + realFilters(box, { u, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true, smooth: px ? 4 : 1 });
+  const fdefs = realAgentDefs(c) + realizeDefs(p.pieceDefs, o.keep, o.desat) + realFilters(box, { u, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.14, seed: 5, tight: true, smooth: px ? 4 : 1 });
   // A visible face gets skin shading; the cloth filter's blur and weave
   // smeared eyes and mouth into a grainy mask.
   const headFx = p.eyesVisible ? "rskin" : "rmat";
@@ -1909,8 +1915,9 @@ function fallenParts(c) {
   const [upperArm, trappedArm] = [armoredArm(P.arms[0], -1, true), armoredArm(P.arms[1], 1, false)];
   const [upperLeg, lowerLeg] = [armoredLeg(P.legs[0], -1), armoredLeg(P.legs[1], 1)];
   const kit = gear(c, P);
+  const scope = idScope();
   const showFace = FACE_HELMETS.has(c.helmet);
-  const h = head(c, false);
+  const h = head(c, false, scope);
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
   const acc = paintAccessories(c.accessories, A, c);
@@ -1930,12 +1937,12 @@ function fallenParts(c) {
       kit.front +
       variantTrim(c) +
       fallenDamage() +
-      recolor(shoulder(c, 1, -4), map) +
+      recolor(shoulder(c, 1, -4, scope), map) +
       (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
       collarOf(c, showFace, map) +
       acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
-    over: recolor((acc.replacesCape || c.capeOff ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14), map) + leftBadge + armBadge + acc.top,
+    over: recolor((acc.replacesCape || c.capeOff ? "" : capeFlap()) + upperArm.body + shoulder(c, -1, 14, scope), map) + leftBadge + armBadge + acc.top,
     glow: recolor(lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow, map) + kit.glow + acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),
@@ -1944,6 +1951,8 @@ function fallenParts(c) {
       `<stop offset="1" stop-color="${mix(c.cape[3], "#000000", 0.5)}"/></linearGradient>` +
       `<radialGradient id="scorch"><stop offset="0" stop-color="#050302" stop-opacity=".85"/>` +
       `<stop offset=".5" stop-color="#1a0f08" stop-opacity=".5"/><stop offset="1" stop-color="#1a0f08" stop-opacity="0"/></radialGradient>`,
+    // Last, once every painter above has run.
+    pieceDefs: scope.markup() + acc.defs,
   };
 }
 
@@ -1988,7 +1997,7 @@ export function buildCastModel(character, key, { realistic = false } = {}) {
   const headFx = p.eyesVisible ? "rskin" : "rmat";
   return {
     box,
-    defs: realAgentDefs(c) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.26, seed: 5 }),
+    defs: realAgentDefs(c) + realizeDefs(p.pieceDefs, o.keep, o.desat) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.55, grime: 0.26, seed: 5 }),
     anim: breathe,
     layers: [
       {
@@ -2018,7 +2027,7 @@ function castFallen(c, realistic) {
   if (!realistic) {
     return {
       box,
-      defs: defs(c) + p.capeIn,
+      defs: defs(c) + p.capeIn + p.pieceDefs,
       layers: [
         { markup: floor },
         { markup: TF(sc(p.pool + p.under) + p.head + sc(p.over)), anim: breathe },
@@ -2034,7 +2043,7 @@ function castFallen(c, realistic) {
   const headFx = FACE_HELMETS.has(c.helmet) ? "rcloth" : "rmat";
   return {
     box,
-    defs: realAgentDefs(c) + realizeDefs(p.capeIn, {}, 0.45) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.5, grime: 0.32, seed: 9 }),
+    defs: realAgentDefs(c) + realizeDefs(p.capeIn, {}, 0.45) + realizeDefs(p.pieceDefs, o.keep, o.desat) + realFilters(box, { u: 0.45, spec: MATTE.has(c.armor) ? 0.18 : 0.5, grime: 0.32, seed: 9 }),
     layers: [
       { markup: contactShadow(-4, 48, 100, 16) + R(debris()) },
       {
