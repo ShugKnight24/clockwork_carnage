@@ -184,6 +184,28 @@ describe("helmets", () => {
   });
 });
 
+describe("the Exo-Frame theme", () => {
+  it("comes second, with one tier-3 frame, helmet and shoulder", () => {
+    expect(WARDROBE_THEMES.map((t) => t.id).slice(0, 2)).toEqual(["issue", "exo"]);
+    const exo = WARDROBE_THEMES[1];
+    expect(exo.name).toBe("Exo-Frame");
+    expect(exo.frames.map((e) => [e.id, e.tier])).toEqual([["exo", 3]]);
+    expect(exo.helmets.map((e) => [e.id, e.tier])).toEqual([["cockpit", 3]]);
+    expect(exo.shoulders.map((e) => [e.id, e.tier])).toEqual([["pods", 3]]);
+    for (const [table, id] of [["frames", "exo"], ["helmets", "cockpit"], ["shoulders", "pods"]]) expect(themeOf(table, id)).toBe("exo");
+  });
+
+  it("grows the silhouette, hides no stock layer, and seats the cockpit's gear on its cage and sensor blocks", () => {
+    expect({ ...FRAME_ART.exo.shape, hides: [...FRAME_ART.exo.shape.hides] }).toEqual({ width: 1.14, shoulder: 1.2, hides: [] });
+    expect(helmetSeats("cockpit")).toEqual({ crown: true, brow: true, side: true });
+    const A = rigAnchors(STAND, [0, 0], "standing", "cockpit");
+    expect(A.crown.y).toBeCloseTo(-100.8, 10);
+    expect(A.sideL.x).toBeCloseTo(-15.8, 10);
+    expect(A.helmet).toEqual({ x: -7.6, y: -93.4, rot: -6, size: 4.2 });
+    expect(FACE_HELMETS.has("cockpit")).toBe(false);
+  });
+});
+
 describe("shoulders", () => {
   it("every SHOULDER_STYLES id has SHOULDER_ART", () => {
     for (const { id } of SHOULDER_STYLES) {
