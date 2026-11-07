@@ -139,6 +139,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="runner-0-ledmask-streetwear-spikepad-masc-hero-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="runner-0-ledmask-streetwear-spikepad-masc-hero-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <radialGradient id="runner-0-ledmask-streetwear-spikepad-masc-hero-aura">
 <stop offset="0" stop-color="#00ffdd" stop-opacity="0.16"/>
 <stop offset="0.6" stop-color="#00ffdd" stop-opacity="0.05"/>
@@ -752,6 +758,18 @@
 <path d="M41.5,11.1 C40.9,11.5 40.9,12 41.3,12.3" fill="none" stroke="#7d8996" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M48.2,4 C46.8,1 42.4,0.6 40.2,2.2 C40,3.2 40.8,3.6 41.6,3.4 C43.2,2.8 45.2,3.2 46.2,4.6 Z" fill="url(#runner-0-ledmask-streetwear-spikepad-masc-hero-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g transform="scale(1.1 1)">
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
 <path d="M-4.6,-74.6 L4.6,-74.6 L5.4,-65.4 L-5.4,-65.4 Z" fill="url(#runner-0-ledmask-streetwear-spikepad-masc-hero-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-4.8,-73.6 C-2.4,-70.6 2.4,-70.6 4.8,-73.6 L5.1,-69.4 C2.4,-68.4 -2.4,-68.4 -5.1,-69.4 Z" fill="#5b3e2f" opacity="0.5"/>
 <g data-acc="screen">

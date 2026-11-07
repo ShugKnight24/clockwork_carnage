@@ -256,6 +256,7 @@ function ledmask(c, K) {
       energy(`<path d="M-9,-84 L9,-84" fill="none" stroke-width=".4"/><path d="M4.4,-82.6 L7.4,-82.6" fill="none" stroke-width=".3"/><circle cx="-7.6" cy="-80.3" r=".45"/><circle cx="7.6" cy="-80.3" r=".45"/>`, hot) +
       K.eyeGlow(c, 0.55, true) +
       acc.glow,
+    nape: K.hairNape(c, false),
   };
 }
 

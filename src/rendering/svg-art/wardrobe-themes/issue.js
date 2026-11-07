@@ -618,6 +618,7 @@ function openHelm(path, window, visorY, extra) {
     return {
       front: K.hairBack(c) + liner + K.face(c) + acc.front + K.hair(c, true) + s.shell + s.dome + extra(c, K) + s.ears + visorUp.body,
       glow: s.earGlow + visorUp.glow + K.eyeGlow(c, 0.35) + acc.glow,
+      nape: K.hairNape(c, true),
     };
   };
 }

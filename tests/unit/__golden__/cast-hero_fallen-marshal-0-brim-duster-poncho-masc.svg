@@ -139,6 +139,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <linearGradient id="capeIn" x1="0" y1="0" x2="0" y2="1">
 <stop offset="0" stop-color="#080707"/>
 <stop offset="1" stop-color="#040404"/>
@@ -594,6 +600,24 @@
 </g>
 </g>
 </g>
+<g transform="translate(8,2)">
+<g transform="rotate(24 0 -69)">
+<g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<g clip-path="url(#belowJaw)">
+<path d="M-7.3,-81.6 C-8.3,-86 -7.7,-92.9 0,-94 C7.7,-92.9 8.3,-86 7.3,-81.6 C6.1,-80.6 -6.1,-80.6 -7.3,-81.6 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.45"/>
+<path d="M-9.3,-87 C-9.5,-80 -9.1,-74 -9.3,-67.4 C-9,-66 -7.8,-66 -7.5,-67.4 C-7.7,-74 -7.3,-80 -7.5,-87 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-7.2,-88.7 C-7.4,-80 -7,-74 -7.2,-67.4 C-6.9,-66 -5.7,-66 -5.4,-67.4 C-5.6,-74 -5.2,-80 -5.4,-88.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-5.1,-90 C-5.3,-80 -4.9,-74 -5.1,-67.4 C-4.8,-66 -3.6,-66 -3.3,-67.4 C-3.5,-74 -3.1,-80 -3.3,-90 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-3,-90.7 C-3.2,-80 -2.8,-74 -3,-67.4 C-2.7,-66 -1.5,-66 -1.2,-67.4 C-1.4,-74 -1,-80 -1.2,-90.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-0.9,-91 C-1.1,-80 -0.7,-74 -0.9,-67.4 C-0.6,-66 0.6,-66 0.9,-67.4 C0.7,-74 1.1,-80 0.9,-91 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M1.2,-90.7 C1,-80 1.4,-74 1.2,-67.4 C1.5,-66 2.7,-66 3,-67.4 C2.8,-74 3.2,-80 3,-90.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M3.3,-90 C3.1,-80 3.5,-74 3.3,-67.4 C3.6,-66 4.8,-66 5.1,-67.4 C4.9,-74 5.3,-80 5.1,-90 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M5.4,-88.7 C5.2,-80 5.6,-74 5.4,-67.4 C5.7,-66 6.9,-66 7.2,-67.4 C7,-74 7.4,-80 7.2,-88.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+<path d="M7.5,-87 C7.3,-80 7.7,-74 7.5,-67.4 C7.8,-66 9,-66 9.3,-67.4 C9.1,-74 9.5,-80 9.3,-87 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+</g>
+</g>
+</g>
+</g>
 <path d="M-3.9,-74.6 L3.9,-74.6 L4.5,-65.4 L-4.5,-65.4 Z" fill="url(#skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="#70432c" opacity="0.5"/>
 <path d="M-5.4,-71.6 L5.4,-71.6 L5.8,-66 L-5.8,-66 Z" fill="url(#suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
@@ -627,6 +651,7 @@
 <g transform="translate(8,2)">
 <g transform="rotate(24 0 -69)">
 <g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<g clip-path="url(#aboveJaw)">
 <path d="M-7.3,-81.6 C-8.3,-86 -7.7,-92.9 0,-94 C7.7,-92.9 8.3,-86 7.3,-81.6 C6.1,-80.6 -6.1,-80.6 -7.3,-81.6 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.45"/>
 <path d="M-9.3,-87 C-9.5,-80 -9.1,-74 -9.3,-67.4 C-9,-66 -7.8,-66 -7.5,-67.4 C-7.7,-74 -7.3,-80 -7.5,-87 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
 <path d="M-7.2,-88.7 C-7.4,-80 -7,-74 -7.2,-67.4 C-6.9,-66 -5.7,-66 -5.4,-67.4 C-5.6,-74 -5.2,-80 -5.4,-88.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
@@ -637,6 +662,7 @@
 <path d="M3.3,-90 C3.1,-80 3.5,-74 3.3,-67.4 C3.6,-66 4.8,-66 5.1,-67.4 C4.9,-74 5.3,-80 5.1,-90 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
 <path d="M5.4,-88.7 C5.2,-80 5.6,-74 5.4,-67.4 C5.7,-66 6.9,-66 7.2,-67.4 C7,-74 7.4,-80 7.2,-88.7 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
 <path d="M7.5,-87 C7.3,-80 7.7,-74 7.5,-67.4 C7.8,-66 9,-66 9.3,-67.4 C9.1,-74 9.5,-80 9.3,-87 Z" fill="#1e120b" stroke="#04060b" stroke-width="0.35"/>
+</g>
 <path d="M-7.8,-86.4 C-9.8,-87 -11.4,-86 -11.6,-84 L-11.6,-79.2 C-11.4,-77.4 -9.8,-76.6 -7.8,-77.2 Z" fill="url(#steelDk)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <path d="M-8.6,-85 C-9.8,-85.2 -10.6,-84.4 -10.6,-83.2 L-10.6,-80 C-10.6,-78.8 -9.8,-78.2 -8.6,-78.4 Z" fill="url(#steel)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
 <path d="M-9.4,-86.6 L-9,-90" fill="none" stroke="#04060b" stroke-width="1.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>

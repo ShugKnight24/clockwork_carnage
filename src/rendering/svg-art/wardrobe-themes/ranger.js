@@ -253,6 +253,7 @@ function bubble(c, K) {
   const r = BR - 0.6;
   const acc = K.faceAccessories({ window: `M${BX - r},${BY} A${r},${r} 0 1,0 ${BX + r},${BY} A${r},${r} 0 1,0 ${BX - r},${BY} Z` });
   const lamp = "M10.6,-76.6 L15.4,-78.6 L17.4,-74.2 L13.2,-71.8 Z";
+  const nape = K.hairNape(c, false);
   return {
     front:
       // The far side of the dome: a faint tinted back and the inside of the ring.
@@ -281,6 +282,8 @@ function bubble(c, K) {
       K.eyeGlow(c, 0.3) +
       // Their light shows through the glass.
       acc.glow,
+    // Long hair below the jaw, behind the neck, still inside the glass.
+    nape: nape && `<g clip-path="url(#${clipId})">${nape}</g>`,
   };
 }
 

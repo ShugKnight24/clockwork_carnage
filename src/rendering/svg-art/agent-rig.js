@@ -312,6 +312,8 @@ export const RIG_DEFS = Object.freeze([
   "pecShade",
   "cyl",
   "weave",
+  "aboveJaw",
+  "belowJaw",
 ]);
 
 function defs(c) {
@@ -370,6 +372,7 @@ ${c.camo ? camoPattern(c.camo, "suit") : `<linearGradient id="suit" x1="0" y1="0
 <linearGradient id="pecShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".12"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/><stop offset=".8" stop-color="#000000" stop-opacity=".18"/><stop offset="1" stop-color="#000000" stop-opacity=".38"/></linearGradient>
 <linearGradient id="cyl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity=".05"/><stop offset=".28" stop-color="#ffffff" stop-opacity=".14"/><stop offset=".5" stop-color="#000000" stop-opacity="0"/><stop offset=".82" stop-color="#000000" stop-opacity=".34"/><stop offset="1" stop-color="#000000" stop-opacity=".18"/></linearGradient>
 <pattern id="weave" width=".9" height=".9" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width=".9" height=".32" fill="#000" opacity=".3"/><rect y=".45" width=".32" height=".45" fill="#fff" opacity=".06"/></pattern>
+${JAW_CLIPS}
 ${CAPE_HEM[c.armor] ? `<clipPath id="capeCut"><path d="${capeCut(CAPE_HEM[c.armor])}"/></clipPath>` : ""}`;
 }
 
@@ -503,11 +506,66 @@ function face(c) {
   return fem ? warpX(markup, FEM_JAW) : markup;
 }
 
-/** Hair. `under` = only what shows under an open helmet. */
-function hair(c, under) {
+// ── Hair and the jaw ────────────────────────────────────────────────────────
+// Hair below the jaw hangs behind the neck and collar, wherever the head is
+// drawn. The hair is drawn whole and split at the jaw by two of the rig's
+// shared clips (defs): the head carries what is above it (hair, hairBack),
+// and the figure draws what is below it (hairNape) in a layer between the
+// body and the collar, so no lock, braid or tail can ever cover the neck.
+
+/** The jaw's height, where the neck shows below the face: the head's hair stops here. */
+const JAW_Y = -74.6;
+/** The rig's clips that split the hair at the jaw (head space); the lower one starts a little above, under the head's edge, so the seam never shows. */
+const JAW_CLIPS =
+  `<clipPath id="aboveJaw"><rect x="-60" y="-160" width="120" height="${f(160 + JAW_Y)}"/></clipPath>` +
+  `<clipPath id="belowJaw"><rect x="-60" y="${f(JAW_Y - 0.4)}" width="120" height="80"/></clipPath>`;
+const clipTo = (id, m) => `<g clip-path="url(#${id})">${m}</g>`;
+/** Hair cut off at the jaw (as it is: a cut that never reaches it needs no clip). */
+const toJaw = (m) => (reachesBelow(m, JAW_Y) ? clipTo("aboveJaw", m) : m);
+
+/** Hair over the face, down to the jaw. `under` = only what shows under an open helmet. */
+const hair = (c, under) => toJaw(frontHair(c, under));
+/** Hair behind the face (volume at the back of the head, long cuts), down to the jaw. */
+const hairBack = (c) => toJaw(backHair(c));
+/**
+ * Hair below the jaw, front and back pieces alike, for the layer behind the
+ * neck. The scalp itself ends at the sideburns, so only the back hair and a
+ * cut's extras (locks, locs, the braid) ever reach it. `under` as for hair.
+ */
+function hairNape(c, under) {
+  const m = backHair(c) + hangingHair(c, under);
+  return reachesBelow(m, JAW_Y - 0.4) ? clipTo("belowJaw", m) : "";
+}
+
+/**
+ * Whether any shape in `markup` reaches below height `y`. A path lies inside
+ * the hull of its points (control points included) and a circle or ellipse
+ * within its radius of its centre, so this never misses one; a stroke's
+ * width is the margin.
+ */
+function reachesBelow(markup, y) {
+  const lowest = Math.max(
+    ...[...markup.matchAll(/d="([^"]*)"/g)].flatMap(([, d]) => [...d.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g)].map((p) => Number(p[2]))),
+    ...[...markup.matchAll(/<(?:circle|ellipse)\b[^>]*>/g)].map(([tag]) => {
+      const at = (k) => Number(tag.match(new RegExp(`\\b${k}="(-?[\\d.]+)"`))?.[1] ?? 0);
+      return at("cy") + Math.max(at("r"), at("rx"), at("ry"));
+    }),
+  );
+  return lowest + 1 > y;
+}
+
+function hangingHair(c, under) {
+  const id = c.hair.id;
+  if (under) return id === "braid" ? braid(c) : "";
+  if (id === "none") return "";
+  const cut = HAIR_CUTS[id] || HAIR_CUTS.short;
+  const { hl, lo } = cutTones(c, cut);
+  return hairExtra(c, cut, hl, lo);
+}
+
+function frontHair(c, under) {
   const id = c.hair.id;
   const hl = mix(c.hair.color, "#ffffff", 0.45);
-  const lo = mix(c.hair.color, "#000000", 0.7);
   if (under) {
     if (id === "short" || id === "white")
       return (
@@ -662,12 +720,17 @@ function hairTexture(c, cut, hl, lo) {
   return out;
 }
 
+/** A cut's highlight and shadow tones, from the colour its roots grow. */
+function cutTones(c, cut) {
+  const root = cutRoot(c, cut);
+  return { hl: mix(root, "#ffffff", 0.42), lo: mix(root, "#000000", 0.62) };
+}
+// Shaved sides of a dyed cut (the mohawk) grow back the natural colour.
+const cutRoot = (c, cut) => (cut.extra === "crest" && c.hair.brow ? c.hair.brow : c.hair.color);
+
 function scalpHair(c, cut) {
-  // Shaved sides of a dyed cut (the mohawk) grow back the natural colour.
-  const root = cut.extra === "crest" && c.hair.brow ? c.hair.brow : c.hair.color;
-  const color = cut.fade ? mix(root, c.skin.color, cut.fade) : c.hair.color;
-  const hl = mix(root, "#ffffff", 0.42);
-  const lo = mix(root, "#000000", 0.62);
+  const color = cut.fade ? mix(cutRoot(c, cut), c.skin.color, cut.fade) : c.hair.color;
+  const { hl, lo } = cutTones(c, cut);
   const crown = crownPath(cut);
   const mass = `${crown} ${hairlinePath(cut)} Z`;
   // The hairline alone, as an open path, for the feather and the cast shadow.
@@ -761,7 +824,7 @@ function hairExtra(c, cut, hl, lo) {
 }
 
 /** Hair that falls behind the face: volume at the back of the head, and long cuts. */
-function hairBack(c) {
+function backHair(c) {
   const id = c.hair.id;
   const back = mix(c.hair.color, "#000000", 0.3);
   if (id === "none") return "";
@@ -1076,7 +1139,7 @@ function helmetShell(c, { path, half: w, ears = true }) {
  * each). Generic: none of it knows a helmet id; a helmet's own shape comes
  * in as arguments.
  */
-export const HELMET_KIT = Object.freeze({ face, hair, hairBack, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix, faceAccessories: () => NO_FACE_ACC });
+export const HELMET_KIT = Object.freeze({ face, hair, hairBack, hairNape, eyeGlow, closedVisor, raisedVisor, visorLenses, helmetShell, mix, faceAccessories: () => NO_FACE_ACC });
 /** Ids the helmet kit defines inline with what it draws (K.hair's clip); a painter never names them itself. */
 export const HELMET_KIT_IDS = Object.freeze(["hairClip"]);
 
@@ -1110,11 +1173,12 @@ function faceItems(c, acc, scope) {
  * `items` are the eyes and face items (faceItems): on the bare face under
  * the hair, handed to a helmet painter as K.faceAccessories, or, for a
  * painter that never asks (a safety net: every open helmet asks), drawn
- * over its head.
- * @returns {{ front: string, glow: string }}
+ * over its head. `nape` is the hair below the jaw, for the layer behind the
+ * neck (the bare head's, or what an open helmet's painter gives back).
+ * @returns {{ front: string, glow: string, nape: string }}
  */
 function head(c, peek, scope, items = NO_FACE_ACC) {
-  if (peek) return { front: hairBack(c) + face(c) + items.front + hair(c, false), glow: eyeGlow(c, 0.45) + items.glow };
+  if (peek) return { front: hairBack(c) + face(c) + items.front + hair(c, false), glow: eyeGlow(c, 0.45) + items.glow, nape: hairNape(c, false) };
   let placed = false;
   const kit = scope.kit(`helmet-${c.helmet}`);
   // The items, and their light, kept to the helmet's face `window` (a path
@@ -1130,7 +1194,8 @@ function head(c, peek, scope, items = NO_FACE_ACC) {
     return { front: clip(items.front), glow: clip(items.glow) };
   };
   const h = helmetArt(c.helmet).paint(c, { ...HELMET_KIT, ...kit, faceAccessories });
-  return placed ? h : { front: h.front + items.front, glow: h.glow + items.glow };
+  const nape = h.nape || "";
+  return placed ? { front: h.front, glow: h.glow, nape } : { front: h.front + items.front, glow: h.glow + items.glow, nape };
 }
 
 /** Eye glow: chrono-augmented irises, visible faintly through a visor. */
@@ -1728,6 +1793,11 @@ const collarOf = (c, showFace, map, plate = true) =>
 
 /**
  * All layers of a customised agent as markup strings (without the <svg>).
+ * Drawn in this order: back, cape, body, nape, neck, glow, head, headGlow.
+ * `body`, `neck` (the collar and what is worn over it) and the rest of the
+ * figure take the frame's width (scale(width 1)); `nape` (the hair below
+ * the jaw, behind the neck) and `head` do not, and turn with the head.
+ * `collar` is the collar alone, for an option tile.
  * @param {object} character game.character-shaped record
  * @param {{ pose?: "idle"|"hero"|"bust", peek?: boolean }} opts
  */
@@ -1797,9 +1867,9 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     (wears(c, "chest") ? TW(badgeAt(c, A.chest)) : "") +
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
-    rifle.hands +
-    TW(collar) +
-    acc.top;
+    rifle.hands;
+  // The collar, and what is worn over it, go over the hair below the jaw.
+  const neck = TW(collar) + acc.top;
 
   const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
@@ -1824,6 +1894,8 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     back: W(kit.back + acc.back),
     cape: W(cape),
     body: W(body),
+    nape: h.nape ? headFem(headScale(h.nape)) : "",
+    neck: W(neck),
     glow: W(glow),
     collar: W(TW(collar)),
     head: headFem(headScale(h.front + helmBadge + acc.head)),
@@ -1857,7 +1929,7 @@ export function buildAgentSvg(character, { pose = "idle", lighting = "showroom",
   if (headOnly) {
     const v = view || AGENT_VIEW.helm;
     return scopeIds(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.join(" ")}" class="${className}" aria-hidden="true"><defs>${p.defs}</defs>${p.collar}${p.head}${p.headGlow}</svg>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.join(" ")}" class="${className}" aria-hidden="true"><defs>${p.defs}</defs>${p.nape}${p.collar}${p.head}${p.headGlow}</svg>`,
       idPrefix,
     );
   }
@@ -1878,7 +1950,10 @@ export function buildAgentSvg(character, { pose = "idle", lighting = "showroom",
     `<g class="ag-shadow">${p.shadow}</g>` +
     `<g class="ag-yaw-back"><g${bodyTf}>${p.back}</g></g>` +
     `<g class="ag-yaw-cape"><g class="ag-cape"><g${bodyTf}>${p.cape}</g></g></g>` +
-    `<g class="ag-yaw-body"><g class="ag-body"><g${bodyTf}>${p.body}</g></g>` +
+    `<g class="ag-yaw-body"><g class="ag-body"><g${bodyTf}>${p.body}</g></g></g>` +
+    // The hair below the jaw turns with the head, between the body and the collar.
+    `<g class="ag-yaw-head"><g class="ag-nape">${p.nape}</g></g>` +
+    `<g class="ag-yaw-body"><g class="ag-neck"><g${bodyTf}>${p.neck}</g></g>` +
     `<g class="ag-glow"><g${bodyTf}>${p.glow}</g></g></g>` +
     `<g class="ag-yaw-head"><g class="ag-head">${p.head}</g><g class="ag-visor">${p.headGlow}</g></g>` +
     `</g></svg>`;
@@ -1974,6 +2049,7 @@ function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
   const head = realizeMarkup(p.head, { ...o, desat: 0.15 });
   const headGlow = realizeMarkup(p.headGlow, o);
   const collar = realizeMarkup(p.collar, o);
+  const nape = p.nape ? `<g filter="url(#${p.eyesVisible ? "rskin" : "rmat"})">${realizeMarkup(p.nape, { ...o, desat: 0.15 })}</g>` : "";
   // Filter blur and grain are sized in art units, so scale them to the frame:
   // the stage figure spans ~450px, option tiles ~64px.
   const v = view || (headOnly ? AGENT_VIEW.helm : pose === "bust" ? AGENT_VIEW.bust : AGENT_VIEW.full);
@@ -1989,7 +2065,7 @@ function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
   if (headOnly) {
     return scopeIds(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.join(" ")}" class="${className}" aria-hidden="true"><defs>${fdefs}</defs>` +
-        `<g filter="url(#rmat)">${collar}</g><g filter="url(#${headFx})">${head}</g>${headGlow}</svg>`,
+        `${nape}<g filter="url(#rmat)">${collar}</g><g filter="url(#${headFx})">${head}</g>${headGlow}</svg>`,
       idPrefix,
     );
   }
@@ -2003,7 +2079,9 @@ function realAgentSvg(p, { pose, idPrefix, className, view, headOnly, px }) {
     `<g class="ag-shadow">${contactShadow(0, 58.8, armed ? 44 : 38, 6.2)}</g>` +
     `<g class="ag-yaw-back"><g${bodyTf}><g filter="url(#rmat)">${realizeMarkup(p.back, o)}</g></g></g>` +
     `<g class="ag-yaw-cape"><g class="ag-cape"><g${bodyTf}><g filter="url(#rcloth)">${realizeMarkup(p.cape, o)}</g></g></g></g>` +
-    `<g class="ag-yaw-body"><g class="ag-body"><g${bodyTf}><g filter="url(#rmat)">${realizeMarkup(p.body, o)}</g></g></g>` +
+    `<g class="ag-yaw-body"><g class="ag-body"><g${bodyTf}><g filter="url(#rmat)">${realizeMarkup(p.body, o)}</g></g></g></g>` +
+    `<g class="ag-yaw-head"><g class="ag-nape">${nape}</g></g>` +
+    `<g class="ag-yaw-body"><g class="ag-neck"><g${bodyTf}><g filter="url(#rmat)">${realizeMarkup(p.neck, o)}</g></g></g>` +
     `<g class="ag-glow"><g${bodyTf}>${realizeMarkup(p.glow, o)}</g></g></g>` +
     `<g class="ag-yaw-head"><g class="ag-head"><g filter="url(#${headFx})">${head}</g></g><g class="ag-visor">${headGlow}</g></g>` +
     `</g></svg>`;
@@ -2094,9 +2172,10 @@ function fallenParts(c) {
       (hideKit ? "" : insignia(c) + kit.front + variantTrim(c)) +
       fallenDamage() +
       recolor(shoulderAt(1, -4), map) +
-      (wears(c, "chest") ? badgeAt(c, A.chest) : "") +
-      collarOf(c, showFace, map, !hides("collar")) +
-      acc.front,
+      (wears(c, "chest") ? badgeAt(c, A.chest) : ""),
+    // The hair below the jaw, under the collar and what is worn on the chest.
+    nape: h.nape ? headTf(h.nape) : "",
+    neck: collarOf(c, showFace, map, !hides("collar")) + acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
     over: recolor((capeOff ? "" : capeFlap()) + upperArm.body + upperSleeve + shoulderAt(-1, 14), map) + leftBadge + armBadge + acc.top,
     glow:
@@ -2146,7 +2225,7 @@ export function buildCastModel(character, key, { realistic = false } = {}) {
         { markup: `<ellipse cx="0" cy="-22" rx="46" ry="78" fill="url(#aura)"/>`, anim: { type: "pulse", min: 0.6, max: 1, speed: 1.2 } },
         { markup: p.shadow + sc(p.back) },
         { markup: sc(p.cape), anim: sway },
-        { markup: sc(p.body) + p.head },
+        { markup: (p.nape ? sc(p.body) + p.nape + sc(p.neck) : sc(p.body + p.neck)) + p.head },
         { markup: sc(p.glow) + p.headGlow, anim: pulse, blend: "lighter" },
       ],
     };
@@ -2167,7 +2246,17 @@ export function buildCastModel(character, key, { realistic = false } = {}) {
       },
       { markup: contactShadow(0, 58.8, armed ? 46 : 40, 7) + `<g filter="url(#rmat)">${sc(R(p.back))}</g>` },
       { markup: `<g filter="url(#rcloth)">${sc(R(p.cape))}</g>`, anim: sway },
-      { markup: `<g filter="url(#rmat)">${sc(R(p.body))}</g><g filter="url(#${headFx})">${realizeMarkup(p.head, { ...o, desat: 0.15 })}</g>` },
+      {
+        // Each filter here runs over the whole box, so the collar only gets
+        // its own pass when there is hair to slot under it.
+        markup:
+          (p.nape
+            ? `<g filter="url(#rmat)">${sc(R(p.body))}</g>` +
+              `<g filter="url(#${headFx})">${realizeMarkup(p.nape, { ...o, desat: 0.15 })}</g>` +
+              `<g filter="url(#rmat)">${sc(R(p.neck))}</g>`
+            : `<g filter="url(#rmat)">${sc(R(p.body + p.neck))}</g>`) +
+          `<g filter="url(#${headFx})">${realizeMarkup(p.head, { ...o, desat: 0.15 })}</g>`,
+      },
       { markup: sc(R(p.glow)) + R(p.headGlow), anim: pulse, blend: "lighter" },
     ],
   };
@@ -2190,7 +2279,7 @@ function castFallen(c, realistic) {
       defs: defs(c) + p.capeIn + p.pieceDefs,
       layers: [
         { markup: floor },
-        { markup: TF(sc(p.pool + p.under) + p.head + sc(p.over)), anim: breathe },
+        { markup: TF((p.nape ? sc(p.pool + p.under) + p.nape + sc(p.neck) : sc(p.pool + p.under + p.neck)) + p.head + sc(p.over)), anim: breathe },
         { markup: TF(sc(p.glow)), anim: glowAnim, blend: "lighter" },
         { markup: TF(p.headGlow), anim: headAnim, blend: "lighter" },
         { markup: p.sparks, anim: sparkAnim, blend: "lighter" },
@@ -2209,7 +2298,11 @@ function castFallen(c, realistic) {
       {
         markup:
           `<g filter="url(#rcloth)">${TF(sc(R(p.pool)))}</g>` +
-          `<g filter="url(#rmat)">${TF(sc(R(p.under)))}</g>` +
+          (p.nape
+            ? `<g filter="url(#rmat)">${TF(sc(R(p.under)))}</g>` +
+              `<g filter="url(#${headFx})">${TF(realizeMarkup(p.nape, { ...o, desat: 0.15 }))}</g>` +
+              `<g filter="url(#rmat)">${TF(sc(R(p.neck)))}</g>`
+            : `<g filter="url(#rmat)">${TF(sc(R(p.under + p.neck)))}</g>`) +
           `<g filter="url(#${headFx})">${TF(realizeMarkup(p.head, { ...o, desat: 0.15 }))}</g>` +
           `<g filter="url(#rmat)">${TF(sc(R(p.over)))}</g>`,
         anim: breathe,

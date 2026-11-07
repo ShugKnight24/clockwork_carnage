@@ -139,6 +139,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="g64-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="g64-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <clipPath id="g64-capeCut">
 <path d="M-80,-120 L80,-120 L80,-4 L34,-6 L26,2 L16,-4 L6,3 L-4,-4 L-14,2 L-24,-5 L-34,1 L-80,-4 Z"/>
 </clipPath>
@@ -636,6 +642,18 @@
 </g>
 </g>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g transform="scale(0.9 1)">
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
 <path d="M-4.6,-74.6 L4.6,-74.6 L5.4,-65.4 L-5.4,-65.4 Z" fill="url(#g64-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-4.8,-73.6 C-2.4,-70.6 2.4,-70.6 4.8,-73.6 L5.1,-69.4 C2.4,-68.4 -2.4,-68.4 -5.1,-69.4 Z" fill="#70432c" opacity="0.5"/>
 <path d="M-6.4,-71.6 L6.4,-71.6 L7,-66 L-7,-66 Z" fill="url(#g64-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>

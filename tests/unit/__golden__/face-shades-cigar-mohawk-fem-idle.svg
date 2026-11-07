@@ -103,6 +103,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="face-shades-cigar-mohawk-fem-idle-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="face-shades-cigar-mohawk-fem-idle-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <clipPath id="face-shades-cigar-mohawk-fem-idle-helmet-mohawk-face-window">
 <path d="M4.2,-68.4 C3.8,-71.4 3.6,-74 4.6,-76.6 L6.6,-80 L6.8,-86.6 L-6.8,-86.6 L-6.6,-80 L-4.6,-76.6 C-3.6,-74 -3.8,-71.4 -4.2,-68.4 Z"/>
 </clipPath>
@@ -419,6 +425,18 @@
 <path d="M23.8,-62 C24.8,-59.6 24.6,-57.4 23.6,-55.8" fill="none" stroke="#0af8e7" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g>
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
 <path d="M-3.5,-74.6 L3.5,-74.6 L4.1,-65.4 L-4,-65.4 Z" fill="url(#face-shades-cigar-mohawk-fem-idle-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-3.7,-73.6 C-1.8,-70.6 1.8,-70.6 3.7,-73.6 L3.9,-69.4 C1.8,-68.4 -1.8,-68.4 -3.9,-69.4 Z" fill="#8f5b3c" opacity="0.5"/>
 <path d="M-4.9,-71.6 L4.9,-71.6 L5.2,-66 L-5.2,-66 Z" fill="url(#face-shades-cigar-mohawk-fem-idle-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>

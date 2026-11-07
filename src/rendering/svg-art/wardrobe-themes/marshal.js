@@ -269,6 +269,7 @@ function brim(c, K) {
       K.eyeGlow(c, 0.55) +
       energy(`<circle cx="-10.6" cy="-81.6" r=".55"/><circle cx="10.6" cy="-81.6" r=".55"/>`, c.energy) +
       acc.glow,
+    nape: K.hairNape(c, true),
   };
 }
 

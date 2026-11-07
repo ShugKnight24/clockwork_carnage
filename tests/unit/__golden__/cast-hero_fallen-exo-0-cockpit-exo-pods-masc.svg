@@ -103,6 +103,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <clipPath id="capeCut">
 <path d="M-80,-120 L80,-120 L80,22 L38,24 L33,40 L27,28 L22,44 L15,31 L8,46 L1,32 L-6,45 L-12,30 L-19,43 L-25,29 L-31,42 L-36,26 L-80,22 Z"/>
 </clipPath>

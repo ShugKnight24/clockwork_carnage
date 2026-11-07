@@ -103,6 +103,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="hair-platinum-wide-short-masc-idle-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="hair-platinum-wide-short-masc-idle-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <radialGradient id="hair-platinum-wide-short-masc-idle-aura">
 <stop offset="0" stop-color="#00ffdd" stop-opacity="0.16"/>
 <stop offset="0.6" stop-color="#00ffdd" stop-opacity="0.05"/>
@@ -420,6 +426,18 @@
 <path d="M23.8,-62 C24.8,-59.6 24.6,-57.4 23.6,-55.8" fill="none" stroke="#0af8e7" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g>
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
 <path d="M-4.6,-74.6 L4.6,-74.6 L5.4,-65.4 L-5.4,-65.4 Z" fill="url(#hair-platinum-wide-short-masc-idle-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-4.8,-73.6 C-2.4,-70.6 2.4,-70.6 4.8,-73.6 L5.1,-69.4 C2.4,-68.4 -2.4,-68.4 -5.1,-69.4 Z" fill="#8f5b3c" opacity="0.5"/>
 <path d="M-6.4,-71.6 L6.4,-71.6 L7,-66 L-7,-66 Z" fill="url(#hair-platinum-wide-short-masc-idle-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>

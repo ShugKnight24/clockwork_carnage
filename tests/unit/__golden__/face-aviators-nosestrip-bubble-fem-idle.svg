@@ -103,6 +103,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="face-aviators-nosestrip-bubble-fem-idle-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="face-aviators-nosestrip-bubble-fem-idle-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <clipPath id="face-aviators-nosestrip-bubble-fem-idle-helmet-bubble-clip">
 <circle cx="0" cy="-84" r="15"/>
 </clipPath>
@@ -428,6 +434,18 @@
 <path d="M23.8,-62 C24.8,-59.6 24.6,-57.4 23.6,-55.8" fill="none" stroke="#0af8e7" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g>
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
 <path d="M-3.5,-74.6 L3.5,-74.6 L4.1,-65.4 L-4,-65.4 Z" fill="url(#face-aviators-nosestrip-bubble-fem-idle-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-3.7,-73.6 C-1.8,-70.6 1.8,-70.6 3.7,-73.6 L3.9,-69.4 C1.8,-68.4 -1.8,-68.4 -3.9,-69.4 Z" fill="#8f5b3c" opacity="0.5"/>
 <path d="M-4.9,-71.6 L4.9,-71.6 L5.2,-66 L-5.2,-66 Z" fill="url(#face-aviators-nosestrip-bubble-fem-idle-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
@@ -549,6 +567,7 @@
 <path d="M-1.5,-79.2 L-1.4,-78.2 M0,-79.3 L0.1,-78.2 M1.5,-79.4 L1.5,-78.3" fill="none" stroke="#b8b0a2" stroke-width="0.3" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
+<g clip-path="url(#face-aviators-nosestrip-bubble-fem-idle-aboveJaw)">
 <path d="M6.6,-80.9 6.6,-80.9 C6.4,-82.7 6.4,-83.9 6.2,-84.9 C6,-86.1 5.6,-87.5 4.8,-87.8 C3.4,-88.2 1.4,-88.1 0,-87.9 C-1.4,-88.1 -3.4,-88.2 -4.8,-87.8 C-5.6,-87.5 -6,-86.1 -6.2,-84.9 C-6.4,-83.9 -6.4,-82.7 -6.6,-80.9" fill="none" stroke="#8f5b3c" stroke-width="1.6" stroke-opacity="0.22" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M6.6,-81.6 6.6,-81.6 C6.4,-83.4 6.4,-84.6 6.2,-85.6 C6,-86.8 5.6,-88.2 4.8,-88.5 C3.4,-88.9 1.4,-88.8 0,-88.6 C-1.4,-88.8 -3.4,-88.9 -4.8,-88.5 C-5.6,-88.2 -6,-86.8 -6.2,-85.6 C-6.4,-84.6 -6.4,-83.4 -6.6,-81.6" fill="none" stroke="#926a4a" stroke-width="0.9" stroke-opacity="0.25" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-7.1,-81.6 C-7.3,-83.2 -7.4,-83 -7.5,-84.4 C-7.7,-85.8 -7.7,-87 -7.6,-88 C-7.2,-91.4 -4.4,-92.7 0,-92.9 C4.4,-92.7 7.2,-91.4 7.6,-88 C7.7,-87 7.7,-85.8 7.5,-84.4 C7.4,-83 7.3,-83.2 7.1,-81.6 L6.6,-81.6 C6.4,-83.4 6.4,-84.6 6.2,-85.6 C6,-86.8 5.6,-88.2 4.8,-88.5 C3.4,-88.9 1.4,-88.8 0,-88.6 C-1.4,-88.8 -3.4,-88.9 -4.8,-88.5 C-5.6,-88.2 -6,-86.8 -6.2,-85.6 C-6.4,-84.6 -6.4,-83.4 -6.6,-81.6 Z" fill="#926a4a"/>
@@ -633,6 +652,7 @@
 <path d="M-1.8,-88.4 C-2.6,-91.6 -2.6,-95.2 -1.6,-98.4 L-0.7,-96.6 L0,-101 L0.8,-96.8 L1.8,-98.8 C2.8,-95.4 2.8,-91.6 1.8,-88.4 C1,-88.9 -1,-88.9 -1.8,-88.4 Z" fill="url(#face-aviators-nosestrip-bubble-fem-idle-hair)" stroke="#04060b" stroke-width="0.45"/>
 <path d="M-0.8,-90 C-1.1,-93 -0.9,-95.6 -0.3,-97.4" fill="none" stroke="#837a76" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M0.9,-90 C1.1,-93 1,-95 0.6,-96.4" fill="none" stroke="#100a07" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
 </g>
 <circle cx="0" cy="-84" r="15.6" fill="url(#face-aviators-nosestrip-bubble-fem-idle-helmet-bubble-glass)" stroke="#04060b" stroke-width="1.1"/>
 <circle cx="0" cy="-84" r="14.7" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.35"/>

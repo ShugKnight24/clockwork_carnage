@@ -604,7 +604,7 @@ function agentMarkup(ch, { pose, peek } = IDLE_STAGE) {
   const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
   return {
     defs: p.defs,
-    markup: `${p.shadow}<g${tf}>${p.back}${p.cape}${p.body}${p.glow}</g>${p.head}${p.headGlow}`,
+    markup: `${p.shadow}<g${tf}>${p.back}${p.cape}${p.body}</g>${p.nape}<g${tf}>${p.neck}${p.glow}</g>${p.head}${p.headGlow}`,
   };
 }
 

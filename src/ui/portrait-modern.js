@@ -46,7 +46,7 @@ export function characterLayers(character) {
     const p = buildAgentParts(c, { pose: "idle" });
     const k = Math.round(p.width * 100) / 100;
     const tf = k === 1 ? "" : ` transform="scale(${k} 1)"`;
-    const base = `<g${tf}>${p.back}${p.cape}${p.body}${p.glow}</g>${p.head}`;
+    const base = `<g${tf}>${p.back}${p.cape}${p.body}</g>${p.nape}<g${tf}>${p.neck}${p.glow}</g>${p.head}`;
     const accent = pieceOf(c, "color").accent;
     const helmet = pieceOf(c, "helmet").id;
     _char = {

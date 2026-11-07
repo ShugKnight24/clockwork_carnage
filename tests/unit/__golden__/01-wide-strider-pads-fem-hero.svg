@@ -139,6 +139,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="g7-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="g7-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <clipPath id="g7-capeCut">
 <path d="M-80,-120 L80,-120 L80,-4 L34,-6 L26,2 L16,-4 L6,3 L-4,-4 L-14,2 L-24,-5 L-34,1 L-80,-4 Z"/>
 </clipPath>
@@ -665,6 +671,18 @@
 <path d="M41.5,11.1 C40.9,11.5 40.9,12 41.3,12.3" fill="none" stroke="#eaf4ff" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M48.2,4 C46.8,1 42.4,0.6 40.2,2.2 C40,3.2 40.8,3.6 41.6,3.4 C43.2,2.8 45.2,3.2 46.2,4.6 Z" fill="url(#g7-steel)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g transform="scale(0.9 1)">
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
 <path d="M-3.5,-74.6 L3.5,-74.6 L4.1,-65.4 L-4,-65.4 Z" fill="url(#g7-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-3.7,-73.6 C-1.8,-70.6 1.8,-70.6 3.7,-73.6 L3.9,-69.4 C1.8,-68.4 -1.8,-68.4 -3.9,-69.4 Z" fill="#70432c" opacity="0.5"/>
 <path d="M-4.9,-71.6 L4.9,-71.6 L5.2,-66 L-5.2,-66 Z" fill="url(#g7-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>

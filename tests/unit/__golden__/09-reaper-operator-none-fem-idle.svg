@@ -139,6 +139,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="g38-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="g38-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <radialGradient id="g38-aura">
 <stop offset="0" stop-color="#a8f4ff" stop-opacity="0.16"/>
 <stop offset="0.6" stop-color="#a8f4ff" stop-opacity="0.05"/>
@@ -621,6 +627,18 @@
 </g>
 </g>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g>
+<g transform="translate(0,58) scale(0.99) translate(0,-58)">
 <path d="M-4.9,-71.6 L4.9,-71.6 L5.2,-66 L-5.2,-66 Z" fill="url(#g38-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <ellipse cx="0" cy="-67.8" rx="7" ry="2.6" fill="url(#g38-shade)"/>
 <path d="M-8.6,-70.4 C-4.5,-68.7 4.5,-68.7 8.6,-70.4 L13.7,-64.6 C7.3,-62.4 -7.3,-62.4 -13.7,-64.6 Z" fill="url(#g38-steel)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>

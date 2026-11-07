@@ -24,13 +24,18 @@
  *       map: the rig splits glow per limb (the fallen agent leaves out the
  *       light of the arm trapped under the body).
  *
- *   helmets: { [id]: { paint(c, K) -> { front, glow }, anchors } }
+ *   helmets: { [id]: { paint(c, K) -> { front, glow, nape? }, anchors } }
  *     paint: the whole head under the helmet (not called for a face peek,
- *       which the rig draws bare). `front` is the head, `glow` its lit parts.
+ *       which the rig draws bare). `front` is the head, `glow` its lit parts,
+ *       `nape` the hair below the jaw (K.hairNape) on a helmet that shows the
+ *       face: the rig draws it behind the neck and collar, in head space.
  *       K is the rig's helmet kit; none of it knows a helmet id, so all a
  *       helmet's own drawing lives here:
  *         K.face(c), K.hair(c, under), K.hairBack(c) — the head under an
- *           open helmet (under: only what shows below the shell)
+ *           open helmet (under: only what shows below the shell), the hair
+ *           down to the jaw only
+ *         K.hairNape(c, under) — the rest of that hair, below the jaw, for
+ *           the painter's `nape` (clipped as its head is, e.g. to a glass)
  *         K.eyeGlow(c, opacity, behindVisor?) — the eyes' light
  *         K.closedVisor(c) -> { body, glow, jaw, eyeGlints } — the visor
  *           pick's glass, drawn down over the face; `jaw` says whether the
@@ -95,6 +100,8 @@
  *     cyl, pecShade   — cylinder and chest shading overlays
  *     weave           — fabric weave pattern
  *     glow, bloom, ao — blur filters (light, wide light, ambient occlusion)
+ *     aboveJaw, belowJaw — the head above and below the jaw (the hair kit's
+ *                          split; a painter has no need to name them)
  *   The helmet kit's K.hair defines its own clip inline (HELMET_KIT_IDS,
  *   beside the kit); a painter never names it. tests/unit/
  *   wardrobe-registry.test.js holds every painter to these.

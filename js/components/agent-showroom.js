@@ -2272,7 +2272,9 @@ class AgentShowroom extends HTMLElement {
     }
     const svg = this.el.figure.querySelector("svg");
     if (!svg) return;
-    const set = (sel, tf) => svg.querySelector(sel)?.setAttribute("transform", tf);
+    // A layer can come in more than one group (the head's hair below the jaw
+    // turns with the head but is drawn under the body's collar).
+    const set = (sel, tf) => svg.querySelectorAll(sel).forEach((g) => g.setAttribute("transform", tf));
     // Every layer turns by the same angle: the same squash, and a slide set by
     // how far behind (or ahead of) the body it sits. Slides picked per layer
     // (the head leading, the cape swinging wide) read as cut-outs coming apart.

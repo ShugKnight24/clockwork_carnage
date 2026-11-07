@@ -103,6 +103,12 @@
 <rect width="0.9" height="0.32" fill="#000" opacity="0.3"/>
 <rect y="0.45" width="0.32" height="0.45" fill="#fff" opacity="0.06"/>
 </pattern>
+<clipPath id="face-eyepatch-beard-bubble-masc-idle-aboveJaw">
+<rect x="-60" y="-160" width="120" height="85.4"/>
+</clipPath>
+<clipPath id="face-eyepatch-beard-bubble-masc-idle-belowJaw">
+<rect x="-60" y="-75" width="120" height="80"/>
+</clipPath>
 <clipPath id="face-eyepatch-beard-bubble-masc-idle-helmet-bubble-clip">
 <circle cx="0" cy="-84" r="15"/>
 </clipPath>
@@ -432,6 +438,35 @@
 <path d="M23.8,-62 C24.8,-59.6 24.6,-57.4 23.6,-55.8" fill="none" stroke="#0af8e7" stroke-width="0.7" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-head">
+<g class="ag-nape">
+<g transform="translate(0,-6.3) translate(0,-67) scale(1) translate(0,67)">
+<g transform="translate(0,-68) scale(0.88) translate(0,67)">
+<g clip-path="url(#face-eyepatch-beard-bubble-masc-idle-helmet-bubble-clip)">
+<g clip-path="url(#face-eyepatch-beard-bubble-masc-idle-belowJaw)">
+<path d="M-7.4,-81.6 C-8.4,-86 -7.8,-93.1 0,-94.2 C7.8,-93.1 8.4,-86 7.4,-81.6 C6.2,-80.6 -6.2,-80.6 -7.4,-81.6 Z" fill="#29190f" stroke="#04060b" stroke-width="0.45"/>
+<path d="M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z" fill="#29190f" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+<path d="M-0.2,-92.6 C-2.6,-92.4 -5.4,-90.6 -6.6,-87.4 C-7.2,-85.8 -7.4,-84 -7.2,-82.2 C-6.6,-83.8 -5.8,-85.4 -4.6,-86.4 C-3.2,-87.4 -1.4,-88.6 -0.2,-92.6 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-0.2,-92.6 C-2.6,-92.4 -5.4,-90.6 -6.6,-87.4" fill="none" stroke="#8d8078" stroke-width="0.3" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0.2,-92.6 C2.6,-92.4 5.4,-90.6 6.6,-87.4 C7.2,-85.8 7.4,-84 7.2,-82.2 C6.6,-83.8 5.8,-85.4 4.6,-86.4 C3.2,-87.4 1.4,-88.6 0.2,-92.6 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)" stroke="#04060b" stroke-width="0.35"/>
+<path d="M0.2,-92.6 C2.6,-92.4 5.4,-90.6 6.6,-87.4" fill="none" stroke="#8d8078" stroke-width="0.3" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-7.4,-84 C-8.2,-80 -8.4,-75 -8,-70.6 C-7.8,-68.8 -7,-67.6 -6.2,-67.2 C-6.8,-70.4 -6.8,-75 -6.4,-79.4 C-6.2,-81.4 -6.4,-83 -7.4,-84 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)" stroke="#04060b" stroke-width="0.35"/>
+<path d="M7.4,-84 C8.2,-80 8.4,-75 8,-70.6 C7.8,-68.8 7,-67.6 6.2,-67.2 C6.8,-70.4 6.8,-75 6.4,-79.4 C6.2,-81.4 6.4,-83 7.4,-84 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)" stroke="#04060b" stroke-width="0.35"/>
+<path d="M-7.6,-80 C-7.8,-76 -7.6,-72 -7,-69 M7.6,-80 C7.8,-76 7.6,-72 7,-69" fill="none" stroke="#8d8078" stroke-width="0.25" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+</g>
+</g>
+</g>
+</g>
+<g class="ag-yaw-body">
+<g class="ag-neck">
+<g>
+<g transform="translate(0,58) scale(1.05) translate(0,-58)">
 <path d="M-4.6,-74.6 L4.6,-74.6 L5.4,-65.4 L-5.4,-65.4 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-skin)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-4.8,-73.6 C-2.4,-70.6 2.4,-70.6 4.8,-73.6 L5.1,-69.4 C2.4,-68.4 -2.4,-68.4 -5.1,-69.4 Z" fill="#8f5b3c" opacity="0.5"/>
 <path d="M-6.4,-71.6 L6.4,-71.6 L7,-66 L-7,-66 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-suit)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
@@ -497,8 +532,10 @@
 <circle cx="0" cy="-84" r="15.6" fill="#023834" opacity="0.35"/>
 <ellipse cx="0" cy="-71" rx="10.8" ry="1.9" fill="#0a0f16" opacity="0.8"/>
 <g clip-path="url(#face-eyepatch-beard-bubble-masc-idle-helmet-bubble-clip)">
+<g clip-path="url(#face-eyepatch-beard-bubble-masc-idle-aboveJaw)">
 <path d="M-7.4,-81.6 C-8.4,-86 -7.8,-93.1 0,-94.2 C7.8,-93.1 8.4,-86 7.4,-81.6 C6.2,-80.6 -6.2,-80.6 -7.4,-81.6 Z" fill="#29190f" stroke="#04060b" stroke-width="0.45"/>
 <path d="M-8.6,-86 C-9.8,-94 -4.8,-95.2 0,-95.2 C4.8,-95.2 9.8,-94 8.6,-86 L9.8,-70.4 C10,-66.6 8.4,-64.8 6.2,-65.4 L-6.2,-65.4 C-8.4,-64.8 -10,-66.6 -9.8,-70.4 Z" fill="#29190f" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
+</g>
 <path d="M-7,-83.6 C-8.9,-84.4 -9.6,-82 -9.2,-79.8 C-8.9,-78.2 -8,-77.4 -6.8,-77.8 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-skin)" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <path d="M7,-83.6 C8.9,-84.4 9.6,-82 9.2,-79.8 C8.9,-78.2 8,-77.4 6.8,-77.8 Z" fill="#b07a53" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <path d="M-7.2,-84 C-7.4,-79 -6.8,-75.5 -5,-73.3 C-3.6,-71.8 -1.8,-71.2 0,-71.2 C1.8,-71.2 3.6,-71.8 5,-73.3 C6.8,-75.5 7.4,-79 7.2,-84 C7,-89.5 4,-91.6 0,-91.6 C-4,-91.6 -7,-89.5 -7.2,-84 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-skin)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
@@ -548,6 +585,7 @@
 <path d="M-4.6,-73.6 C-2,-71.4 2,-71.4 4.6,-73.6" fill="none" stroke="#75665c" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
+<g clip-path="url(#face-eyepatch-beard-bubble-masc-idle-aboveJaw)">
 <path d="M6.6,-78.9 6.6,-78.9 C6.4,-80.7 6.4,-83.9 6.2,-84.9 C6,-86.1 5.6,-87.1 4.8,-87.4 C3.4,-87.8 1.4,-87.7 0,-87.5 C-1.4,-87.7 -3.4,-87.8 -4.8,-87.4 C-5.6,-87.1 -6,-86.1 -6.2,-84.9 C-6.4,-83.9 -6.4,-80.7 -6.6,-78.9" fill="none" stroke="#8f5b3c" stroke-width="1.6" stroke-opacity="0.22" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M6.6,-79.6 6.6,-79.6 C6.4,-81.4 6.4,-84.6 6.2,-85.6 C6,-86.8 5.6,-87.8 4.8,-88.1 C3.4,-88.5 1.4,-88.4 0,-88.2 C-1.4,-88.4 -3.4,-88.5 -4.8,-88.1 C-5.6,-87.8 -6,-86.8 -6.2,-85.6 C-6.4,-84.6 -6.4,-81.4 -6.6,-79.6" fill="none" stroke="#3a2416" stroke-width="0.9" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-7.1,-79.6 C-7.3,-81.2 -7.4,-83 -7.8,-84.4 C-8.3,-85.8 -8.4,-87 -8.3,-88 C-7.8,-92.1 -4.4,-93.9 0,-94.2 C4.4,-93.9 7.8,-92.1 8.3,-88 C8.4,-87 8.3,-85.8 7.8,-84.4 C7.4,-83 7.3,-81.2 7.1,-79.6 L6.6,-79.6 C6.4,-81.4 6.4,-84.6 6.2,-85.6 C6,-86.8 5.6,-87.8 4.8,-88.1 C3.4,-88.5 1.4,-88.4 0,-88.2 C-1.4,-88.4 -3.4,-88.5 -4.8,-88.1 C-5.6,-87.8 -6,-86.8 -6.2,-85.6 C-6.4,-84.6 -6.4,-81.4 -6.6,-79.6 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)"/>
@@ -593,6 +631,7 @@
 <path d="M-7.4,-84 C-8.2,-80 -8.4,-75 -8,-70.6 C-7.8,-68.8 -7,-67.6 -6.2,-67.2 C-6.8,-70.4 -6.8,-75 -6.4,-79.4 C-6.2,-81.4 -6.4,-83 -7.4,-84 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)" stroke="#04060b" stroke-width="0.35"/>
 <path d="M7.4,-84 C8.2,-80 8.4,-75 8,-70.6 C7.8,-68.8 7,-67.6 6.2,-67.2 C6.8,-70.4 6.8,-75 6.4,-79.4 C6.2,-81.4 6.4,-83 7.4,-84 Z" fill="url(#face-eyepatch-beard-bubble-masc-idle-hair)" stroke="#04060b" stroke-width="0.35"/>
 <path d="M-7.6,-80 C-7.8,-76 -7.6,-72 -7,-69 M7.6,-80 C7.8,-76 7.6,-72 7,-69" fill="none" stroke="#8d8078" stroke-width="0.25" stroke-opacity="0.45" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
 </g>
 <circle cx="0" cy="-84" r="15.6" fill="url(#face-eyepatch-beard-bubble-masc-idle-helmet-bubble-glass)" stroke="#04060b" stroke-width="1.1"/>
 <circle cx="0" cy="-84" r="14.7" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.35"/>
