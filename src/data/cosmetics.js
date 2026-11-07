@@ -185,6 +185,24 @@ export const HAIR_COLORS = Object.freeze([
   { id: "chrono", name: "Chrono Charged", color: null, dye: true, energy: true },
 ].map((e) => Object.freeze(e)));
 
+/**
+ * The mouth's expression: one pick for every face (src/rendering/svg-art/
+ * expressions.js). A bare face draws it as a mouth, in each build's own lips;
+ * the LED mask lights it in pixels. "default" is the mouth every face wore
+ * before the pick. A helmet that covers the mouth draws none of it
+ * (helmetMouth in src/data/wardrobe-themes/index.js). Never locked.
+ */
+export const EXPRESSIONS = Object.freeze([
+  { id: "default", name: "Default", desc: "The set of the mouth at rest" },
+  { id: "smile", name: "Smile", desc: "Lips closed, corners up" },
+  { id: "grin", name: "Grin", desc: "Ear to ear, teeth showing" },
+  { id: "smirk", name: "Smirk", desc: "One corner up, the other unimpressed" },
+  { id: "grim", name: "Grim", desc: "Flat and set" },
+  { id: "frown", name: "Frown", desc: "Corners down" },
+  { id: "shout", name: "Shout", desc: "Wide open, mid battle cry" },
+  { id: "shocked", name: "Shocked", desc: "A small round O" },
+].map((e) => Object.freeze(e)));
+
 export const EYE_COLORS = [
   { id: "amber", name: "Amber", color: "#ffcc66" },
   { id: "blue", name: "Blue", color: "#66bbff" },
@@ -520,6 +538,7 @@ export const DEFAULT_LOOK_IDS = Object.freeze({
   skinTone: "warm_light",
   hair: "buzz",
   hairColor: "natural",
+  expression: "default",
   eye: "amber",
   armor: "standard",
   helmet: "standard",
@@ -575,6 +594,7 @@ export const DEFAULT_CHARACTER = {
   skinTone: DEFAULT_LOOK_IDS.skinTone,
   hair: DEFAULT_LOOK_IDS.hair,
   hairColor: DEFAULT_LOOK_IDS.hairColor,
+  expression: DEFAULT_LOOK_IDS.expression,
   eye: DEFAULT_LOOK_IDS.eye,
   armor: DEFAULT_LOOK_IDS.armor,
   frame: DEFAULT_LOOK_IDS.frame,
