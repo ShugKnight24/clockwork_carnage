@@ -231,15 +231,50 @@ function spacesuit(P, c) {
 
 // ── Bubble helmet ───────────────────────────────────────────────────────────
 
+// The glass: its centre and radius, in head coordinates. The whole face,
+// chin and a beard included (down to -70.4), sits inside it, above the ring.
 const BX = 0;
-const BY = -84;
-const BR = 15.6;
+const BY = -83;
+const BR = 16.6;
+// The neck ring locks onto the suit's collar, below the chin. Its top edge
+// is where the face stops showing; the glass meets the ring along it.
+const RING_TOP = [[-12, -68], [-6, -70.2], [6, -70.2], [12, -68]];
+const RING = "M-12,-68 C-6,-70.2 6,-70.2 12,-68 L12.8,-63 C6,-60.6 -6,-60.6 -12.8,-63 Z";
+
+/** The ring's top edge at x (the cubic through RING_TOP, which runs left to right). */
+function ringTopAt(x) {
+  const [p0, p1, p2, p3] = RING_TOP;
+  const at = (t, i) => (1 - t) ** 3 * p0[i] + 3 * (1 - t) ** 2 * t * p1[i] + 3 * (1 - t) * t ** 2 * p2[i] + t ** 3 * p3[i];
+  let [lo, hi] = [0, 1];
+  for (let n = 0; n < 24; n++) {
+    const t = (lo + hi) / 2;
+    if (at(t, 0) < x) lo = t;
+    else hi = t;
+  }
+  return at((lo + hi) / 2, 1);
+}
+
+/**
+ * The face window: the glass above the ring, as a polygon round the glass's
+ * inner edge with every point below the ring's top edge raised onto it. The
+ * face items' light is drawn over the whole head and only this clip keeps
+ * it off the ring.
+ */
+function faceWindow(r) {
+  const pts = [];
+  for (let a = 0; a < 360; a += 6) {
+    const x = BX + Math.cos((a * Math.PI) / 180) * r;
+    const y = BY + Math.sin((a * Math.PI) / 180) * r;
+    pts.push([x, Math.abs(x) <= 12 ? Math.min(y, ringTopAt(x)) : y]);
+  }
+  return `M${pts.map((p) => pt(...p)).join(" L")} Z`;
+}
 
 function bubble(c, K) {
   const tint = K.mix(c.energy, "#ffffff", 0.55);
   const [clipId, glassId] = [K.uid("clip"), K.uid("glass")];
   // The glass's own clip and tint, in the figure's defs under scoped ids.
-  K.defs(`<clipPath id="${clipId}"><circle cx="${BX}" cy="${BY}" r="${BR - 0.6}"/></clipPath>`);
+  K.defs(`<clipPath id="${clipId}"><circle cx="${BX}" cy="${BY}" r="${f(BR - 0.6)}"/></clipPath>`);
   K.defs(
     `<radialGradient id="${glassId}" cx=".38" cy=".32" r=".7">` +
     `<stop offset="0" stop-color="#ffffff" stop-opacity="0"/>` +
@@ -247,38 +282,38 @@ function bubble(c, K) {
     `<stop offset=".9" stop-color="${tint}" stop-opacity=".3"/>` +
       `<stop offset="1" stop-color="#ffffff" stop-opacity=".45"/></radialGradient>`,
   );
-  const ring = "M-12,-71.6 C-6,-73.8 6,-73.8 12,-71.6 L12.8,-66.6 C6,-64.2 -6,-64.2 -12.8,-66.6 Z";
-  // The face shows through the glass only: its items and their light are
-  // kept inside it.
-  const r = BR - 0.6;
-  const acc = K.faceAccessories({ window: `M${BX - r},${BY} A${r},${r} 0 1,0 ${BX + r},${BY} A${r},${r} 0 1,0 ${BX - r},${BY} Z` });
-  const lamp = "M10.6,-76.6 L15.4,-78.6 L17.4,-74.2 L13.2,-71.8 Z";
+  // The face shows through the glass only, above the ring: its items and
+  // their light are kept inside that.
+  const acc = K.faceAccessories({ window: faceWindow(BR - 0.6) });
+  const lamp = "M10.6,-73 L15.4,-75 L17.4,-70.6 L13.2,-68.2 Z";
   const nape = K.hairNape(c, false);
+  // Rim light down the glass's lower right, on its edge.
+  const rim = [22, 26, 30, 34, 38, 42, 46, 50, 54].map((a) => pt(BX + Math.cos((a * Math.PI) / 180) * (BR - 1), BY + Math.sin((a * Math.PI) / 180) * (BR - 1)));
   return {
     front:
       // The far side of the dome: a faint tinted back and the inside of the ring.
       `<circle cx="${BX}" cy="${BY}" r="${BR}" fill="${K.mix(c.energy, "#02060a", 0.8)}" opacity=".35"/>` +
-      `<ellipse cx="0" cy="-71" rx="10.8" ry="1.9" fill="#0a0f16" opacity=".8"/>` +
+      `<ellipse cx="0" cy="-67.4" rx="10.8" ry="1.9" fill="#0a0f16" opacity=".8"/>` +
       // The head inside the glass, the eyes and face items on it.
       `<g clip-path="url(#${clipId})">${K.hairBack(c)}${K.face(c)}${acc.front}${K.hair(c, false)}</g>` +
       // The glass: tinted toward the edge, inked, a bright window reflection and a rim light.
       `<circle cx="${BX}" cy="${BY}" r="${BR}" fill="url(#${glassId})" stroke="${INK}" stroke-width="1.1"/>` +
-      `<circle cx="${BX}" cy="${BY}" r="${BR - 0.9}" fill="none" stroke="#ffffff" stroke-width=".4" opacity=".35"/>` +
-      line("M-12.6,-90 C-10.8,-95 -6.6,-98.4 -1.4,-99", "#ffffff", 1.6, 0.75) +
-      line("M-13.8,-85 C-13.9,-86.4 -13.7,-87.4 -13.4,-88.2", "#ffffff", 1.1, 0.6) +
+      `<circle cx="${BX}" cy="${BY}" r="${f(BR - 0.9)}" fill="none" stroke="#ffffff" stroke-width=".4" opacity=".35"/>` +
+      line("M-13.2,-90 C-11.4,-95.2 -7,-98.6 -1.4,-99.1", "#ffffff", 1.6, 0.75) +
+      line("M-14.8,-84 C-14.9,-85.4 -14.7,-86.4 -14.4,-87.2", "#ffffff", 1.1, 0.6) +
       `<path d="M4.6,-96.6 C7.4,-95.8 9.6,-94.2 11.2,-92.2 L9.4,-90.8 C8,-92.6 6.2,-93.8 3.8,-94.6 Z" fill="#ffffff" opacity=".45"/>` +
       `<circle cx="-8.6" cy="-93.4" r=".9" fill="#ffffff" opacity=".85"/>` +
-      line("M14.6,-79 C13.6,-75.4 11.8,-72.8 9.6,-71", c.rim, 0.8, 0.75) +
+      line(`M${rim.join(" L")}`, c.rim, 0.8, 0.75) +
       // Neck ring: a steel collar with a palette band, the lamp on its right.
-      shape(ring, STEEL, 1) +
-      shape("M-12.3,-69.6 C-6,-71.6 6,-71.6 12.3,-69.6 L12.5,-68 C6,-66 -6,-66 -12.5,-68 Z", c.pal.primary, 0.5) +
-      line("M-11.4,-71.4 C-6,-73 2,-73.2 6,-72.6", "#ffffff", 0.6, 0.65) +
-      `<g fill="#0c1116"><circle cx="-9.6" cy="-67.2" r=".45"/><circle cx="-4.8" cy="-66" r=".45"/><circle cx="4.8" cy="-66" r=".45"/><circle cx="9.6" cy="-67.2" r=".45"/></g>` +
+      shape(RING, STEEL, 1) +
+      shape("M-12.3,-66 C-6,-68 6,-68 12.3,-66 L12.5,-64.4 C6,-62.4 -6,-62.4 -12.5,-64.4 Z", c.pal.primary, 0.5) +
+      line("M-11.4,-67.8 C-6,-69.4 2,-69.6 6,-69", "#ffffff", 0.6, 0.65) +
+      `<g fill="#0c1116"><circle cx="-9.6" cy="-63.6" r=".45"/><circle cx="-4.8" cy="-62.4" r=".45"/><circle cx="4.8" cy="-62.4" r=".45"/><circle cx="9.6" cy="-63.6" r=".45"/></g>` +
       shape(lamp, STEEL_DK, 0.8) +
-      shape("M15.2,-78.2 L17.4,-74.2 L16.2,-73.4 L14,-77.4 Z", "#1a2026", 0.4),
+      shape("M15.2,-74.6 L17.4,-70.6 L16.2,-69.8 L14,-73.8 Z", "#1a2026", 0.4),
     glow:
-      energy(`<path d="M15.4,-77.6 L16.9,-74.6" fill="none" stroke-width="1.1" stroke-linecap="round"/>`, c.energy) +
-      `<path d="M16.6,-76.4 L24,-79.4 L25.6,-72.6 Z" fill="${c.energy}" opacity=".12" filter="url(#glow)"/>` +
+      energy(`<path d="M15.4,-74 L16.9,-71" fill="none" stroke-width="1.1" stroke-linecap="round"/>`, c.energy) +
+      `<path d="M16.6,-72.8 L24,-75.8 L25.6,-69 Z" fill="${c.energy}" opacity=".12" filter="url(#glow)"/>` +
       K.eyeGlow(c, 0.3) +
       // Their light shows through the glass.
       acc.glow,
@@ -328,7 +363,7 @@ export default {
     // on a face that shows. Eyes and face items go on the face inside the
     // glass (K.faceAccessories), so the glass and its glare lie over them.
     bubble: {
-      anchors: { top: -99.6, half: 13, rail: -70, badge: false },
+      anchors: { top: -99.6, half: 13, rail: -66.4, badge: false },
       paint: bubble,
     },
   },

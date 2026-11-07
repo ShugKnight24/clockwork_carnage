@@ -113,3 +113,32 @@ describe("the Abyssal Diver's tank hoses", () => {
     }
   });
 });
+
+describe("the Void Ranger's bubble helmet", () => {
+  const points = (d) => [...d.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  /** The face's chin (agent-rig.js face) and the beard's lowest point (accessories/face.js), in head coordinates. */
+  const CHIN = [0, -71.2];
+  const BEARD = [0, -70.4];
+
+  for (const body of ["masc", "fem"]) {
+    it(`${body}: the whole face sits inside the glass, above the neck ring, and the face window stops at the ring`, () => {
+      const c = lookOf({ frame: "spacesuit", helmet: "bubble", shoulder: "patches", body });
+      let window = "";
+      const kit = { ...HELMET_KIT, ...idScope().kit("helmet-bubble"), faceAccessories: (o) => ((window = o.window), HELMET_KIT.faceAccessories(o)) };
+      const { front } = HELMET_ART.bubble.paint(c, kit);
+      const [, cx, cy, r] = front.match(/<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="([\d.]+)" fill="url\(#[^"]*glass\)"/).map(Number);
+      const ring = points(front.match(/<path d="([^"]+)" fill="url\(#steel\)"/)[1]);
+      const ringTop = Math.min(...ring.map(([, y]) => y));
+      for (const [x, y] of [CHIN, BEARD]) {
+        expect(Math.hypot(x - cx, y - cy)).toBeLessThan(r);
+        expect(y).toBeLessThan(ringTop);
+      }
+      // The window: inside the glass, and nowhere down over the ring's top edge.
+      const corner = Math.min(...ring.filter(([x]) => Math.abs(x) >= 12).map(([, y]) => y));
+      for (const [x, y] of points(window)) {
+        expect(Math.hypot(x - cx, y - cy)).toBeLessThanOrEqual(r);
+        expect(y).toBeLessThanOrEqual(corner);
+      }
+    });
+  }
+});
