@@ -135,13 +135,17 @@ export const FACE = {
       skin: [-1, 1].map((s) => band(stripe(s, -79.8, 1.5, 5.9), ".92") + band(stripe(s, -77.7, 1.1, 5.5), ".85")).join(""),
     };
   },
+  // A short cigar drooping from the right corner of the mouth, its lit tip
+  // over the chin and neck: clear of every cut that frames the face (the
+  // long cut's locks start at x 6.2, the back hair beside the neck at 4.5).
+  // A thin wisp of smoke rises over the cheek, not into the hair.
   cigar: () => ({
     face:
-      fill("M2,-74.4 L7.6,-75.8 L7.8,-74.6 L2.2,-73.4 Z", "#5a3a22", 0.45) +
-      stroke("M3.4,-74.6 L3.6,-73.8", BRASS, 0.5) +
-      fill("M7.6,-75.8 L8.4,-76 L8.6,-74.8 L7.8,-74.6 Z", "#6a6a6a", 0.35) +
-      stroke("M8.6,-76.6 C9.4,-78 8.4,-79.4 9.2,-81 C9.8,-82.4 9,-83.6 9.6,-85", "#d8dde2", 0.4, 0.35),
-    glow: dot(8.5, -75.4, 0.6, "#ff7a2a"),
+      fill("M2.29,-74.49 L3.92,-72.86 L3.14,-72.08 L1.51,-73.71 Z", "#5a3a22", 0.45) +
+      stroke("M2.64,-74.14 L1.86,-73.36", BRASS, 0.5) +
+      fill("M3.92,-72.86 L4.31,-72.47 L3.53,-71.69 L3.14,-72.08 Z", "#6a6a6a", 0.35) +
+      stroke("M4.2,-73.1 C4.8,-73.9 3.9,-74.6 4.4,-75.5 C4.8,-76.2 4.2,-76.8 4.5,-77.5", "#d8dde2", 0.4, 0.35),
+    glow: `<path d="M3.92,-72.08 L3.92,-72.08" stroke="#ff7a2a" stroke-width=".9" stroke-linecap="round"/>`,
   }),
   nosestrip: () => ({
     face: fill("M-2.8,-79.4 L2.8,-79.6 L2.9,-78.2 L-2.7,-78 Z", "#e8e2d6", 0.4) + stroke("M-1.6,-79.2 L-1.5,-78.2 M0,-79.3 L0.1,-78.2 M1.6,-79.4 L1.7,-78.3", "#b8b0a2", 0.3),

@@ -105,3 +105,28 @@ describe("hair below the jaw sits behind the neck", () => {
     expect(cast).not.toContain("belowJaw)");
   });
 });
+
+describe("a cigar keeps its light out of the hair", () => {
+  const pts = (m) => [...m.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g)].map((p) => [Number(p[1]), Number(p[2])]);
+
+  it("its tip sits over the chin and neck, and nothing of it reaches a lock framing the face", () => {
+    for (const body of ["masc", "fem"]) {
+      const p = buildAgentParts(lookFromIds({ body, helmet: "wide", accessories: { ...lookFromIds({}).accessories, face: "cigar" } }));
+      const at = (m) => m.slice(m.indexOf('data-acc="cigar"'), m.indexOf("</g>", m.indexOf('data-acc="cigar"')));
+      const [[tipX, tipY]] = pts(at(p.headGlow));
+      const glowR = Number(at(p.headGlow).match(/stroke-width="([\d.]+)"/)[1]) / 2;
+      // Below the jaw, the neck covers everything inside its edge (agent-rig.js NECK, x ±3.9 at the jaw): hair hangs only outside it.
+      expect(tipY, body).toBeGreaterThan(JAW);
+      expect(tipX + glowR, body).toBeLessThanOrEqual(4.5);
+      // The hair that frames the face below the eyes (locks, locs, sideburns:
+      // the solid pieces, not the strand texture): its innermost x, over every cut.
+      for (const { id } of HAIR_STYLES) {
+        const c = buildAgentParts(lookFromIds({ hair: id, body })).look;
+        const pieces = [...HELMET_KIT.hair(c, false).matchAll(/<path d="([^"]+)" fill="url\(#hair\)"/g)].map((m) => m[1]).join(" ");
+        const framing = pts(pieces).filter(([, y]) => y > -80).map(([x]) => Math.abs(x));
+        if (!framing.length) continue;
+        expect(Math.max(...pts(at(p.head)).map(([x]) => Math.abs(x))), `${body} ${id}`).toBeLessThan(Math.min(...framing));
+      }
+    }
+  });
+});
