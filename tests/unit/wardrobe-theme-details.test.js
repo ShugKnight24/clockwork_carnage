@@ -2,8 +2,8 @@
 // golden snapshots alone would let drift back: each case pins the rule the
 // fix follows, not the drawing.
 import { describe, it, expect } from "vitest";
-import { buildAgentParts, mix } from "../../src/rendering/svg-art/agent-rig.js";
-import { FRAME_ART } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
+import { buildAgentParts, mix, HELMET_KIT } from "../../src/rendering/svg-art/agent-rig.js";
+import { FRAME_ART, HELMET_ART } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import { idScope } from "../../src/rendering/svg-art/id-scope.js";
 import { STAND, FALLEN } from "../../src/rendering/svg-art/models/hero.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
@@ -28,5 +28,62 @@ describe("the Frontier Marshal's duster", () => {
       expect(legs).toContain("translate(");
       expect(placed(frameLayers("duster", shift(P, 5, -7), c).legs)).toBe(placed(legs));
     }
+  });
+});
+
+describe("the Abyssal Diver's porthole helmet", () => {
+  const paint = (frame) => {
+    const c = lookOf({ frame, helmet: "porthole", shoulder: "lantern" });
+    return HELMET_ART.porthole.paint(c, { ...HELMET_KIT, ...idScope().kit("helmet-porthole") }).front;
+  };
+  const points = (d) => [...d.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  /** Filled shapes in drawing order: their index in the markup and the box round their points. */
+  const filled = (markup) =>
+    [...markup.matchAll(/<path d="([^"]+)" fill="([^"]+)"/g)]
+      .filter((m) => m[2] !== "none")
+      .map((m) => {
+        const p = points(m[1]);
+        const xs = p.map(([x]) => x);
+        const ys = p.map(([, y]) => y);
+        return { at: m.index, d: m[1], box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] };
+      });
+  const inside = ([x, y], [x0, y0, x1, y1], e = 0.05) => x >= x0 - e && x <= x1 + e && y >= y0 - e && y <= y1 + e;
+  /** The hose off the crown's elbow (it starts at the elbow's mouth) and where it ends. */
+  const crownHose = (markup) => {
+    const d = markup.match(/<path d="(M6\.8,-102\.5[^"]*)"/)[1];
+    return { d, end: points(d).at(-1) };
+  };
+
+  it("the crown hose ends in a coupling, over the diving frame's tanks and on any other frame", () => {
+    const ends = [];
+    for (const frame of ["diving", "standard", "strider"]) {
+      const m = paint(frame);
+      const { d, end } = crownHose(m);
+      const fittings = filled(m).filter((s) => s.d !== d && inside(end, s.box));
+      expect(fittings.length, frame).toBeGreaterThan(0);
+      ends.push(end.join());
+    }
+    // Over the tanks it runs to the tank's riser; elsewhere it is stowed on the collar.
+    expect(ends[0]).not.toBe(ends[1]);
+    expect(ends[1]).toBe(ends[2]);
+  });
+
+  it("over the tanks the riser from the hose's coupling turns in behind the dome, to the tank's valve", () => {
+    const m = paint("diving");
+    const dome = m.indexOf('<path d="M0,-100 C9.6,-100');
+    const { end } = crownHose(m);
+    const coupling = filled(m).find((s) => inside(end, s.box));
+    // The riser runs from the coupling's foot to a point the dome covers, and is drawn before it.
+    const riser = [...m.matchAll(/<path d="(M[^"]+)" fill="none"/g)].find((r) => {
+      const [first] = points(r[1]);
+      return inside(first, coupling.box) && r[1] !== crownHose(m).d;
+    });
+    expect(riser).toBeDefined();
+    expect(riser.index).toBeLessThan(dome);
+    const [x, y] = points(riser[1]).at(-1);
+    // Inside the dome's outline at that height (its right side runs out to 15.6 round -84).
+    expect(x).toBeLessThan(15);
+    expect(y).toBeGreaterThan(-100);
+    expect(y).toBeLessThan(-69.4);
   });
 });

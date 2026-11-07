@@ -7,7 +7,8 @@
  *              twin air tanks on the back with hoses round to the chest,
  *              weighted lead boots and laced cuffs
  *   porthole — round brass diving helmet: grilled front port, side ports,
- *              a bolted collar and an air fitting on the crown
+ *              a bolted collar and an air fitting on the crown, its hose run
+ *              to the tanks or stowed on the collar
  *   lantern  — a brass deep-lantern on a shoulder bracket (right side)
  */
 import { INK, RIM, f, pt, lerp, shape, line, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
@@ -36,6 +37,13 @@ function metals(K) {
   const url = (k) => `url(#${id[k]})`;
   return { BRASS: url("brass"), BRASS_DK: url("brassDk"), COPPER: url("copper"), CANVAS: url("canvas"), LEAD: url("lead") };
 }
+
+/**
+ * The frames that carry the air tanks the porthole helmet's crown hose feeds
+ * from: the helmet reads the look's frame (c.frame) to know whether to run
+ * the hose to the right tank or stow it on its own collar.
+ */
+const TANK_FRAMES = new Set(["diving"]);
 
 const rivet = (x, y, r = 0.65) => `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="#e9c470" stroke="${INK}" stroke-width=".35"/>`;
 /** A rubber air hose along a path: ink, rubber, a highlight and ribs. */
@@ -199,8 +207,34 @@ function porthole(c, K) {
   const bolts = [-12.6, -8.4, -4.2, 0, 4.2, 8.4, 12.6].map((x) => rivet(x, -69.2 + Math.abs(x) * 0.02 - (Math.abs(x) > 10 ? 0.3 : 0), 0.85)).join("");
   // Cross grille on the front port: a ring of bars.
   const grille = "M0,-90.8 L0,-75 M-7.8,-82.9 L7.8,-82.9";
+  // The crown hose. Over the tanks it runs off the elbow and down the right
+  // of the dome to a coupling on the right tank's riser, a brass pipe that
+  // turns in behind the dome to the tank's valve (drawn before the dome so
+  // the dome hides where it goes). With no tanks behind it the hose has
+  // nothing to feed from: it hangs down the same side and its capped end is
+  // clipped to a lug on the collar.
+  const tanks = TANK_FRAMES.has(c.frame);
+  const plumbing = tanks
+    ? hose("M6.8,-102.5 C11.8,-102.6 16.6,-100.6 17.6,-96.6 L17.8,-95.6", 2) +
+      line("M17.8,-93.4 C17.9,-90.6 17,-88.6 14.4,-87.2", INK, 2.4, 1) +
+      line("M17.8,-93.4 C17.9,-90.6 17,-88.6 14.4,-87.2", "#c99a3e", 1.4, 1) +
+      line("M17.5,-93 C17.5,-91 16.9,-89.6 15.4,-88.6", BRASS_HI, 0.4, 0.7) +
+      // The coupling over the hose's end, its flats.
+      shape("M16.5,-95.6 L19.1,-95.6 L19.1,-93 L16.5,-93 Z", BRASS_DK, 0.6) +
+      line("M17.3,-95.4 L17.3,-93.2 M18.3,-95.4 L18.3,-93.2", "#3a2710", 0.3, 0.8)
+    : hose("M6.8,-102.5 C13,-102.7 18,-99 18.2,-91 C18.3,-85 18,-81 17.9,-78.2", 2);
+  const stowed = tanks
+    ? ""
+    : // The lug riveted to the collar, then the coupling over the hose's
+      // end and its cap.
+      shape("M17.2,-76.4 L17.4,-74.6 L15.2,-71.2 L13.6,-71.8 Z", BRASS_DK, 0.6) +
+      rivet(14.6, -71.9, 0.5) +
+      shape("M16.6,-78.2 L19.2,-78.2 L19.2,-75.6 L16.6,-75.6 Z", BRASS_DK, 0.6) +
+      line("M17.4,-78 L17.4,-75.8 M18.4,-78 L18.4,-75.8", "#3a2710", 0.3, 0.8) +
+      shape("M16.9,-75.6 L18.9,-75.6 C18.9,-74.2 18.4,-73.6 17.9,-73.6 C17.4,-73.6 16.9,-74.2 16.9,-75.6 Z", BRASS, 0.6);
   return {
     front:
+      plumbing +
       // The bolted collar seats on the suit's own collar (the Abyssal
       // Diver's corselet under its frame, which hides the stock gorget).
       shape(collar, BRASS_DK, 1) +
@@ -224,13 +258,14 @@ function porthole(c, K) {
       line(grille, "#c99a3e", 1.4, 1) +
       `<circle cx="0" cy="-82.9" r="1.6" fill="${BRASS}" stroke="${INK}" stroke-width=".5"/>` +
       line("M-5.6,-87.4 C-4,-88.8 -2.4,-89.4 -1.4,-89.6", "#ffffff", 0.7, 0.6) +
-      // Air fitting on the crown: a nozzle and an elbow, a hose leading off.
+      // Air fitting on the crown: a nozzle and an elbow over the hose's end.
       shape("M-2.4,-99.6 L2.4,-99.6 L2,-102.6 L-2,-102.6 Z", BRASS_DK, 0.7) +
       shape("M-1.4,-102.6 L1.4,-102.6 L1.4,-104 L6.8,-104 L6.8,-101 L1.4,-101 Z", BRASS, 0.6) +
-      hose("M6.8,-102.5 C11,-102.6 14.2,-100.4 15.8,-96.4", 2) +
       // Bolts round the collar.
       bolts +
-      line("M-13,-70.6 C-6,-72.8 6,-72.8 13,-70.6", BRASS_HI, 0.45, 0.55),
+      line("M-13,-70.6 C-6,-72.8 6,-72.8 13,-70.6", BRASS_HI, 0.45, 0.55) +
+      // The stowed hose's lug sits over the collar.
+      stowed,
     glow: K.eyeGlow(c, 0.55, true) + energy(`<circle cx="-12.4" cy="-85.6" r=".5"/><circle cx="12.4" cy="-85.6" r=".5"/>`, c.energy),
   };
 }
