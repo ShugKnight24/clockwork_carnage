@@ -398,15 +398,25 @@
 <path d="M13.1,-67.8 L19.9,-67 L17.6,-52.4 L14.1,-49.6 L13.7,-56 Z" fill="#6d5a47" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <path d="M13.1,-67.8 L19.9,-67 L17.6,-52.4 L14.1,-49.6 L13.7,-56 Z" fill="url(#marshal-0-brim-duster-poncho-masc-idle-weave)" opacity="0.5"/>
 <path d="M13.7,-66.8 L14.4,-56.2 L14.4,-50.6" fill="none" stroke="#372b21" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M12.2,-51 L13.2,-48.6 L16,-48.9 L14,-46.8 L15.3,-44.7 L12.7,-45 L11.1,-42.6 L10.4,-45 L7.6,-44.7 L9.5,-46.8 L8,-48.9 L10.8,-48.6 Z" fill="#d9a842" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
-<circle cx="10.8" cy="-51" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="14.4" cy="-48.9" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="14.4" cy="-44.7" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="10.8" cy="-42.6" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="7.2" cy="-44.7" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="7.2" cy="-48.9" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<path d="M9,-48.1 L11.1,-48.5 L12.1,-50.2" fill="none" stroke="#fbe3a0" stroke-width="0.45" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="10.8" cy="-46.8" r="1.5" fill="#7a5418" stroke="#04060b" stroke-width="0.35"/>
+<path d="M16,-46.8 C15.6,-44.6 13.5,-42.9 11.2,-42.9 C8.9,-42.9 7.3,-44.6 7.5,-46.8 C7.7,-49 9.7,-50.7 12.2,-50.7 C14.7,-50.7 16.3,-49 16,-46.8 Z" fill="none" stroke="#04060b" stroke-width="1.7"/>
+<path d="M16,-46.8 C15.6,-44.6 13.5,-42.9 11.2,-42.9 C8.9,-42.9 7.3,-44.6 7.5,-46.8 C7.7,-49 9.7,-50.7 12.2,-50.7 C14.7,-50.7 16.3,-49 16,-46.8 Z" fill="none" stroke="#d9a842" stroke-width="0.95"/>
+<path d="M16,-46.8 C15.6,-44.6 13.5,-42.9 11.2,-42.9 C8.9,-42.9 7.3,-44.6 7.5,-46.8 C7.7,-49 9.7,-50.7 12.2,-50.7 C14.7,-50.7 16.3,-49 16,-46.8 Z" fill="none" stroke="#7a5418" stroke-width="0.22" stroke-dasharray="0.5 0.4"/>
+<path d="M7.7,-44.6 C6.3,-47 7.8,-50.1 11.1,-50.8" fill="none" stroke="#fbe3a0" stroke-width="0.3" opacity="0.9"/>
+<path d="M12.2,-50.5 L12.9,-48.1 L15.7,-47.9 L13.3,-46.3 L13.6,-43.8 L11.5,-45.2 L9,-43.8 L10.1,-46.3 L8,-47.9 L10.9,-48.1 Z" fill="#d9a842"/>
+<path d="M11.8,-46.8 L12.2,-50.5 L10.9,-48.1 Z" fill="#fbe3a0"/>
+<path d="M11.8,-46.8 L12.2,-50.5 L12.9,-48.1 Z" fill="#fbe3a0"/>
+<path d="M11.8,-46.8 L15.7,-47.9 L12.9,-48.1 Z" fill="#d9a842"/>
+<path d="M11.8,-46.8 L15.7,-47.9 L13.3,-46.3 Z" fill="#7a5418"/>
+<path d="M11.8,-46.8 L13.6,-43.8 L13.3,-46.3 Z" fill="#7a5418"/>
+<path d="M11.8,-46.8 L13.6,-43.8 L11.5,-45.2 Z" fill="#7a5418"/>
+<path d="M11.8,-46.8 L9,-43.8 L11.5,-45.2 Z" fill="#7a5418"/>
+<path d="M11.8,-46.8 L9,-43.8 L10.1,-46.3 Z" fill="#d9a842"/>
+<path d="M11.8,-46.8 L8,-47.9 L10.1,-46.3 Z" fill="#fbe3a0"/>
+<path d="M11.8,-46.8 L8,-47.9 L10.9,-48.1 Z" fill="#fbe3a0"/>
+<path d="M12.2,-50.5 L12.9,-48.1 L15.7,-47.9 L13.3,-46.3 L13.6,-43.8 L11.5,-45.2 L9,-43.8 L10.1,-46.3 L8,-47.9 L10.9,-48.1 Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M12.9,-46.8 C12.9,-46.2 12.3,-45.7 11.6,-45.7 C11,-45.7 10.5,-46.2 10.6,-46.8 C10.6,-47.4 11.2,-47.9 11.9,-47.9 C12.5,-47.9 13,-47.4 12.9,-46.8 Z" fill="#d9a842" stroke="#04060b" stroke-width="0.3" stroke-linejoin="round"/>
+<path d="M11.2,-46.4 L11.2,-47.2 L11.7,-46.7 L12.3,-47.2 L12.2,-46.4" fill="none" stroke="#7a5418" stroke-width="0.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9.8,-49.6 C9.8,-49.4 9.7,-49.2 9.5,-49.2 C9.2,-49.2 9,-49.4 9,-49.6 C9.1,-49.8 9.3,-50 9.5,-50 C9.7,-50 9.8,-49.8 9.8,-49.6 Z" fill="#ffffff" opacity="0.85"/>
 <path d="M-17.9,-27.6 Q0,-22.4 17.9,-27.6 L18.3,-22.6 Q0,-17.2 -18.3,-22.6 Z" fill="#3a2618" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-17.3,-26.4 Q0,-21.2 17.3,-26.4" fill="none" stroke="#6a4630" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-17" y="-26.6" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
@@ -764,12 +774,6 @@
 </g>
 <g fill="#fff0cc" stroke="#fff0cc" opacity="0.9">
 <rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
-</g>
-<g filter="url(#marshal-0-brim-duster-poncho-masc-idle-glow)" fill="#ffc94a" stroke="#ffc94a">
-<circle cx="10.8" cy="-46.8" r="0.8"/>
-</g>
-<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
-<circle cx="10.8" cy="-46.8" r="0.8"/>
 </g>
 <g data-acc="antenna">
 <circle cx="24" cy="-112" r="1.2" fill="#ffc94a"/>

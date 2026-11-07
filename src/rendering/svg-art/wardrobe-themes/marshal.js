@@ -19,21 +19,66 @@ const LEATHER = "#3a2618";
 /** Coat leather: a weathered brown pulled toward the palette's dark. */
 const coatOf = (c, mix) => mix(mix(c.pal.dark, "#000000", 0.2), "#5a3f2a", 0.62);
 
-/** A six-point star with ball tips, centred at (x, y). */
+/**
+ * The marshal's badge, centred at (x, y), `r` to the ring's outer edge: a
+ * five-point star cut inside a brass ring, the coat showing between its
+ * points. Each point is stamped with a ridge down its middle, so one half
+ * catches the light from the upper left and the other falls into shade; a
+ * raised boss in the middle carries an engraved M. It is plain metal, so it
+ * gives nothing to the glow layer: only a pin-shine on the ring.
+ */
 function star(x, y, r) {
-  let d = "";
-  let balls = "";
-  for (let i = 0; i < 12; i++) {
-    const a = ((i * 30 - 90) * Math.PI) / 180;
-    const rr = i % 2 ? r * 0.5 : r;
-    d += `${i ? "L" : "M"}${pt(x + Math.cos(a) * rr, y + Math.sin(a) * rr)} `;
-    if (!(i % 2)) balls += `<circle cx="${f(x + Math.cos(a) * r)}" cy="${f(y + Math.sin(a) * r)}" r="${f(r * 0.17)}" fill="${BRASS}" stroke="${INK}" stroke-width=".35"/>`;
+  const at = (a, rr) => [x + Math.cos(a) * rr, y + Math.sin(a) * rr];
+  const tipR = r * 0.84;
+  const inR = tipR * 0.42;
+  const lightDir = [-0.6, -0.8];
+  let facets = "";
+  for (let i = 0; i < 5; i++) {
+    const a = ((i * 72 - 90) * Math.PI) / 180;
+    const tip = at(a, tipR);
+    for (const side of [-1, 1]) {
+      // The facet between the ridge and one inner corner faces out between
+      // the two; its tone follows how much of that faces the light.
+      const corner = at(a + (side * 36 * Math.PI) / 180, inR);
+      const n = a + (side * 18 * Math.PI) / 180;
+      const lit = Math.cos(n) * lightDir[0] + Math.sin(n) * lightDir[1];
+      const tone = lit > 0.45 ? BRASS_HI : lit > -0.25 ? BRASS : BRASS_LO;
+      facets += `<path d="M${pt(x, y)} L${pt(...tip)} L${pt(...corner)} Z" fill="${tone}"/>`;
+    }
   }
+  let outline = "";
+  for (let i = 0; i < 10; i++) {
+    const a = ((i * 36 - 90) * Math.PI) / 180;
+    outline += `${i ? "L" : "M"}${pt(...at(a, i % 2 ? inR : tipR))} `;
+  }
+  outline += "Z";
+  const ringR = r - 0.5;
+  // Round parts as Béziers, not <circle>s or arcs: the rig warps the torso
+  // to the build by its path points, and the ring, boss and shine must warp
+  // with the star they frame.
+  // A cubic for the arc of radius rr about (cx, cy) from angle a0 to a1.
+  const arc = (cx, cy, rr, a0, a1) => {
+    const h = (4 / 3) * Math.tan((a1 - a0) / 4) * rr;
+    const [x0, y0, x1, y1] = [cx + Math.cos(a0) * rr, cy + Math.sin(a0) * rr, cx + Math.cos(a1) * rr, cy + Math.sin(a1) * rr];
+    return `C${pt(x0 - Math.sin(a0) * h, y0 + Math.cos(a0) * h)} ${pt(x1 + Math.sin(a1) * h, y1 - Math.cos(a1) * h)} ${pt(x1, y1)}`;
+  };
+  const circle = (cx, cy, rr) => `M${pt(cx + rr, cy)} ${[0, 1, 2, 3].map((q) => arc(cx, cy, rr, (q * Math.PI) / 2, ((q + 1) * Math.PI) / 2)).join(" ")} Z`;
   return (
-    shape(d + "Z", BRASS, 0.6) +
-    balls +
-    line(`M${pt(x - r * 0.62, y - r * 0.32)} L${pt(x - r * 0.2, y - r * 0.4)} L${pt(x, y - r * 0.8)}`, BRASS_HI, 0.45, 0.9) +
-    `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r * 0.36)}" fill="${BRASS_LO}" stroke="${INK}" stroke-width=".35"/>`
+    // The ring: an ink edge either side of the brass band, a darker
+    // engraved line round its middle, the light along its upper left.
+    `<path d="${circle(x, y, ringR)}" fill="none" stroke="${INK}" stroke-width="1.7"/>` +
+    `<path d="${circle(x, y, ringR)}" fill="none" stroke="${BRASS}" stroke-width=".95"/>` +
+    `<path d="${circle(x, y, ringR)}" fill="none" stroke="${BRASS_LO}" stroke-width=".22" stroke-dasharray=".5 .4"/>` +
+    `<path d="M${pt(...at(Math.PI * 0.82, ringR + 0.25))} ${arc(x, y, ringR + 0.25, Math.PI * 0.82, Math.PI * 1.42)}" fill="none" stroke="${BRASS_HI}" stroke-width=".3" opacity=".9"/>` +
+    // The star, its points meeting the ring.
+    `<path d="${outline}" fill="${BRASS}"/>` +
+    facets +
+    `<path d="${outline}" fill="none" stroke="${INK}" stroke-width=".45" stroke-linejoin="round"/>` +
+    // The raised boss and its engraved M.
+    shape(circle(x, y, r * 0.26), BRASS, 0.3) +
+    line(`M${pt(x - r * 0.12, y + r * 0.1)} L${pt(x - r * 0.12, y - r * 0.1)} L${pt(x, y + r * 0.03)} L${pt(x + r * 0.12, y - r * 0.1)} L${pt(x + r * 0.12, y + r * 0.1)}`, BRASS_LO, 0.2, 1) +
+    // Pin-shine on the ring.
+    `<path d="${circle(x - ringR * 0.6, y - ringR * 0.72, 0.38)}" fill="#ffffff" opacity=".85"/>`
   );
 }
 
@@ -45,7 +90,6 @@ function duster(P, c, K) {
   const coatHi = mix(coat, "#e8d2b0", 0.28);
   const coatLo = mix(coat, "#000000", 0.4);
   const trim = mix(c.pal.primary, coat, 0.62);
-  let glow = "";
 
   // The back of the coat hangs behind the legs to mid-shin, a riding vent
   // up the middle.
@@ -184,11 +228,12 @@ function duster(P, c, K) {
     shape(mirrorIf(s, "M11,-67.8 L16.6,-67 L15.4,-52.4 L12.6,-49.6 L11.6,-56 Z"), coatHi, 0.8) +
     `<path d="${mirrorIf(s, "M11,-67.8 L16.6,-67 L15.4,-52.4 L12.6,-49.6 L11.6,-56 Z")}" fill="url(#weave)" opacity=".5"/>` +
     line(mirrorIf(s, "M11.4,-66.8 L12.2,-56.2 L12.8,-50.6"), trim, 0.6, 0.9);
-  const badge = star(10.8, -46.8, 4.2);
-  glow += energy(`<circle cx="10.8" cy="-46.8" r=".8"/>`, c.energy);
+  const badge = star(10.8, -46.8, 4.4);
 
   const torso = collar + panels + lapel(-1) + lapel(1) + badge + belt + holsters;
-  return { under, legs, torso, arms, glow };
+  // Nothing on the coat is lit: the sleeves cover the limbs' light and the
+  // badge is plain brass.
+  return { under, legs, torso, arms, glow: "" };
 }
 
 // ── Brim: wide-brim hat, comm band, bandana ────────────────────────────────

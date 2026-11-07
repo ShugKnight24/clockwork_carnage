@@ -475,15 +475,25 @@
 <path d="M11,-67.8 L16.6,-67 L15.4,-52.4 L12.6,-49.6 L11.6,-56 Z" fill="#6d5a47" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <path d="M11,-67.8 L16.6,-67 L15.4,-52.4 L12.6,-49.6 L11.6,-56 Z" fill="url(#weave)" opacity="0.5"/>
 <path d="M11.4,-66.8 L12.2,-56.2 L12.8,-50.6" fill="none" stroke="#372b21" stroke-width="0.6" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M10.8,-51 L11.9,-48.6 L14.4,-48.9 L12.9,-46.8 L14.4,-44.7 L11.9,-45 L10.8,-42.6 L9.8,-45 L7.2,-44.7 L8.7,-46.8 L7.2,-48.9 L9.8,-48.6 Z" fill="#d9a842" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
-<circle cx="10.8" cy="-51" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="14.4" cy="-48.9" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="14.4" cy="-44.7" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="10.8" cy="-42.6" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="7.2" cy="-44.7" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<circle cx="7.2" cy="-48.9" r="0.7" fill="#d9a842" stroke="#04060b" stroke-width="0.35"/>
-<path d="M8.2,-48.1 L10,-48.5 L10.8,-50.2" fill="none" stroke="#fbe3a0" stroke-width="0.45" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="10.8" cy="-46.8" r="1.5" fill="#7a5418" stroke="#04060b" stroke-width="0.35"/>
+<path d="M14.7,-46.8 C14.7,-44.6 13,-42.9 10.8,-42.9 C8.6,-42.9 6.9,-44.6 6.9,-46.8 C6.9,-49 8.6,-50.7 10.8,-50.7 C13,-50.7 14.7,-49 14.7,-46.8 Z" fill="none" stroke="#04060b" stroke-width="1.7"/>
+<path d="M14.7,-46.8 C14.7,-44.6 13,-42.9 10.8,-42.9 C8.6,-42.9 6.9,-44.6 6.9,-46.8 C6.9,-49 8.6,-50.7 10.8,-50.7 C13,-50.7 14.7,-49 14.7,-46.8 Z" fill="none" stroke="#d9a842" stroke-width="0.95"/>
+<path d="M14.7,-46.8 C14.7,-44.6 13,-42.9 10.8,-42.9 C8.6,-42.9 6.9,-44.6 6.9,-46.8 C6.9,-49 8.6,-50.7 10.8,-50.7 C13,-50.7 14.7,-49 14.7,-46.8 Z" fill="none" stroke="#7a5418" stroke-width="0.22" stroke-dasharray="0.5 0.4"/>
+<path d="M7.3,-44.6 C5.8,-47 7,-50.1 9.8,-50.8" fill="none" stroke="#fbe3a0" stroke-width="0.3" opacity="0.9"/>
+<path d="M10.8,-50.5 L11.7,-48.1 L14.3,-47.9 L12.3,-46.3 L13,-43.8 L10.8,-45.2 L8.6,-43.8 L9.3,-46.3 L7.3,-47.9 L9.9,-48.1 Z" fill="#d9a842"/>
+<path d="M10.8,-46.8 L10.8,-50.5 L9.9,-48.1 Z" fill="#fbe3a0"/>
+<path d="M10.8,-46.8 L10.8,-50.5 L11.7,-48.1 Z" fill="#fbe3a0"/>
+<path d="M10.8,-46.8 L14.3,-47.9 L11.7,-48.1 Z" fill="#d9a842"/>
+<path d="M10.8,-46.8 L14.3,-47.9 L12.3,-46.3 Z" fill="#7a5418"/>
+<path d="M10.8,-46.8 L13,-43.8 L12.3,-46.3 Z" fill="#7a5418"/>
+<path d="M10.8,-46.8 L13,-43.8 L10.8,-45.2 Z" fill="#7a5418"/>
+<path d="M10.8,-46.8 L8.6,-43.8 L10.8,-45.2 Z" fill="#7a5418"/>
+<path d="M10.8,-46.8 L8.6,-43.8 L9.3,-46.3 Z" fill="#d9a842"/>
+<path d="M10.8,-46.8 L7.3,-47.9 L9.3,-46.3 Z" fill="#fbe3a0"/>
+<path d="M10.8,-46.8 L7.3,-47.9 L9.9,-48.1 Z" fill="#fbe3a0"/>
+<path d="M10.8,-50.5 L11.7,-48.1 L14.3,-47.9 L12.3,-46.3 L13,-43.8 L10.8,-45.2 L8.6,-43.8 L9.3,-46.3 L7.3,-47.9 L9.9,-48.1 Z" fill="none" stroke="#04060b" stroke-width="0.45" stroke-linejoin="round"/>
+<path d="M11.9,-46.8 C11.9,-46.2 11.4,-45.7 10.8,-45.7 C10.2,-45.7 9.7,-46.2 9.7,-46.8 C9.7,-47.4 10.2,-47.9 10.8,-47.9 C11.4,-47.9 11.9,-47.4 11.9,-46.8 Z" fill="#d9a842" stroke="#04060b" stroke-width="0.3" stroke-linejoin="round"/>
+<path d="M10.3,-46.4 L10.3,-47.2 L10.8,-46.7 L11.3,-47.2 L11.3,-46.4" fill="none" stroke="#7a5418" stroke-width="0.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8.8,-49.6 C8.8,-49.4 8.7,-49.2 8.5,-49.2 C8.3,-49.2 8.1,-49.4 8.1,-49.6 C8.1,-49.8 8.3,-50 8.5,-50 C8.7,-50 8.8,-49.8 8.8,-49.6 Z" fill="#ffffff" opacity="0.85"/>
 <path d="M-18.6,-27.6 Q0,-22.4 18.6,-27.6 L19,-22.6 Q0,-17.2 -19,-22.6 Z" fill="#3a2618" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M-18,-26.4 Q0,-21.2 18,-26.4" fill="none" stroke="#6a4630" stroke-width="0.5" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="-17" y="-26.6" width="1.3" height="2.6" rx="0.5" fill="#d9a842" stroke="#04060b" stroke-width="0.3"/>
@@ -884,12 +894,6 @@
 </g>
 <g fill="#fff0cc" stroke="#fff0cc" opacity="0.9">
 <rect x="-1.8" y="-26" width="3.6" height="2.2" rx="0.3"/>
-</g>
-<g filter="url(#glow)" fill="#ffc94a" stroke="#ffc94a">
-<circle cx="10.8" cy="-46.8" r="0.8"/>
-</g>
-<g fill="#bffcff" stroke="#bffcff" opacity="0.9">
-<circle cx="10.8" cy="-46.8" r="0.8"/>
 </g>
 <g data-acc="antenna">
 <g transform="translate(-6,4) rotate(-12)">
