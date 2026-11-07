@@ -312,19 +312,19 @@
 <path d="M-5.6,-74 L-13.9,-74" fill="none" stroke="#04060b" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-8.4,-83.6 L-11,-83.6 L-11,-86.4 L-8.4,-86.4 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
 <path d="M-7.4,-86.4 L-12,-86.4 L-12,-87.8 L-7.4,-87.8 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
-<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-11.6,-85.6 C-17,-86 -19.4,-80 -18.6,-72" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.6,-80 -19.4,-72 L-19.2,-63" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.6,-80 -19.4,-72 L-19.2,-63" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.6,-80 -19.4,-72 L-19.2,-63" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-11.6,-85.6 C-17,-86 -19.6,-80 -19.4,-72 L-19.2,-63" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
 <path d="M5.4,-66 L5.6,-80.4 C5.8,-84.8 13.6,-84.8 13.8,-80.4 L14,-60 L5.4,-60 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-copper)" stroke="#04060b" stroke-width="1" stroke-linejoin="round"/>
 <path d="M6.8,-79.8 C7,-82.6 9,-83.4 10,-83.4" fill="none" stroke="#ffd2b0" stroke-width="0.6" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M5.6,-74 L13.9,-74" fill="none" stroke="#04060b" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M8.4,-83.6 L11,-83.6 L11,-86.4 L8.4,-86.4 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>
 <path d="M7.4,-86.4 L12,-86.4 L12,-87.8 L7.4,-87.8 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-brass-dk)" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
-<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M11.6,-85.6 C17,-86 19.4,-80 18.6,-72" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M11.6,-85.6 C17,-86 19.6,-80 19.4,-72 L19.2,-63" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.6,-80 19.4,-72 L19.2,-63" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.6,-80 19.4,-72 L19.2,-63" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11.6,-85.6 C17,-86 19.6,-80 19.4,-72 L19.2,-63" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
 <path d="M-7,-70 L7,-70 L8,-56 L-8,-56 Z" fill="#1f1a14" stroke="#04060b" stroke-width="0.8" stroke-linejoin="round"/>
 <path d="M-17.9,-19.6C-18.1,-18.2 -19.1,-14.1 -19.4,-11.3C-19.7,-8.4 -19.8,-5.9 -19.6,-2.5C-19.3,0.9 -18.5,5.5 -18.1,9C-17.6,12.6 -17,17 -16.8,18.6C-17.2,24 -6.5,24.7 -6.2,19.3C-6,18.8 -5.6,17.7 -5.2,16.3C-4.7,15 -4,13.7 -3.6,11.1C-3.2,8.4 -3.1,4.1 -2.7,0.5C-2.3,-3.2 -1.5,-7.7 -1.2,-10.9C-0.9,-14.1 -1.2,-17.2 -1.1,-18.5C-0.6,-26.9 -17.3,-27.9 -17.9,-19.6Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-suit)" stroke="#04060b" stroke-width="1.1" stroke-linejoin="round"/>
 <path d="M-17.9,-19.6C-18.1,-18.2 -19.1,-14.1 -19.4,-11.3C-19.7,-8.4 -19.8,-5.9 -19.6,-2.5C-19.3,0.9 -18.5,5.5 -18.1,9C-17.6,12.6 -17,17 -16.8,18.6C-17.2,24 -6.5,24.7 -6.2,19.3C-6,18.8 -5.6,17.7 -5.2,16.3C-4.7,15 -4,13.7 -3.6,11.1C-3.2,8.4 -3.1,4.1 -2.7,0.5C-2.3,-3.2 -1.5,-7.7 -1.2,-10.9C-0.9,-14.1 -1.2,-17.2 -1.1,-18.5C-0.6,-26.9 -17.3,-27.9 -17.9,-19.6Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-weave)"/>
@@ -586,14 +586,14 @@
 <path d="M8.2,-33.2 L10.2,-33.2" fill="none" stroke="#b8c0c8" stroke-width="0.4" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-2.1,-33.4 L2.1,-33.4 L2.4,-28.6 L-2.4,-28.6 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-brass)" stroke="#04060b" stroke-width="0.7" stroke-linejoin="round"/>
 <path d="M-1.2,-32.4 L1.2,-32.4 L1.2,-29.6 L-1.2,-29.6 Z" fill="none" stroke="#04060b" stroke-width="0.5" stroke-linejoin="round"/>
-<path d="M-16.6,-71 C-19.5,-62 -18.3,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-16.6,-71 C-19.5,-62 -18.3,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-16.6,-71 C-19.5,-62 -18.3,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M-16.6,-71 C-19.5,-62 -18.3,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
-<path d="M16.6,-71 C19.5,-62 18.3,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.6,-71 C19.5,-62 18.3,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.6,-71 C19.5,-62 18.3,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.6,-71 C19.5,-62 18.3,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M-17.3,-62 C-19.2,-56 -17.9,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.3,-62 C-19.2,-56 -17.9,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.3,-62 C-19.2,-56 -17.9,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M-17.3,-62 C-19.2,-56 -17.9,-50 -14.6,-46 C-11.4,-43 -7.8,-45 -7,-50.4" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
+<path d="M17.3,-62 C19.2,-56 17.9,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#04060b" stroke-width="3.6" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.3,-62 C19.2,-56 17.9,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#5e5348" stroke-width="2.4" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.3,-62 C19.2,-56 17.9,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#a39280" stroke-width="0.72" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M17.3,-62 C19.2,-56 17.9,-50 14.6,-46 C11.4,-43 7.8,-45 7,-50.4" fill="none" stroke="#0c0a09" stroke-width="2.4" stroke-dasharray="0.45 1.1" stroke-opacity="0.7"/>
 <path d="M-14,-66.6 C-9,-71.4 9,-71.4 14,-66.6 C16,-62 16.2,-57.4 14.5,-53.4 C9.2,-50 4.2,-48.6 0,-48.4 C-4.2,-48.6 -9.1,-50 -14.5,-53.4 C-16.2,-57.4 -16,-62 -14,-66.6 Z" fill="url(#diver-0-porthole-diving-lantern-fem-idle-frame-diving-brass)" stroke="#04060b" stroke-width="1.2" stroke-linejoin="round"/>
 <path d="M-13,-64.8 C-8.1,-68.6 -2.7,-69.4 0,-69.4" fill="none" stroke="#fff1c2" stroke-width="0.8" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M15.1,-62 C15.8,-58.4 15.4,-56 14.2,-53.8" fill="none" stroke="#3aa4ff" stroke-width="0.6" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/>

@@ -57,14 +57,16 @@ function diving(P, c, K) {
   const { BRASS, BRASS_DK, COPPER, CANVAS, LEAD } = metals(K);
   let glow = "";
   // Twin copper air tanks behind the back, standing up past the shoulders,
-  // a brass valve and a hose elbow on each.
+  // a brass valve and a hose elbow on each. Each hose loops out over the
+  // shoulder and down behind the top of the sleeve, where the torso's run of
+  // it picks up (see below).
   const tank = (s) =>
     shape(mirrorIf(s, "M5.4,-66 L5.6,-80.4 C5.8,-84.8 13.6,-84.8 13.8,-80.4 L14,-60 L5.4,-60 Z"), COPPER, 1) +
     line(mirrorIf(s, "M6.8,-79.8 C7,-82.6 9,-83.4 10,-83.4"), "#ffd2b0", 0.6, 0.7) +
     line(mirrorIf(s, "M5.6,-74 L13.9,-74"), INK, 0.6, 0.6) +
     shape(mirrorIf(s, "M8.4,-83.6 L11,-83.6 L11,-86.4 L8.4,-86.4 Z"), BRASS, 0.6) +
     shape(mirrorIf(s, "M7.4,-86.4 L12,-86.4 L12,-87.8 L7.4,-87.8 Z"), BRASS_DK, 0.5) +
-    hose(mirrorIf(s, "M11.6,-85.6 C17,-86 19.4,-80 18.6,-72"));
+    hose(mirrorIf(s, "M11.6,-85.6 C17,-86 19.6,-80 19.4,-72 L19.2,-63"));
   const under = tank(-1) + tank(1) + shape("M-7,-70 L7,-70 L8,-56 L-8,-56 Z", "#1f1a14", 0.8);
 
   const legs = P.legs
@@ -165,8 +167,11 @@ function diving(P, c, K) {
     shape("M-2.6,-33.4 L2.6,-33.4 L2.6,-28.6 L-2.6,-28.6 Z", BRASS, 0.7) +
     shape("M-1.4,-32.4 L1.4,-32.4 L1.4,-29.6 L-1.4,-29.6 Z", "none", 0.5) +
     // Hoses: from the tanks, round under the arms, up into the corselet.
-    hose("M-18.4,-71 C-21.4,-62 -20,-50 -16.6,-46 C-13.4,-43 -9,-45 -7.6,-50.4") +
-    hose("M18.4,-71 C21.4,-62 20,-50 16.6,-46 C13.4,-43 9,-45 7.6,-50.4") +
+    // This run starts under the top of the sleeve, where the tank's run ends:
+    // the rig fits the torso to the build and the tanks behind it not, so
+    // the two only meet where the sleeve hides the join.
+    hose("M-19,-62 C-20.4,-56 -19.6,-50 -16.6,-46 C-13.4,-43 -9,-45 -7.6,-50.4") +
+    hose("M19,-62 C20.4,-56 19.6,-50 16.6,-46 C13.4,-43 9,-45 7.6,-50.4") +
     // Corselet.
     shape(corselet, BRASS, 1.2) +
     line("M-14.4,-64.8 C-9,-68.6 -3,-69.4 0,-69.4", BRASS_HI, 0.8, 0.8) +

@@ -87,3 +87,29 @@ describe("the Abyssal Diver's porthole helmet", () => {
     expect(y).toBeLessThan(-69.4);
   });
 });
+
+describe("the Abyssal Diver's tank hoses", () => {
+  const c = lookOf({ frame: "diving", helmet: "porthole", shoulder: "lantern" });
+  const points = (d) => [...d.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  /** The hoses' paths (the rubber stroke each hose draws once). */
+  const hoses = (markup) => [...markup.matchAll(/<path d="([^"]+)" fill="none" stroke="#5e5348"/g)].map((m) => points(m[1]));
+
+  it("each run from a tank ends, and each run into the corselet starts, under the sleeve; the latter ends in its coupling", () => {
+    // The tanks sit behind the body and the corselet's hoses over it, which
+    // the rig fits to the build differently: the two runs may only meet where
+    // the sleeve (from 4 above the shoulder joint down) hides the join.
+    const { under, torso } = frameLayers("diving", STAND, c);
+    const sleeveTop = Math.max(...STAND.arms.map(({ sh }) => sh[1])) - 4;
+    const fromTanks = hoses(under);
+    const toCorselet = hoses(torso);
+    expect(fromTanks).toHaveLength(2);
+    expect(toCorselet).toHaveLength(2);
+    for (const run of fromTanks) expect(run.at(-1)[1]).toBeGreaterThanOrEqual(sleeveTop);
+    for (const run of toCorselet) {
+      expect(run[0][1]).toBeGreaterThanOrEqual(sleeveTop);
+      const [x, y] = run.at(-1);
+      const couplings = [...torso.matchAll(/<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="2"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+      expect(couplings.some(([cx, cy]) => Math.hypot(x - cx, y - cy) <= 2)).toBe(true);
+    }
+  });
+});
