@@ -2,9 +2,15 @@
  * Eyes and face slots (FACE_SLOTS in src/data/accessories.js). Drawn in head
  * space on the face itself (agent-rig.js face(): eyes at y -81.6, x -3 and
  * 3.2; brows near -84.4; nose -80..-76; mouth -74; cheeks out to x ±7.2),
- * returned as `face`, with lights in `glow` (the rig blooms them). The rig
- * draws them only where the face shows and the helmet leaves the slot room
- * (its entry's faceSlots), shaped to the feminine jaw like the face under them.
+ * returned as `face`, with lights in `glow` (the rig blooms them). Paint that
+ * lies on the skin itself (a scar, freckles, war paint) is returned as `skin`
+ * instead: the rig draws it first, under the eyewear and the rest, and clips
+ * it to the face's own outline for the build, so no stroke of it can leave
+ * the face whatever its numbers. Draw skin paint to end inside the cheek all
+ * the same; the clip is a guard, not a shape. The rig draws them only where
+ * the face shows and the helmet leaves the slot room (its entry's faceSlots),
+ * shaped to the feminine jaw like the face under them (every "x,y" pair is
+ * narrowed, so draw with paths, not circles or arcs, where the fit matters).
  * Like every painter, an id comes from K.uid and its markup goes to K.defs.
  */
 
@@ -86,7 +92,7 @@ export const EYES = {
 export const FACE = {
   scar: (A, c) => {
     const d = "M2.2,-86.4 L3.4,-83.8 L3.2,-82.6 M3.6,-80.4 L4.6,-77.6 L5.4,-76.4";
-    return { face: stroke(d, mix(c.skin.shadow, "#7a2a28", 0.35), 0.75, 0.9) + stroke(d, mix(c.skin.color, "#ffffff", 0.35), 0.25, 0.7) };
+    return { skin: stroke(d, mix(c.skin.shadow, "#7a2a28", 0.35), 0.75, 0.9) + stroke(d, mix(c.skin.color, "#ffffff", 0.35), 0.25, 0.7) };
   },
   // Two stripes under each eye in the player's paint (c.tints.face; its
   // default for a look resolved without one), never the suit's colours.
@@ -94,16 +100,21 @@ export const FACE = {
   // light skin and light on deep skin, so any paint reads on any face, even
   // one close to the skin's own colour (the edge then thickens, since the
   // paint alone no longer parts it from the skin). The lower stripe is
-  // thinner, as if dragged by two fingers.
+  // thinner, as if dragged by two fingers. Each runs out from beside the
+  // nose and tapers to a point on the cheekbone, short of the cheek's edge
+  // (x 7.2), the way a fingertip lifts off.
   warpaint: (A, c) => {
     const paint = c.tints?.face ?? accessoryItem("face", "warpaint").tint.default;
     const skin = lum(c.skin.color);
     const edge = skin > 0.42 ? mix(c.skin.shadow, "#000000", 0.55) : mix(c.skin.color, "#ffffff", 0.55);
     const width = Math.abs(skin - lum(paint)) < 0.3 ? 0.5 : 0.32;
-    const stripe = (s, y, t) => `M${f(s * 1.8)},${f(y)} L${f(s * 6.6)},${f(y - 0.8)} L${f(s * 6.5)},${f(y - 0.8 + t)} L${f(s * 2)},${f(y + t * 0.9)} Z`;
+    // A stripe on side s from its inner end at (1.8, y), t thick, its tip at x `tip`.
+    const stripe = (s, y, t, tip) =>
+      `M${f(s * 1.8)},${f(y)} C${f(s * 3.4)},${f(y - 0.45)} ${f(s * (tip - 1.4))},${f(y - 0.75)} ${f(s * tip)},${f(y - 0.6)} ` +
+      `C${f(s * (tip - 1.8))},${f(y - 0.6 + t * 0.5)} ${f(s * 3.4)},${f(y + t)} ${f(s * 2)},${f(y + t * 0.9)} Z`;
     const band = (d, op) => `<path d="${d}" fill="${paint}" stroke="${edge}" stroke-width="${width}" stroke-linejoin="round" opacity="${op}"/>`;
     return {
-      face: [-1, 1].map((s) => band(stripe(s, -79.8, 1.5), ".92") + band(stripe(s, -77.7, 1.1), ".85")).join(""),
+      skin: [-1, 1].map((s) => band(stripe(s, -79.8, 1.5, 5.9), ".92") + band(stripe(s, -77.7, 1.1, 5.5), ".85")).join(""),
     };
   },
   cigar: () => ({
@@ -130,7 +141,8 @@ export const FACE = {
   freckles: (A, c) => {
     const tone = mix(c.skin.shadow, "#5a3a22", 0.4);
     const pts = [[-5, -78.6], [-4, -79.4], [-3.2, -78.2], [-2.2, -79], [-1.4, -79.8], [1.4, -79.8], [2.2, -79], [3.2, -78.2], [4, -79.4], [5, -78.6], [-4.4, -77.6], [4.4, -77.6]];
-    return { face: `<g fill="${tone}" opacity=".7">${pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r=".32"/>`).join("")}</g>` };
+    // Dots as round-capped strokes of no length, so they narrow with the feminine jaw.
+    return { skin: `<path d="${pts.map(([x, y]) => `M${x},${y} L${x},${y}`).join(" ")}" stroke="${tone}" stroke-width=".64" stroke-linecap="round" opacity=".7"/>` };
   },
   beard: (A, c) => {
     const hair = c.hair.color;

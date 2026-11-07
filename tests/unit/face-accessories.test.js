@@ -156,3 +156,41 @@ describe("fitted and drawn everywhere the head is", () => {
     expect(worn(characterLayers(closed).base, "monocle")).toBe(false);
   });
 });
+
+describe("paint on the skin stays on the face", () => {
+  const SKIN = ["scar", "warpaint", "freckles"];
+  const clipOf = (p) => p.defs.match(/<clipPath id="face-skin">(.*?)<\/clipPath>/)?.[1];
+
+  it("a scar, freckles and war paint are clipped to the build's face outline, under the eyewear", () => {
+    for (const item of SKIN) {
+      for (const body of ["masc", "fem"]) {
+        for (const peek of [false, true]) {
+          const p = buildAgentParts(wearing({ helmet: peek ? "standard" : "wide", body }, "aviators", item), { peek });
+          const clip = p.head.indexOf('<g clip-path="url(#face-skin)">');
+          expect(clip, `${item} ${body} peek=${peek}`).toBeGreaterThan(-1);
+          expect(p.head.indexOf(`data-acc="${item}"`), `${item} ${body}`).toBeGreaterThan(clip);
+          expect(p.head.indexOf('data-acc="aviators"'), `${item} ${body}`).toBeGreaterThan(p.head.indexOf(`data-acc="${item}"`));
+          expect(clipOf(p), `${item} ${body}`).toBeTruthy();
+        }
+      }
+    }
+  });
+
+  it("the clip follows the feminine jaw", () => {
+    const outline = (body) => clipOf(buildAgentParts(wearing({ helmet: "wide", body }, "none", "warpaint"))).match(/d="([^"]+)"/)[1];
+    expect(Math.max(...xs(outline("fem")))).toBeLessThan(Math.max(...xs(outline("masc"))));
+  });
+
+  it("the clip is only there when something is painted on the skin", () => {
+    const p = buildAgentParts(wearing({ helmet: "wide" }, "aviators", "beard"));
+    expect(clipOf(p)).toBeUndefined();
+    expect(p.head).not.toContain("url(#face-skin)");
+  });
+
+  it("war paint tapers out on the cheek, short of the face's edge", () => {
+    const head = buildAgentParts(wearing({ helmet: "wide" }, "none", "warpaint")).head;
+    const paint = head.slice(head.indexOf('data-acc="warpaint"'), head.indexOf("</g>", head.indexOf('data-acc="warpaint"')));
+    // The cheek's edge is at x 7.2 on the masculine face.
+    expect(Math.max(...xs(paint))).toBeLessThanOrEqual(6.2);
+  });
+});

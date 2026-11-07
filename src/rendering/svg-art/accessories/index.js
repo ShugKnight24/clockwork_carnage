@@ -3,7 +3,8 @@
  * A.pose) and the resolved look and returns markup for the layers it uses:
  * back (behind the torso and cape), front (on the body, under the arms and
  * rifle), top (over the arms, hands and collar), glow, head (with the helmet),
- * face (on the face, in head space). Helmet-slot glows come back as headGlow
+ * face (on the face, in head space), skin (paint on the face's skin, in head
+ * space: the rig keeps it inside the face's outline). Helmet-slot glows come back as headGlow
  * so they turn and fall with the head; eyes- and face-slot glows as faceGlow.
  * Every group is tagged data-acc="<id>" for tests and debugging.
  * A painter's third argument is its kit, K.uid(name) and K.defs(markup)
@@ -14,7 +15,7 @@
  * Eyes and face items (FACE_SLOTS) are drawn only where A.faceSlots says the
  * slot shows: a closed helmet hides both, an open one may leave no room for
  * one (helmetFaceSlots in ../wardrobe-themes/index.js). The rig places
- * `face` and `faceGlow` on the head, under the hair, or hands them to a
+ * `skin`, `face` and `faceGlow` on the head, under the hair, or hands them to a
  * helmet that layers its face itself (K.faceAccessories, the helmet kit).
  */
 import { ACCESSORY_SLOTS, ACCESSORIES, FACE_SLOTS } from "../../../data/accessories.js";
@@ -29,12 +30,12 @@ import { EYES as eyes, FACE as face } from "./face.js";
 
 export const PAINTERS_BY_SLOT = { back, waist, helmet, arms, neck, legs, eyes, face };
 const CAPE_REPLACERS = new Set(["cloak"]);
-const LAYERS = ["back", "front", "top", "glow", "head", "face"];
+const LAYERS = ["back", "front", "top", "glow", "head", "face", "skin"];
 /** The helmet seat each helmet-slot item needs. */
 const SEAT_OF = new Map(ACCESSORIES.helmet.filter((e) => e.seat).map((e) => [e.id, e.seat]));
 
 export function paintAccessories(accessories, A, c) {
-  const out = { back: "", front: "", top: "", glow: "", head: "", headGlow: "", face: "", faceGlow: "", defs: "", replacesCape: false };
+  const out = { back: "", front: "", top: "", glow: "", head: "", headGlow: "", face: "", faceGlow: "", skin: "", defs: "", replacesCape: false };
   const scope = idScope();
   for (const { id: slot } of ACCESSORY_SLOTS) {
     const itemId = accessories?.[slot];

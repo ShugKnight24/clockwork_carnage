@@ -474,7 +474,7 @@ describe("painters name only their own ids and the rig's shared defs", () => {
     for (const { id } of ACCESSORIES[slot]) {
       if (id === "none") continue;
       const out = paintAccessories({ [slot]: id }, A, c);
-      const markup = ["back", "front", "top", "glow", "head", "headGlow", "face", "faceGlow", "defs"].map((k) => out[k]).join("");
+      const markup = ["back", "front", "top", "glow", "head", "headGlow", "face", "faceGlow", "skin", "defs"].map((k) => out[k]).join("");
       expect(markup, `${slot} ${id} draws`).not.toBe("");
       expectOwn(markup, `acc-${slot}-${id}-`, `${slot} ${id}`);
     }

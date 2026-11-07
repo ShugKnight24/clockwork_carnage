@@ -393,6 +393,9 @@ const FACE =
   "M-7.2,-84 C-7.4,-79 -6.8,-75.5 -5,-73.3 C-3.6,-71.8 -1.8,-71.2 0,-71.2 C1.8,-71.2 3.6,-71.8 5,-73.3 " +
   "C6.8,-75.5 7.4,-79 7.2,-84 C7,-89.5 4,-91.6 0,-91.6 C-4,-91.6 -7,-89.5 -7.2,-84 Z";
 const NECK = "M-3.9,-74.6 L3.9,-74.6 L4.5,-65.4 L-4.5,-65.4 Z";
+/** The face's centre (between head top and chin), and how far skin paint's clip is drawn in toward it: off the outline's ink. */
+const FACE_MID = -81.4;
+const SKIN_INSET = 0.93;
 
 /**
  * Eye shapes per body type. The feminine eye is a touch larger with a
@@ -1081,10 +1084,25 @@ export const HELMET_KIT_IDS = Object.freeze(["hairClip"]);
 const NO_FACE_ACC = Object.freeze({ front: "", glow: "" });
 
 /**
- * The eyes and face items a look wears (paintAccessories' face and
+ * The eyes and face items a look wears (paintAccessories' skin, face and
  * faceGlow), fitted to the build: the feminine jaw narrows them with the face.
+ * Paint on the skin goes under the rest and is clipped to the face's own
+ * outline for the build, drawn in by the width of its ink, so whatever its
+ * numbers it never runs off the cheek or over the ink line (`scope` is the
+ * figure's idScope, for the clip's id).
  */
-const faceItems = (c, acc) => ({ front: c.fem ? warpX(acc.face, FEM_JAW) : acc.face, glow: c.fem ? warpX(acc.faceGlow, FEM_JAW) : acc.faceGlow });
+function faceItems(c, acc, scope) {
+  const fit = (m) => (c.fem ? warpX(m, FEM_JAW) : m);
+  let skin = "";
+  if (acc.skin) {
+    const K = scope.kit("face");
+    const id = K.uid("skin");
+    const outline = fit(`<path d="${FACE}"/>`).replace("/>", ` transform="translate(0,${FACE_MID}) scale(${SKIN_INSET}) translate(0,${-FACE_MID})"/>`);
+    K.defs(`<clipPath id="${id}">${outline}</clipPath>`);
+    skin = `<g clip-path="url(#${id})">${fit(acc.skin)}</g>`;
+  }
+  return { front: skin + fit(acc.face), glow: fit(acc.faceGlow) };
+}
 
 /**
  * Head assembly: the helmet's painter, or for a face peek the bare head.
@@ -1786,7 +1804,7 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
   const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
-  const h = head(c, peek, scope, faceItems(c, acc));
+  const h = head(c, peek, scope, faceItems(c, acc, scope));
   const helmBadge = wears(c, "helmet") && A.helmet && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
   if (cape && CAPE_HEM[c.armor]) {
@@ -2043,7 +2061,7 @@ function fallenParts(c) {
   const headTf = (inner) => `<g transform="translate(8,2)"><g transform="rotate(24 0 -69)">${headScale(inner)}</g></g>`;
   const A = rigAnchors(FALLEN, [14, -4], "fallen", c.helmet);
   const acc = paintAccessories(c.accessories, A, c);
-  const h = head(c, false, scope, faceItems(c, acc));
+  const h = head(c, false, scope, faceItems(c, acc, scope));
   const helmBadge = wears(c, "helmet") && A.helmet && !showFace ? badgeAt(c, A.helmet, "low") : "";
   const leftBadge = wears(c, "shoulder") ? badgeAt(c, { ...A.shoulderL, rot: 14 }, "low") : "";
   // The free arm lies on top of the body, so its vambrace badge rides with it.
