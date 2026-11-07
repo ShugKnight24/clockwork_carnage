@@ -12,6 +12,7 @@ import { HELMET_STYLES } from "../../src/data/cosmetics.js";
 import { lookKey } from "../../src/core/character-fields.js";
 import { characterLayers } from "../../src/ui/portrait-modern.js";
 import { lookFromIds } from "./helpers/golden-looks.js";
+import { FACE } from "../../src/rendering/svg-art/accessories/face.js";
 
 vi.mock("../../src/data/wardrobe-themes/issue.js", async (importOriginal) => {
   const { default: issue } = await importOriginal();
@@ -243,6 +244,44 @@ describe("the eyepatch's strap", () => {
         expect(inEye, `${body} strap at ${x.toFixed(2)},${y.toFixed(2)} over the right eye`).toBe(false);
         if (x >= BROW_TOP[0][0] && x <= BROW_TOP.at(-1)[0]) expect(y + half, `${body} strap at ${x.toFixed(2)},${y.toFixed(2)} on the right brow`).toBeLessThan(browTop(x));
       }
+    }
+  });
+});
+
+describe("piercings sit in the build's own lip and brow", () => {
+  // Before the jaw's warp, from agent-rig.js face(): the lower lip runs from
+  // the mouth line down to its edge at the ring's x (1.4), and the outer
+  // right brow's top and bottom at the bar's x (4.4 to 4.75).
+  const FACES = {
+    masc: { lip: [-73.6, -72.7], brow: [-84.95, -84.25] },
+    fem: { lip: [-73.85, -72.95], brow: [-85.4, -84.95] },
+  };
+  const strokes = (markup) => [...markup.matchAll(/<path d="([^"]+)"/g)].map((m) => m[1]);
+  const pts = (d) => [...d.matchAll(/(-?\d*\.?\d+),(-?\d*\.?\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+
+  it("the lip ring leaves from inside the lower lip and hangs below it", () => {
+    for (const body of ["masc", "fem"]) {
+      const c = buildAgentParts(lookFromIds({ body })).look;
+      const ring = pts(strokes(FACE.piercings({}, c).face).at(-1));
+      const [top, edge] = FACES[body].lip;
+      for (const [x, y] of [ring[0], ring.at(-1)]) {
+        expect(y, `${body} ring end ${x},${y}`).toBeGreaterThan(top);
+        expect(y, `${body} ring end ${x},${y}`).toBeLessThan(edge);
+        // Inside the mouth's width (its corners at x ±2.4).
+        expect(Math.abs(x), body).toBeLessThan(2.4);
+      }
+      // Its loop hangs below the lip's edge.
+      expect(Math.max(...ring.map(([, y]) => y)), body).toBeGreaterThan(edge);
+    }
+  });
+
+  it("the brow bar goes through the brow, a bead above it and one below", () => {
+    for (const body of ["masc", "fem"]) {
+      const c = buildAgentParts(lookFromIds({ body })).look;
+      const [[, y0], [, y1]] = pts(strokes(FACE.piercings({}, c).face)[0]);
+      const [top, bottom] = FACES[body].brow;
+      expect(Math.min(y0, y1), body).toBeLessThan(top);
+      expect(Math.max(y0, y1), body).toBeGreaterThan(bottom);
     }
   });
 });

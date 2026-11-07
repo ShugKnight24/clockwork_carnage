@@ -536,11 +536,11 @@
 <path d="M4.5,-80 C5.4,-77 5.3,-74 4.7,-70.6" fill="none" stroke="#c9a24a" stroke-width="0.35" stroke-opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <g data-acc="piercings">
-<path d="M3.3,-85.4 L4.9,-84.2" fill="none" stroke="#0a0d12" stroke-width="0.7" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="3.4" cy="-85.4" r="0.45" fill="#d6dde5"/>
-<circle cx="5" cy="-84.2" r="0.45" fill="#d6dde5"/>
-<circle cx="1.6" cy="-73" r="0.9" fill="none" stroke="#0a0d12" stroke-width="0.7"/>
-<circle cx="1.6" cy="-73" r="0.9" fill="none" stroke="#d6dde5" stroke-width="0.35"/>
+<path d="M4.3,-85.95 L4.6,-84.35" fill="none" stroke="#0a0d12" stroke-width="0.7" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4.3,-85.95 L4.3,-85.95 M4.6,-84.35 L4.6,-84.35" fill="none" stroke="#0a0d12" stroke-width="1.2" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M4.3,-85.95 L4.3,-85.95 M4.6,-84.35 L4.6,-84.35" fill="none" stroke="#d6dde5" stroke-width="0.8" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0.7,-73.35 C0.6,-72 1.5,-72 1.5,-73.35" fill="none" stroke="#0a0d12" stroke-width="0.7" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M0.7,-73.35 C0.6,-72 1.5,-72 1.5,-73.35" fill="none" stroke="#d6dde5" stroke-width="0.35" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 </g>
 <path d="M-6.8,-87.6 L6.8,-87.6 L6.6,-85.4 C4.8,-85.6 2.6,-86.2 0.8,-87.2 L-0.8,-87.2 C-2.6,-86.2 -4.8,-85.6 -6.6,-85.4 Z" fill="url(#face-monocle-piercings-wide-fem-idle-hair)" stroke="#04060b" stroke-width="0.6" stroke-linejoin="round"/>

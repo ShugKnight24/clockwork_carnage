@@ -96,6 +96,16 @@ export const EYES = {
   },
 };
 
+/**
+ * Where the piercings go on each build's face (agent-rig.js face(), EYE and
+ * the mouths): the brow bar's two beads, above and below the outer right
+ * brow, and the point on the lower lip the ring leaves from.
+ */
+const PIERCE = {
+  masc: { brow: ["4.4,-85.35", "4.75,-83.75"], lip: [1.4, -73.2] },
+  fem: { brow: ["4.4,-85.95", "4.75,-84.35"], lip: [1.4, -73.35] },
+};
+
 /** Everything else worn on the face. */
 export const FACE = {
   scar: (A, c) => {
@@ -136,14 +146,24 @@ export const FACE = {
   nosestrip: () => ({
     face: fill("M-2.8,-79.4 L2.8,-79.6 L2.9,-78.2 L-2.7,-78 Z", "#e8e2d6", 0.4) + stroke("M-1.6,-79.2 L-1.5,-78.2 M0,-79.3 L0.1,-78.2 M1.6,-79.4 L1.7,-78.3", "#b8b0a2", 0.3),
   }),
-  piercings: () => {
+  // A bar through the outer right brow, a bead showing above and below it,
+  // and a ring through the lower lip: it leaves the lip at two points and
+  // only its lower loop shows, the rest inside the lip. Placed on each
+  // build's own brow and lip (the feminine brow arches higher, her lower lip
+  // is fuller), before the jaw's warp narrows them with the face.
+  piercings: (A, c) => {
     const metal = "#d6dde5";
+    const { brow, lip } = c.fem ? PIERCE.fem : PIERCE.masc;
+    const [x, y] = lip;
+    const ring = `M${f(x - 0.55)},${f(y)} C${f(x - 0.6)},${f(y + 1.35)} ${f(x + 0.6)},${f(y + 1.35)} ${f(x + 0.55)},${f(y)}`;
+    const bead = ([bx, by]) => `M${bx},${by} L${bx},${by}`;
     return {
       face:
-        stroke("M3.4,-85.4 L5,-84.2", INK, 0.7) +
-        dot(3.4, -85.4, 0.45, metal) +
-        dot(5, -84.2, 0.45, metal) +
-        `<circle cx="1.6" cy="-73" r=".9" fill="none" stroke="${INK}" stroke-width=".7"/><circle cx="1.6" cy="-73" r=".9" fill="none" stroke="${metal}" stroke-width=".35"/>`,
+        stroke(`M${brow[0]} L${brow[1]}`, INK, 0.7) +
+        stroke(`${bead(brow[0].split(","))} ${bead(brow[1].split(","))}`, INK, 1.2) +
+        stroke(`${bead(brow[0].split(","))} ${bead(brow[1].split(","))}`, metal, 0.8) +
+        stroke(ring, INK, 0.7) +
+        stroke(ring, metal, 0.35),
     };
   },
   freckles: (A, c) => {
