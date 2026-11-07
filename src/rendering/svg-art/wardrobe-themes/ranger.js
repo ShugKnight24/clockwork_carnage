@@ -5,10 +5,11 @@
  *
  * Void Ranger: a retro explorer's pressure suit. The suit's whites are fixed
  * (they stay off the rig's colour map); trims and patches take the palette,
- * lamps the energy colour.
+ * lamps the energy colour. The pressure gloves are the suit's white, locked
+ * on by a palette ring like the suit's own.
  */
 import { INK, f, pt, lerp, shape, line, muscle, energy, armJoints, polar, heading, LIMB } from "../models/hero.js";
-import { STEEL, STEEL_DK, plateAt, lineAt, mirrorIf, k, T, S } from "../frame-kit.js";
+import { STEEL, STEEL_DK, plateAt, lineAt, mirrorIf, k, T, S, cuffPath, cuffLine } from "../frame-kit.js";
 
 // Suit cloth: lit, base, shade, crease.
 const W0 = "#f6f7f5";
@@ -345,6 +346,32 @@ function patches(c, s, K) {
   ));
 }
 
+// ── Pressure gloves ─────────────────────────────────────────────────────────
+
+/**
+ * Puffy white pressure gloves: fat padded fingers with grey grip pads at the
+ * tips, a pleat across the knuckles, and a short gauntlet locked to the
+ * sleeve by a ring in the palette colour, the suit's own rings, with a
+ * steel latch on the outside.
+ */
+function pressure(H, c, K) {
+  const digit = (F) => K.digit(F, W1, { hi: "#ffffff", hiOp: 0.85, crease: W3, creaseOp: 0.7 }) + shape(K.span(F, F.len - 1.2, F.len, { cap: true }), SOLE, 0.5);
+  const cuff = cuffPath(H, -3.8, 1.2, 1.2, 0.8);
+  const a = H.wrist / 2 + 1.5;
+  return {
+    palm: H.palm ? shape(H.palm.d, W2, 0.6) : "",
+    back: shape(H.back.d, W1, 0.9) + `<path d="${H.back.d}" fill="url(#cyl)"/>` + line(H.back.ridge, W3, 0.8, 0.8) + line(H.back.ridge, W0, 0.4, 0.9),
+    fingers: H.fingers.map(digit),
+    thumb: digit(H.thumb),
+    cuff:
+      shape(cuff, W1, 0.9) +
+      `<path d="${cuff}" fill="url(#cyl)"/>` +
+      shape(cuffPath(H, -2.4, -0.6, 1.5, 1.5), c.pal.primary, 0.8) +
+      line(cuffLine(H, -2, 1.2), "#ffffff", 0.4, 0.5) +
+      shape(`M${f(H.out * a - 0.9)},-2.6 L${f(H.out * a + 0.9)},-2.6 L${f(H.out * a + 0.9)},-0.2 L${f(H.out * a - 0.9)},-0.2 Z`, STEEL, 0.5),
+  };
+}
+
 export default {
   id: "ranger",
   frames: {
@@ -369,5 +396,9 @@ export default {
   },
   shoulders: {
     patches: { paint: patches, maxShoulderScale: 1.08 },
+  },
+  gloves: {
+    // Padded: a broader hand, fat fingers.
+    pressure: { shape: { width: 1.12, finger: 1.3 }, paint: pressure },
   },
 };

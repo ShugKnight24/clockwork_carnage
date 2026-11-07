@@ -6,9 +6,10 @@
  * The suit as a working clock: brass plate gone green at the edges, an open
  * gear train on the chest, a pendulum and a wind-up key at the back. The
  * metal is fixed brass; only the escapement light takes the energy colour.
+ * The gloves are fitted kid leather with a brass cuff and a gear stud.
  */
-import { INK, f, pt, line, shape, energy, armJoints } from "../models/hero.js";
-import { STEEL, STEEL_DK, mirrorIf } from "../frame-kit.js";
+import { INK, f, pt, lerp, line, shape, energy, armJoints } from "../models/hero.js";
+import { STEEL, STEEL_DK, mirrorIf, cuffPath, cuffLine, ray, wristMid } from "../frame-kit.js";
 
 const PATINA = "#4f8f7c";
 const BRASS_HI = "#fff1c2";
@@ -256,6 +257,35 @@ function gearrim(c, s, K) {
   );
 }
 
+// ── Kid gloves ──────────────────────────────────────────────────────────────
+
+const KID = "#3a2a20";
+const KID_HI = "#94735a";
+const KID_LO = "#1a120c";
+
+/**
+ * Fitted kid-leather gloves, a watchmaker's: slim in the fingers, three
+ * stitched points down the back, a brass cuff, and a small brass gear
+ * riveted on the back of the hand.
+ */
+function kid(H, c, K) {
+  const { BRASS, BRASS_DK } = brass(K);
+  const digit = (F) => K.digit(F, KID, { hi: KID_HI, hiOp: 0.45, crease: KID_LO, creaseOp: 0.7 });
+  const [x, y] = lerp(wristMid(H), lerp(H.back.knuckles[1], H.back.knuckles[2], 0.5), 0.42);
+  return {
+    palm: H.palm ? shape(H.palm.d, KID_LO, 0.6) : "",
+    back:
+      shape(H.back.d, KID, 0.7) +
+      `<path d="${H.back.d}" fill="url(#cyl)"/>` +
+      [0, 1, 2].map((i) => line(ray(H, i, 0.62, 0.86), KID_HI, 0.3, 0.6)).join("") +
+      shape(gearPath(x, y, 1, 8, 0.45), BRASS, 0.35) +
+      `<circle cx="${f(x)}" cy="${f(y)}" r=".4" fill="${BRASS_DK}" stroke="${GEAR_INK}" stroke-width=".25"/>`,
+    fingers: H.fingers.map(digit),
+    thumb: digit(H.thumb),
+    cuff: shape(cuffPath(H, -1.9, 0.7, 0.6, 0.5), BRASS, 0.7) + line(cuffLine(H, -1.4, 0.5), BRASS_HI, 0.35, 0.8) + line(cuffLine(H, 0.1, 0.4), GEAR_INK, 0.35, 0.7),
+  };
+}
+
 export default {
   id: "horologist",
   frames: {
@@ -275,5 +305,9 @@ export default {
   },
   shoulders: {
     gearrim: { paint: gearrim },
+  },
+  gloves: {
+    // Fitted: slim fingers.
+    kid: { shape: { finger: 0.92 }, paint: kid },
   },
 };

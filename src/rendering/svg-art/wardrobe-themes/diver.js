@@ -10,9 +10,10 @@
  *              a bolted collar and an air fitting on the crown, its hose run
  *              to the tanks or stowed on the collar
  *   lantern  — a brass deep-lantern on a shoulder bracket (right side)
+ *   rubber   — thick rubber diving gloves sealed by a bolted brass wrist ring
  */
 import { INK, RIM, f, pt, lerp, shape, line, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
-import { plateAt, lineAt, mirrorIf, k, T, S } from "../frame-kit.js";
+import { plateAt, lineAt, mirrorIf, k, T, S, cuffPath, cuffLine } from "../frame-kit.js";
 
 const RUBBER = "#2a2421";
 const BRASS_HI = "#fff1c2";
@@ -319,6 +320,35 @@ function lantern(c, s, K) {
   );
 }
 
+// ── Diving gloves ───────────────────────────────────────────────────────────
+
+const RUBBER_HI = "#6e625a";
+
+/**
+ * Thick rubber diving gloves, fat in the fingers and wet-glossy, sealed to
+ * the suit by a bolted brass ring over a rubber cuff.
+ */
+function rubber(H, c, K) {
+  const { BRASS, BRASS_DK } = metals(K);
+  const digit = (F) => K.digit(F, RUBBER, { hi: RUBBER_HI, hiOp: 0.65, crease: "#0c0a09", creaseOp: 0.7 });
+  const cuff = cuffPath(H, -4.4, 1.2, 0.5, 0.5);
+  const ring = cuffPath(H, -2.6, -0.6, 1, 1);
+  const half = H.wrist * 0.3;
+  return {
+    palm: H.palm ? shape(H.palm.d, "#171311", 0.6) : "",
+    back: shape(H.back.d, RUBBER, 0.9) + `<path d="${H.back.d}" fill="url(#cyl)"/>` + line(H.back.ridge, RUBBER_HI, 0.5, 0.45),
+    fingers: H.fingers.map(digit),
+    thumb: digit(H.thumb),
+    cuff:
+      shape(cuff, RUBBER, 0.8) +
+      `<path d="${cuff}" fill="url(#cyl)"/>` +
+      shape(ring, BRASS, 0.7) +
+      line(cuffLine(H, -2.2, 0.8), BRASS_HI, 0.4, 0.8) +
+      line(cuffLine(H, -1, 0.8), BRASS_DK, 0.4, 0.8) +
+      [-half, 0, half].map((x) => rivet(x, -1.6 + 0.5 * (1 - (x / H.wrist) ** 2), 0.45)).join(""),
+  };
+}
+
 export default {
   id: "diver",
   frames: {
@@ -341,5 +371,9 @@ export default {
   },
   shoulders: {
     lantern: { paint: lantern },
+  },
+  gloves: {
+    // Thick rubber: a broader hand and fat fingers.
+    rubber: { shape: { width: 1.08, finger: 1.24 }, paint: rubber },
   },
 };

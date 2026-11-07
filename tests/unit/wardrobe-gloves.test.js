@@ -2,7 +2,7 @@
 // `glove`), the themes' art paints it over the shared hand (handGeom in
 // models/hero.js), and the rig draws a hand on every arm in every pose.
 import { describe, it, expect } from "vitest";
-import { BODY_FRAMES } from "../../src/data/cosmetics.js";
+import { BODY_FRAMES, SKIN_TONES, CHARACTER_COLORS } from "../../src/data/cosmetics.js";
 import { DEFAULT_GLOVE, frameGlove } from "../../src/data/wardrobe-themes/index.js";
 import { GLOVE_ART, frameGloveArt, validateWardrobe } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import { buildAgentParts, buildCastModel, RIG_DEFS } from "../../src/rendering/svg-art/agent-rig.js";
@@ -32,7 +32,7 @@ function hands(markup) {
   return out;
 }
 
-const THEMED = {};
+const THEMED = { exo: "servo", duster: "leather", lamellar: "tekko", clockwork: "kid", streetwear: "fingerless", diving: "rubber", spacesuit: "pressure", vestment: "wraps" };
 
 describe("every frame wears a glove", () => {
   it("resolves every frame's glove to art, the themes' frames to their own", () => {
@@ -130,11 +130,28 @@ describe("the rig draws a hand on every arm", () => {
 });
 
 describe("glove materials", () => {
-  it("the standard glove takes the armour's recolour", () => {
+  it("the Runner's fingertips are bare, in the look's own skin", () => {
+    const [a, b] = [SKIN_TONES[0], SKIN_TONES[SKIN_TONES.length - 1]];
+    for (const tone of [a, b]) {
+      const markup = hands(buildAgentParts(lookFromIds({ frame: "streetwear", skinTone: tone.id }), { pose: "idle" }).body).join("");
+      expect(markup).toContain(`fill="${tone.color}"`);
+      // And only there: the standard glove shows no skin.
+      expect(hands(buildAgentParts(lookFromIds({ skinTone: tone.id }), { pose: "idle" }).body).join("")).not.toContain(tone.color);
+    }
+  });
+
+  it("the standard glove takes the armour's recolour; themed gloves keep their own materials", () => {
     const glove = (frame, ids) => hands(buildAgentParts(lookFromIds({ frame, ...ids }), { pose: "idle" }).body).join("");
     // A matte armour knocks the painted speculars down on the armour, the standard glove's included.
     expect(glove("standard", {})).toContain("#eaf4ff");
     expect(glove("standard", { armor: "stealth" })).not.toContain("#eaf4ff");
+    // The pressure glove's white stays white on matte armour; the leather
+    // and the rubber are the same whatever the palette or armour.
+    expect(glove("spacesuit", { armor: "stealth" })).toContain("#ffffff");
+    const [p0, p1] = [CHARACTER_COLORS[0].id, CHARACTER_COLORS[CHARACTER_COLORS.length - 1].id];
+    for (const frame of ["duster", "diving"]) {
+      expect(glove(frame, { color: p1, armor: "stealth" }), frame).toBe(glove(frame, { color: p0 }));
+    }
   });
 
   it("each glove names only its own ids and the rig's shared defs", () => {

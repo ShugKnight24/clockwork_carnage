@@ -6,7 +6,7 @@ export default {
   id: "exo",
   name: "Exo-Frame",
   short: "Exo",
-  frames: [{ id: "exo", name: "Exo-Frame", desc: "Hydraulic exoskeleton over the suit: piston limbs, reactor core, mech boots", tier: 3,
+  frames: [{ id: "exo", name: "Exo-Frame", desc: "Hydraulic exoskeleton over the suit: piston limbs, reactor core, mech boots", tier: 3, glove: "servo",
       // Plate and a reactor-fed frame: tougher, and heavier on its feet.
       bonuses: { armorAdd: 3, maxHealthAdd: 10, moveSpeedAdd: -0.1 } }],
   helmets: [{ id: "cockpit", name: "Cockpit", desc: "Roll-cage pilot helmet with a HUD canopy", tier: 3, visor: false,

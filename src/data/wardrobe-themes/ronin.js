@@ -6,7 +6,7 @@ export default {
   id: "ronin",
   name: "Ronin",
   short: "Ronin",
-  frames: [{ id: "lamellar", name: "Ronin", desc: "Laced chrono-steel lamellar, hanging tassets, an obi with a short blade and a back banner", tier: 2,
+  frames: [{ id: "lamellar", name: "Ronin", desc: "Laced chrono-steel lamellar, hanging tassets, an obi with a short blade and a back banner", tier: 2, glove: "tekko",
       // Laced steel scales: real plate, and a little weight to carry.
       bonuses: { armorAdd: 4, moveSpeedAdd: -0.04 } }],
   // The war mask covers the face; there is no visor to fit.

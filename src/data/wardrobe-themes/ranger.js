@@ -7,7 +7,7 @@ export default {
   id: "ranger",
   name: "Void Ranger",
   short: "Ranger",
-  frames: [{ id: "spacesuit", name: "Void Ranger", desc: "Puffy white pressure suit: ribbed joints, life-support pack, moon boots", tier: 2, hides: ["kit", "collar", "hips", "limbGlow"],
+  frames: [{ id: "spacesuit", name: "Void Ranger", desc: "Puffy white pressure suit: ribbed joints, life-support pack, moon boots", tier: 2, hides: ["kit", "collar", "hips", "limbGlow"], glove: "pressure",
       // The life-support pack runs a med loop; the pressure suit is bulky.
       bonuses: { regenAdd: 0.25, moveSpeedAdd: -0.05 } }],
   // Clear glass: the face shows; there is no visor to fit.

@@ -7,9 +7,10 @@
  *            holster on each thigh, the marshal's star, spurred boots
  *   brim   — a wide-brim hat over a comm band, a bandana up over the face
  *   poncho — a short woven serape over the shoulders, fringed at the hem
+ *   leather — tan work gloves, stitched, with a flared gauntlet cuff
  */
 import { INK, f, pt, lerp, shape, line, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
-import { STEEL, STEEL_DK, angle, plateAt, lineAt, mirrorIf, k, T } from "../frame-kit.js";
+import { STEEL, STEEL_DK, angle, plateAt, lineAt, mirrorIf, k, T, stitch, cuffPath, cuffLine, ray } from "../frame-kit.js";
 
 const BRASS = "#d9a842";
 const BRASS_HI = "#fbe3a0";
@@ -401,6 +402,40 @@ function poncho(c, s, K) {
   );
 }
 
+// ── Leather work gloves ────────────────────────────────────────────────────
+
+// Saddle tan, a shade lighter than the coat so the hands read against it.
+const GLOVE = "#7a5232";
+const GLOVE_LO = "#4a3019";
+const GLOVE_HI = "#c49668";
+const THREAD = "#e8cf9c";
+
+/**
+ * Tan leather work gloves: stitched down the back of each finger and along
+ * the back of the hand's tendons, a seam round the knuckles, and a gauntlet
+ * cuff that flares over the wrist to meet the coat's sleeve.
+ */
+function leather(H, c, K) {
+  const finger = (F) =>
+    K.digit(F, GLOVE, { hi: GLOVE_HI, hiOp: 0.4, crease: GLOVE_LO, creaseOp: 0.8 }) + stitch(K.along(F, 0.8, F.len - 1, -0.3), THREAD, 0.25, 0.75);
+  return {
+    palm: H.palm ? shape(H.palm.d, GLOVE_LO, 0.6) : "",
+    back:
+      shape(H.back.d, GLOVE, 0.8) +
+      `<path d="${H.back.d}" fill="url(#cyl)"/>` +
+      [0, 1, 2].map((i) => stitch(ray(H, i, 0.3, 0.8), THREAD, 0.25, 0.7)).join("") +
+      stitch(H.back.ridge, THREAD, 0.25, 0.6),
+    fingers: H.fingers.map(finger),
+    thumb: finger(H.thumb),
+    cuff:
+      shape(cuffPath(H, -5.6, 1, 1.9, 0.5), GLOVE, 0.8) +
+      `<path d="${cuffPath(H, -5.6, 1, 1.9, 0.5)}" fill="url(#cyl)"/>` +
+      line(cuffLine(H, -5.2, 1.6), GLOVE_HI, 0.45, 0.55) +
+      stitch(cuffLine(H, -4.4, 1.3), THREAD, 0.25, 0.8) +
+      stitch(cuffLine(H, 0, 0.5), THREAD, 0.25, 0.8),
+  };
+}
+
 export default {
   id: "marshal",
   frames: {
@@ -418,5 +453,8 @@ export default {
   },
   shoulders: {
     poncho: { paint: poncho, maxShoulderScale: 1.06 },
+  },
+  gloves: {
+    leather: { paint: leather },
   },
 };

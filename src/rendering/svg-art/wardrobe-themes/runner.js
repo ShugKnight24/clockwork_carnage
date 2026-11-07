@@ -7,10 +7,11 @@
  * oversized jacket with a popped collar and rolled sleeves, LED ink up the
  * forearms, tape on everything, a cable from the back to a wrist deck and
  * chunky high-top sneakers with lit soles; a bare face behind a pixel-grin
- * LED mask; a studded, spiked jacket pad.
+ * LED mask; a studded, spiked jacket pad; fingerless gloves with an LED
+ * trace across the back.
  */
 import { INK, f, pt, lerp, shape, line, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
-import { STEEL, STEEL_DK, plateAt, lineAt, mirrorIf, k, CHROME } from "../frame-kit.js";
+import { STEEL, STEEL_DK, plateAt, lineAt, mirrorIf, k, CHROME, cuffPath, wristMid } from "../frame-kit.js";
 
 const PAINT = "url(#paint)";
 const TAPE = "#c9ccc4";
@@ -301,6 +302,56 @@ function spikepad(c, s, K) {
   );
 }
 
+// ── Fingerless gloves ───────────────────────────────────────────────────────
+
+const GLOVE = "#1d2026";
+const GLOVE_HI = "#5c636e";
+
+/**
+ * Fingerless gloves: dark synthetic knit over the palm and the back, cut off
+ * at the last joint so the fingertips show bare (the look's skin), a padded
+ * knuckle strip, a ribbed cuff with the jacket's colour on its tab, and an
+ * LED trace across the back to match the inked forearms.
+ */
+function fingerless(H, c, K) {
+  const skin = c.skin;
+  const digit = (F) => {
+    const cut = F.len - Math.min(2.4, F.len * 0.34);
+    return (
+      K.digit(F, skin.color, { hi: K.mix(skin.color, "#ffffff", 0.45), hiOp: 0.5, crease: skin.shadow, creaseOp: 0.6 }) +
+      shape(K.span(F, 0, cut), GLOVE, 0.6) +
+      line(K.along(F, F.len * 0.12, cut - 0.4, 0.5), GLOVE_HI, 0.35, 0.5) +
+      // The cut edge, rolled.
+      line(K.across(F, cut - 0.2, 0.2), TAPE_LO, 0.45, 0.8)
+    );
+  };
+  const a = H.wrist / 2 + 0.5;
+  let ribs = "";
+  for (let x = -a + 0.7; x < a; x += 0.9) ribs += `M${f(x)},-2.2 L${f(x)},0.6 `;
+  const m = wristMid(H);
+  const [k0, k1] = H.back.knuckles;
+  const [p0, p1, p2] = [lerp(m, k1, 0.3), lerp(m, k1, 0.62), lerp(m, k0, 0.78)];
+  const trace = `<path d="M${pt(...p0)}L${pt(...p1)}L${pt(...p2)}" fill="none" stroke-width=".45" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${f(p2[0])}" cy="${f(p2[1])}" r=".35"/>`;
+  return {
+    palm: H.palm ? shape(H.palm.d, "#121418", 0.6) : "",
+    back:
+      shape(H.back.d, GLOVE, 0.8) +
+      `<path d="${H.back.d}" fill="url(#weave)"/>` +
+      `<path d="${H.back.d}" fill="url(#cyl)"/>` +
+      shape(H.back.guard, "#2e333c", 0.5) +
+      line(H.back.ridge, GLOVE_HI, 0.4, 0.6) +
+      // The trace's ink, lit in the glow.
+      line(`M${pt(...p0)}L${pt(...p1)}L${pt(...p2)}`, "#05070a", 0.9, 0.9),
+    fingers: H.fingers.map(digit),
+    thumb: digit(H.thumb),
+    cuff:
+      shape(cuffPath(H, -2.6, 0.8, 0.5, 0.4), GLOVE, 0.7) +
+      line(ribs, GLOVE_HI, 0.3, 0.45) +
+      shape(`M${f(H.out * (a - 2.4))},-2.2 L${f(H.out * (a + 0.4))},-2.2 L${f(H.out * (a + 0.4))},0 L${f(H.out * (a - 2.4))},0 Z`, PAINT, 0.5),
+    glow: energy(trace, c.energy),
+  };
+}
+
 export default {
   id: "runner",
   frames: {
@@ -322,5 +373,8 @@ export default {
   },
   shoulders: {
     spikepad: { paint: spikepad },
+  },
+  gloves: {
+    fingerless: { paint: fingerless },
   },
 };

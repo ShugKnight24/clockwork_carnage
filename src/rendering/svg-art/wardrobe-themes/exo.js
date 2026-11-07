@@ -9,9 +9,11 @@
  *   cockpit  — a boxy pilot's helmet in a roll cage, a HUD canopy across the
  *              face (tinted by the look's energy), sensor blocks at the temples
  *   pods     — six-tube missile launchers on hinge arms over the shoulders
+ *   servo    — armoured mech gauntlets: segmented finger plates, a piston
+ *              over the back of the hand, a hinge drum at the wrist
  */
 import { INK, f, lerp, mirror, shape, line, energy, armJoints } from "../models/hero.js";
-import { STEEL, STEEL_DK, HAZARD, plateAt, lineAt, mirrorIf, T, S, strut, drum } from "../frame-kit.js";
+import { STEEL, STEEL_DK, HAZARD, plateAt, lineAt, mirrorIf, T, S, strut, drum, cuffPath, cuffLine, wristMid, stitch } from "../frame-kit.js";
 
 // ── Exo-Frame: a one-person mech worn over the suit ────────────────────────
 
@@ -85,16 +87,16 @@ function exo(P, c) {
       const s = i === 0 ? -1 : 1;
       const { sh, el, wr } = armJoints(arm, s);
       // A strut down the outside of the arm from under the shoulder piece
-      // into the elbow drum (the shoulder covers the arm above it), and a
-      // servo gauntlet: an oversized cuff over the forearm and knuckle plates.
+      // into the elbow drum (the shoulder covers the arm above it), and an
+      // oversized servo cuff over the forearm (the hand's plates are the
+      // servo glove's).
       return (
         strut(lerp(sh, el, 0.4), lerp(sh, el, 1), s, 6.6, 3.4, 1.5) +
         drum([el[0] + s * 5.8, el[1]], 3.6) +
         plateAt(lerp(el, wr, 0.56), el, wr, "M-7.2,-8.6 L7.2,-8.6 L8,7.4 L-8,7.4 Z", STEEL, 1.1) +
         plateAt(lerp(el, wr, 0.56), el, wr, "M-6.2,-5.4 L6.2,-5.4 L6.4,-2.8 L-6.4,-2.8 Z", HAZARD, 0.5) +
         lineAt(lerp(el, wr, 0.56), el, wr, "M-5,-5.4 L-6.4,-2.8 M-2,-5.4 L-3.4,-2.8 M1,-5.4 L-0.4,-2.8 M4,-5.4 L2.6,-2.8", INK, 0.6, 0.9) +
-        lineAt(lerp(el, wr, 0.56), el, wr, "M-7,2 L7,2 M-7.4,5 L7.4,5", INK, 0.5, 0.55) +
-        plateAt(wr, el, wr, "M-5.6,1 L5.6,1 L6,6.6 L-6,6.6 Z", STEEL_DK, 0.8)
+        lineAt(lerp(el, wr, 0.56), el, wr, "M-7,2 L7,2 M-7.4,5 L7.4,5", INK, 0.5, 0.55)
       );
     })
     .join("");
@@ -205,6 +207,52 @@ function pods(c, s, K) {
   );
 }
 
+// ── Servo gauntlets ─────────────────────────────────────────────────────────
+
+const SERVO = "#272d35";
+
+/**
+ * Armoured mech gauntlets: every finger a run of steel plates, one to a
+ * bone, over a dark servo glove; a plate over the back of the hand and a
+ * guard across the knuckles, a piston from the wrist to the knuckles, and a
+ * heavy cuff hinged on a drum at the wrist.
+ */
+function servo(H, c, K) {
+  const plates = (F) => {
+    const S = [0, ...F.knuckles, F.len];
+    let out = "";
+    for (let i = 0; i < S.length - 1; i++) {
+      // The first bone's plate starts clear of the knuckle guard.
+      const [a, b] = [S[i] + (i ? 0.3 : 1.2), S[i + 1] - 0.3];
+      if (b - a < 0.6) continue;
+      out += shape(K.span(F, a, b, { inset: 0.15, cap: i === S.length - 2 }), STEEL, 0.45) + line(K.along(F, a + 0.2, b - 0.2, 0.45), "#f4faff", 0.35, 0.5);
+    }
+    return out;
+  };
+  const digit = (F) => K.digit(F, SERVO, { hi: false, crease: false }) + plates(F);
+  const m = wristMid(H);
+  const ridge = lerp(H.back.knuckles[1], H.back.knuckles[2], 0.5);
+  const a = H.wrist / 2 + 1;
+  return {
+    palm: H.palm ? shape(H.palm.d, "#15191e", 0.6) : "",
+    back:
+      shape(H.back.d, SERVO, 1) +
+      shape(H.back.panel, STEEL, 0.7) +
+      `<path d="${H.back.panel}" fill="url(#cyl)"/>` +
+      strut(lerp(m, ridge, 0.1), lerp(m, ridge, 0.82), 1, 0, 1.9, 0.9) +
+      shape(H.back.guard, STEEL_DK, 0.7) +
+      line(H.back.ridge, "#f4faff", 0.4, 0.45),
+    fingers: H.fingers.map(digit),
+    thumb: digit(H.thumb),
+    cuff:
+      shape(cuffPath(H, -3.6, 0.6, 1, 0.6), STEEL_DK, 0.9) +
+      line(cuffLine(H, -2.6, 0.9), HAZARD, 0.7, 0.9) +
+      // Hazard band: yellow, chequered in ink.
+      stitch(cuffLine(H, -2.6, 0.9), INK, 0.7, 0.6, ".8 .8") +
+      drum([H.out * a, -1.4], 1.9),
+  };
+}
+
 export default {
   id: "exo",
   frames: {
@@ -219,5 +267,10 @@ export default {
   },
   shoulders: {
     pods: { paint: pods },
+  },
+  gloves: {
+    // Steel plate like the frame's, recoloured with its armour; a broader
+    // hand with thick plated fingers.
+    servo: { shape: { width: 1.1, finger: 1.14 }, armour: true, paint: servo },
   },
 };

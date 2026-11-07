@@ -7,7 +7,7 @@ export default {
   id: "runner",
   name: "Neon Runner",
   short: "Runner",
-  frames: [{ id: "streetwear", name: "Streetwear", desc: "Cropped crew jacket, LED-inked forearms, a wired wrist deck", tier: 2, hides: ["kit", "collar", "limbGlow"],
+  frames: [{ id: "streetwear", name: "Streetwear", desc: "Cropped crew jacket, LED-inked forearms, a wired wrist deck", tier: 2, hides: ["kit", "collar", "limbGlow"], glove: "fingerless",
       // Light kit: quicker on your feet, cheaper to dash.
       bonuses: { moveSpeedAdd: 0.1, dashCostAdd: -2 } }],
   // A bare face behind a mouth mask: the face shows, no visor.

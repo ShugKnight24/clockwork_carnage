@@ -68,3 +68,45 @@ export const drum = (p, r) =>
   `<circle cx="${f(p[0])}" cy="${f(p[1])}" r="${f(r)}" fill="${STEEL_DK}" stroke="${INK}" stroke-width=".8"/>` +
   `<circle cx="${f(p[0])}" cy="${f(p[1])}" r="${f(r * 0.62)}" fill="${STEEL}" stroke="${INK}" stroke-width=".5"/>` +
   `<path d="M${pt(p[0] - r * 0.62, p[1])} L${pt(p[0] + r * 0.62, p[1])} M${pt(p[0], p[1] - r * 0.62)} L${pt(p[0], p[1] + r * 0.62)}" stroke="${INK}" stroke-width=".4" opacity=".6"/>`;
+
+// ── Gloves ─────────────────────────────────────────────────────────────────
+// For the themes' glove painters (see wardrobe-themes/index.js), which draw
+// on the hand's geometry (H) and the cuff's coordinates: origin the wrist,
+// +y down the forearm into the hand.
+
+/** Stitching: a dashed thread along a path. */
+export const stitch = (d, color, w = 0.3, op = 0.9, dash = ".7 .5") =>
+  `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-opacity="${op}" stroke-dasharray="${dash}" stroke-linecap="round"/>`;
+
+/**
+ * A glove's cuff round the forearm, from `top` (up the forearm, negative) to
+ * `bottom` (onto the hand), `flare` wider than the forearm at the top and
+ * `hug` at the bottom; both edges curve round the arm.
+ */
+export function cuffPath(H, top, bottom, flare = 1, hug = 0.4) {
+  const a = H.wrist / 2 + flare;
+  const b = H.wrist / 2 + hug;
+  return (
+    `M${f(-a)},${f(top)} C${f(-a * 0.4)},${f(top - 0.8)} ${f(a * 0.4)},${f(top - 0.8)} ${f(a)},${f(top)} ` +
+    `L${f(b)},${f(bottom)} C${f(b * 0.4)},${f(bottom + 0.7)} ${f(-b * 0.4)},${f(bottom + 0.7)} ${f(-b)},${f(bottom)} Z`
+  );
+}
+
+/** A line round the cuff at `y`, `out` wider than the forearm, curving with the arm. */
+export const cuffLine = (H, y, out = 0.4) => {
+  const a = H.wrist / 2 + out;
+  return `M${f(-a)},${f(y)} C${f(-a * 0.4)},${f(y + 0.7)} ${f(a * 0.4)},${f(y + 0.7)} ${f(a)},${f(y)}`;
+};
+
+/** The middle of the wrist's two sides on the back of the hand (H.back.wrist), in the hand's coordinates. */
+export const wristMid = (H) => lerp(...H.back.wrist, 0.5);
+
+/**
+ * A line over the back of the hand from the wrist toward knuckle `i` (H.back.knuckles),
+ * from `a` to `b` of the way: a tendon, a seam or a row of stitches.
+ */
+export const ray = (H, i, a, b) => {
+  const m = wristMid(H);
+  const k = H.back.knuckles[i];
+  return `M${pt(...lerp(m, k, a))}L${pt(...lerp(m, k, b))}`;
+};

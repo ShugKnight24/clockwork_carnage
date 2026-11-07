@@ -7,7 +7,7 @@ export default {
   id: "marshal",
   name: "Frontier Marshal",
   short: "Marshal",
-  frames: [{ id: "duster", name: "Frontier Duster", desc: "Long duster over the suit: twin thigh holsters, a marshal's star, spurred boots", tier: 2, hides: ["kit", "hips", "cape", "limbGlow"],
+  frames: [{ id: "duster", name: "Frontier Duster", desc: "Long duster over the suit: twin thigh holsters, a marshal's star, spurred boots", tier: 2, hides: ["kit", "hips", "cape", "limbGlow"], glove: "leather",
       // Oilcloth stops weather, not rounds: what it carries is the twin
       // holsters and the rounds on the belt.
       bonuses: { ammoCapAdd: 0.15 } }],

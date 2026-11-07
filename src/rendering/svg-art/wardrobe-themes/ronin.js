@@ -3,10 +3,11 @@
  * by id. See ./index.js for what each painter is given and returns.
  *
  * Samurai armour recast in chrono-steel, worn over the suit: rows of small
- * plates laced together with palette-coloured cord.
+ * plates laced together with palette-coloured cord. The tekko glove: a steel
+ * plate over the back of the hand, laced on at the wrist, cloth fingers.
  */
 import { INK, RIM, f, pt, lerp, mirror, shape, line, energy, armJoints } from "../models/hero.js";
-import { STEEL, STEEL_DK, plateAt, lineAt, S } from "../frame-kit.js";
+import { STEEL, STEEL_DK, plateAt, lineAt, S, cuffPath } from "../frame-kit.js";
 
 /** Bone-white cross-knots (hishinui) on the bottom row of each laced panel. */
 const KNOT = "#e6dcc2";
@@ -116,7 +117,7 @@ function lamellar(P, c, K) {
     })
     .join("");
 
-  // Laced forearm guards with a hand plate at the wrist.
+  // Laced forearm guards (the plate over the hand is the tekko glove's).
   const arms = P.arms
     .map((arm, i) => {
       const s = i === 0 ? -1 : 1;
@@ -126,8 +127,7 @@ function lamellar(P, c, K) {
         plateAt(at, el, wr, "M-5.6,-8.4 L5.6,-8.4 L6,7.2 L-6,7.2 Z", STEEL_DK, 1) +
         lineAt(at, el, wr, "M-5.4,-4.4 L5.6,-4.4 M-5.6,-0.4 L5.8,-0.4 M-5.8,3.6 L5.9,3.6", INK, 0.55, 0.65) +
         lineAt(at, el, wr, "M-3,-8 L-3,7 M0,-8 L0,7.2 M3,-8 L3,7", lace, 0.6, 0.85) +
-        lineAt(at, el, wr, `M${f(s * -4.8)},-7.6 L${f(s * -5.2)},6.6`, "#f4faff", 0.45, 0.5) +
-        plateAt(wr, el, wr, "M-4.8,0.6 L4.8,0.6 L5.4,5.4 L0,6.6 L-5.4,5.4 Z", STEEL, 0.8)
+        lineAt(at, el, wr, `M${f(s * -4.8)},-7.6 L${f(s * -5.2)},6.6`, "#f4faff", 0.45, 0.5)
       );
     })
     .join("");
@@ -333,6 +333,42 @@ function sode(c, s, K) {
   );
 }
 
+// ── Tekko ───────────────────────────────────────────────────────────────────
+
+const CLOTH = "#22232d";
+const CLOTH_HI = "#4d5162";
+
+/**
+ * Tekko: a steel plate shaped to the back of the hand, coming to a point
+ * over the middle knuckles, laced on at the wrist with the armour's
+ * palette-coloured cord; cloth fingers and palm, a small plate on the thumb.
+ */
+function tekko(H, c, K) {
+  const lace = c.pal.primary;
+  const [w0, w1] = H.back.wrist;
+  const kn = H.back.knuckles;
+  const tw = H.back.toWrist;
+  const mid = lerp(kn[1], kn[2], 0.5);
+  const plate =
+    `M${pt(...lerp(w0, kn[0], 0.08))} L${pt(...lerp(w1, kn[3], 0.08))} L${pt(...lerp(w1, kn[3], 0.84))} ` +
+    `L${pt(mid[0] - tw[0] * 0.9, mid[1] - tw[1] * 0.9)} L${pt(...lerp(w0, kn[0], 0.84))} Z`;
+  const cloth = (F) => K.digit(F, CLOTH, { hi: CLOTH_HI, hiOp: 0.55, crease: "#08090d", creaseOp: 0.7 }) + `<path d="${F.d}" fill="url(#weave)" opacity=".5"/>`;
+  const a = H.wrist / 2 + 0.6;
+  const cords = `M${f(-a)},-2.8 L${f(a)},-1.3 L${f(-a)},0.2 M${f(a)},-2.8 L${f(-a)},-1.3 L${f(a)},0.2`;
+  return {
+    palm: H.palm ? shape(H.palm.d, "#121219", 0.6) : "",
+    back:
+      shape(H.back.d, CLOTH, 0.8) +
+      `<path d="${H.back.d}" fill="url(#weave)" opacity=".5"/>` +
+      shape(plate, STEEL, 0.8) +
+      `<path d="${plate}" fill="url(#cyl)"/>` +
+      line(`M${pt(...lerp(w0, kn[0], 0.2))} L${pt(...lerp(w0, kn[0], 0.76))}`, "#f4faff", 0.45, 0.5),
+    fingers: H.fingers.map(cloth),
+    thumb: cloth(H.thumb) + shape(K.span(H.thumb, 0.8, H.thumb.knuckles[0] - 0.3, { inset: 0.35 }), STEEL_DK, 0.5),
+    cuff: shape(cuffPath(H, -3.2, 0.8, 0.6, 0.4), CLOTH, 0.7) + line(cords, INK, 1.2, 0.9) + line(cords, lace, 0.6, 1) + `<circle cx="0" cy="-1.3" r=".6" fill="${KNOT}" stroke="${INK}" stroke-width=".3"/>`,
+  };
+}
+
 export default {
   id: "ronin",
   frames: {
@@ -351,5 +387,8 @@ export default {
   },
   shoulders: {
     sode: { paint: sode },
+  },
+  gloves: {
+    tekko: { paint: tekko },
   },
 };

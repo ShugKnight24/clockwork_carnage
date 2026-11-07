@@ -8,9 +8,11 @@
  *   hood     — a deep hood, the face lost in shadow but for two lit eyes, a
  *              clock-ring halo floating behind
  *   mantle   — a stiff ceremonial collar plate engraved with runes, a tassel
+ *   wraps    — cloth hand wraps in the robe's colours, the fingertips bare
+ *              and a rune on the back that glows with the agent's energy
  */
 import { INK, f, pt, lerp, shape, line, energy, muscle, armJoints, LIMB } from "../models/hero.js";
-import { STEEL_DK, plateAt, lineAt, k, angle } from "../frame-kit.js";
+import { STEEL_DK, plateAt, lineAt, k, angle, cuffPath, cuffLine, wristMid } from "../frame-kit.js";
 
 const PAINT = "url(#paint)";
 
@@ -299,6 +301,56 @@ function mantle(c, s, K) {
   );
 }
 
+// ── Hand wraps ──────────────────────────────────────────────────────────────
+
+/**
+ * Cloth hand wraps in the robe's colours: bound round the palm and the back
+ * of the hand and down each finger to the last joint, the fingertips bare,
+ * the thread trim across the knuckles, a loose end hanging from the wrist,
+ * and a rune cut on the back that glows with the agent's energy.
+ */
+function wraps(H, c, K) {
+  const C = cloth(c, K.mix);
+  const skin = c.skin;
+  const digit = (F) => {
+    const cut = F.len - Math.min(2.2, F.len * 0.3);
+    let out =
+      K.digit(F, skin.color, { hi: K.mix(skin.color, "#ffffff", 0.45), hiOp: 0.5, crease: skin.shadow, creaseOp: 0.6 }) +
+      shape(K.span(F, 0, cut), C.base, 0.6) +
+      `<path d="${K.span(F, 0, cut)}" fill="url(#weave)" opacity=".5"/>`;
+    // The binding's turns, and its edge at the cut.
+    for (let s = 1.6; s < cut - 0.5; s += 1.3) out += line(K.across(F, s, 0.15), C.lo, 0.45, 0.9);
+    return out + line(K.across(F, cut - 0.15, 0.15), C.hi, 0.4, 0.8);
+  };
+  const [w0, w1] = H.back.wrist;
+  const kn = H.back.knuckles;
+  let turns = "";
+  for (const t of [0.22, 0.42, 0.62]) turns += `M${pt(...lerp(w0, kn[0], t + 0.12))}L${pt(...lerp(w1, kn[3], t))}`;
+  const [x, y] = lerp(wristMid(H), lerp(kn[1], kn[2], 0.5), 0.5);
+  const rune = `<g transform="translate(${pt(x, y)}) scale(.55)"><path d="${RUNES[2]}" fill="none" stroke-width=".6" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  const a = H.wrist / 2 + 0.5;
+  const o = H.out;
+  return {
+    palm: H.palm ? shape(H.palm.d, C.lo, 0.6) : "",
+    back:
+      shape(H.back.d, C.base, 0.8) +
+      `<path d="${H.back.d}" fill="url(#weave)" opacity=".5"/>` +
+      `<path d="${H.back.d}" fill="url(#cyl)"/>` +
+      line(turns, C.lo, 0.5, 0.9) +
+      line(H.back.ridge, C.trim, 0.4, 0.8) +
+      `<g transform="translate(${pt(x, y)}) scale(.55)">${line(RUNES[2], "#05070c", 1.4, 0.9)}</g>`,
+    fingers: H.fingers.map(digit),
+    thumb: digit(H.thumb),
+    cuff:
+      shape(`M${f(o * (a - 0.4))},-0.6 C${f(o * (a + 0.8))},0.6 ${f(o * (a + 1.2))},2.4 ${f(o * (a + 0.8))},4.2 L${f(o * (a - 0.4))},3.8 C${f(o * (a + 0.2))},2.4 ${f(o * a)},1 ${f(o * (a - 1.4))},0 Z`, C.base, 0.6) +
+      shape(cuffPath(H, -2.8, 0.6, 0.5, 0.5), C.base, 0.7) +
+      `<path d="${cuffPath(H, -2.8, 0.6, 0.5, 0.5)}" fill="url(#weave)" opacity=".5"/>` +
+      line(cuffLine(H, -1.6, 0.5), C.lo, 0.45, 0.9) +
+      line(cuffLine(H, -2.3, 0.5), C.trim, 0.4, 0.8),
+    glow: energy(rune, c.energy),
+  };
+}
+
 export default {
   id: "chronomancer",
   frames: {
@@ -321,5 +373,8 @@ export default {
   },
   shoulders: {
     mantle: { paint: mantle },
+  },
+  gloves: {
+    wraps: { paint: wraps },
   },
 };
