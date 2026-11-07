@@ -35,6 +35,9 @@ const lum = (hex) => {
 const tear = (s) =>
   `M${f(s * 0.9)},-83.2 C${f(s * 3)},-83.8 ${f(s * 5.8)},-83.8 ${f(s * 6.6)},-82.8 C${f(s * 7)},-80.6 ${f(s * 6)},-78.4 ${f(s * 4)},-78.2 C${f(s * 2)},-78.2 ${f(s * 0.9)},-79.6 ${f(s * 0.8)},-81.4 Z`;
 
+/** The eyepatch's straps: over the brow to the right temple, and back over the left ear. */
+const EYEPATCH_STRAP = "M-0.9,-83.5 C0,-85.3 1.2,-86.8 2.8,-87.4 C4.2,-87.9 5.9,-88 7.4,-87.5 M-5.7,-82.6 L-7.3,-83.6";
+
 /** Eyewear. */
 export const EYES = {
   aviators: () => {
@@ -55,10 +58,15 @@ export const EYES = {
       glow: stroke("M-6.6,-81.6 C-3,-82 3,-82 6.6,-81.6", c.energy, 0.5, 0.7),
     };
   },
+  // The patch over the left eye. Its strap runs from the patch's top inner
+  // corner up across the forehead, above the right brow (the feminine brow
+  // arches to -86.1), to the right temple, and a short one from its outer
+  // edge back over the left side of the head, above the ear: neither comes
+  // near the right eye or brow.
   eyepatch: () => ({
     face:
-      stroke("M-7.4,-85.6 L7.4,-79.6", INK, 1.1) +
-      stroke("M-7.4,-85.6 L7.4,-79.6", "#1e1b18", 0.6) +
+      stroke(EYEPATCH_STRAP, INK, 1.1) +
+      stroke(EYEPATCH_STRAP, "#1e1b18", 0.6) +
       fill("M-5.6,-83.4 C-4,-84.6 -1.8,-84.4 -0.8,-83 C-0.6,-81 -1.4,-79.2 -3.2,-78.8 C-5,-79 -6,-80.8 -5.6,-83.4 Z", "#16130f", 0.6) +
       stroke("M-4.6,-83.2 C-3.6,-83.8 -2.2,-83.8 -1.6,-83.2", "#4a443c", 0.4, 0.8),
   }),

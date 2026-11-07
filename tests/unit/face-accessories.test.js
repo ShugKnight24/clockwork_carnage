@@ -194,3 +194,55 @@ describe("paint on the skin stays on the face", () => {
     expect(Math.max(...xs(paint))).toBeLessThanOrEqual(6.2);
   });
 });
+
+/** Points along a path of M, L and C commands (absolute), `n` per segment. */
+function samplePath(d, n = 24) {
+  const out = [];
+  let at = [0, 0];
+  for (const [, cmd, args] of d.matchAll(/([MLC])([^MLC]*)/g)) {
+    const v = args.trim().split(/[\s,]+/).map(Number);
+    if (cmd === "M") at = [v[0], v[1]];
+    else if (cmd === "L") {
+      for (let i = 1; i <= n; i++) out.push([at[0] + ((v[0] - at[0]) * i) / n, at[1] + ((v[1] - at[1]) * i) / n]);
+      at = [v[0], v[1]];
+    } else {
+      const [p1, p2, p3] = [[v[0], v[1]], [v[2], v[3]], [v[4], v[5]]];
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        const b = (k) => (1 - t) ** 3 * at[k] + 3 * (1 - t) ** 2 * t * p1[k] + 3 * (1 - t) * t * t * p2[k] + t ** 3 * p3[k];
+        out.push([b(0), b(1)]);
+      }
+      at = p3;
+    }
+    if (cmd === "M") out.push(at);
+  }
+  return out;
+}
+
+describe("the eyepatch's strap", () => {
+  // The right eye (whites and lid fold) and the top of the right brow, the
+  // higher feminine arch, from agent-rig.js EYE mirrored to the right.
+  const EYE = { x0: 1.1, x1: 5.3, y0: -84.4, y1: -79.9 };
+  const BROW_TOP = [[1.3, -85.1], [2.15, -85.55], [3.09, -85.7], [4.05, -85.52], [4.94, -84.99], [5.7, -84.1]];
+  const browTop = (x) => {
+    for (let i = 1; i < BROW_TOP.length; i++) {
+      const [[xa, ya], [xb, yb]] = [BROW_TOP[i - 1], BROW_TOP[i]];
+      if (x <= xb) return ya + ((yb - ya) * (x - xa)) / (xb - xa);
+    }
+    return null;
+  };
+
+  it("crosses the forehead above the right brow and never touches the right eye, on either build", () => {
+    for (const body of ["masc", "fem"]) {
+      const head = buildAgentParts(wearing({ helmet: "wide", body }, "eyepatch", "none")).head;
+      const strap = head.slice(head.indexOf('data-acc="eyepatch"')).match(/<path d="([^"]+)"/)[1];
+      // Half the strap's inked width, and a little air.
+      const half = 0.55 + 0.15;
+      for (const [x, y] of samplePath(strap)) {
+        const inEye = x > EYE.x0 - half && x < EYE.x1 + half && y > EYE.y0 - half && y < EYE.y1 + half;
+        expect(inEye, `${body} strap at ${x.toFixed(2)},${y.toFixed(2)} over the right eye`).toBe(false);
+        if (x >= BROW_TOP[0][0] && x <= BROW_TOP.at(-1)[0]) expect(y + half, `${body} strap at ${x.toFixed(2)},${y.toFixed(2)} on the right brow`).toBeLessThan(browTop(x));
+      }
+    }
+  });
+});
