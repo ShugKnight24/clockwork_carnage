@@ -34,6 +34,7 @@ import {
   gorget,
   standingCape,
   chronoRifle,
+  handOf,
   STAND,
   headScale,
   ARMED,
@@ -54,7 +55,7 @@ import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { frameShape, frameLayers } from "./frames.js";
 import { CANDY, CANDY_HI, AMBER } from "./frame-kit.js";
-import { frameHides, helmetArt, helmetFaceSlots, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
+import { frameGlove, frameGloveArt, frameHides, helmetArt, helmetFaceSlots, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
 import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
 import { idScope } from "./id-scope.js";
 import { ACCESSORY_SLOTS, FACE_SLOTS, tintFor } from "../../data/accessories.js";
@@ -1786,6 +1787,22 @@ function frameShoulder(c, s, tilt, scope) {
   return { markup: shoulder(c, s, tilt, scope, id), scale: Math.min(fs.shoulder, shoulderArt(id).maxShoulderScale ?? Infinity) };
 }
 
+/**
+ * The look's hands in pose P, one `{ body, glow }` per arm, in its frame's
+ * glove (frameGloveArt). A glove that is armour takes the armour's recolour
+ * (`map`), as the arm does; any other keeps its own materials. `kw` is the
+ * hand's thickness, the build's arm thickness.
+ */
+function handsOf(c, P, map, scope, kw) {
+  const glove = frameGloveArt(c.frame);
+  const K = { mix, ...scope.kit(`glove-${frameGlove(c.frame)}`) };
+  const tint = (m) => (glove.armour ? recolor(m, map) : m);
+  return P.arms.map((arm, i) => {
+    const h = handOf(arm, i === 0 ? -1 : 1, glove, c, K, kw);
+    return { body: tint(h.body), glow: tint(h.glow) };
+  });
+}
+
 /** Gorget, with the bare neck above it when the face shows; `plate: false` leaves off the gorget (a frame that hides the collar). */
 const collarOf = (c, showFace, map, plate = true) =>
   (showFace ? shape(NECK, "url(#skin)", 1) + `<path d="M-4.1,-73.6 C-2,-70.6 2,-70.6 4.1,-73.6 L4.3,-69.4 C2,-68.4 -2,-68.4 -4.3,-69.4 Z" fill="${c.skin.shadow}" opacity=".5"/>` : "") +
@@ -1820,17 +1837,19 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
   const kit = gear(c, P);
   const showFace = peek || FACE_HELMETS.has(c.helmet);
 
-  let rifle = { body: "", hands: "", glow: "" };
+  let rifle = { body: "", glow: "" };
   if (armed) {
     const r = chronoRifle();
     const gm = gunMap(c);
     const extra = finishExtras(c);
     rifle = {
       body: recolor(r.body, gm) + `<g ${RIFLE_TF}>${extra.body}</g>`,
-      hands: recolor(r.hands, map),
       glow: recolor(r.glow, gm) + (extra.glow ? `<g ${RIFLE_TF}>${extra.glow}</g>` : ""),
     };
   }
+  // Over everything on the arms (a frame's sleeves and cuffs) and, armed,
+  // closed on the rifle's grips.
+  const hands = handsOf(c, P, map, scope, B.armW);
 
   // The frame's own layers, and the stock layers it hides (see HIDES in
   // src/data/wardrobe-themes/index.js, which says what each word removes): a coat
@@ -1867,13 +1886,13 @@ export function buildAgentParts(character, { pose = "idle", peek = false } = {})
     (wears(c, "chest") ? TW(badgeAt(c, A.chest)) : "") +
     (wears(c, "shoulder") ? badgeAt(c, A.shoulderL, "low") : "") +
     (wears(c, "forearm") ? badgeAt(c, A.forearmL, "low") : "") +
-    rifle.hands;
+    hands.map((h) => h.body).join("");
   // The collar, and what is worn over it, go over the hair below the jaw.
   const neck = TW(collar) + acc.top;
 
   const torsoGlow = c.armor === "heavy" || c.armor === "trencher" || fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW;
   const limbGlow = hides("limbGlow") ? "" : legs.map((l) => l.glow).join("") + arms.map((a) => a.glow).join("");
-  const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + acc.glow;
+  const glow = recolor(limbGlow, map) + TW(recolor(torsoGlow, map) + (hideKit ? "" : kit.glow)) + fr.glow + rifle.glow + hands.map((h) => h.glow).join("") + acc.glow;
   const h = head(c, peek, scope, faceItems(c, acc, scope));
   const helmBadge = wears(c, "helmet") && A.helmet && !FACE_HELMETS.has(c.helmet) ? badgeAt(c, A.helmet, "low") : "";
   let cape = acc.replacesCape || c.capeOff || hides("cape") ? "" : recolor(standingCape(), map).replace(/^<ellipse[^>]*\/>/, "");
@@ -2150,6 +2169,10 @@ function fallenParts(c) {
   const [upperSide, trappedSide] = [0, 1].map((i) => frameLayers(c.frame, withArm(P, i), c, K));
   const [upperSleeve, trappedSleeve] = [upperSide.arms, trappedSide.arms];
   const [upperLegKit, lowerLegKit] = [0, 1].map((i) => frameLayers(c.frame, withLeg(P, i), c, K).legs);
+  // The fallen agent has no build, so its arms are the stock thickness; the
+  // hands keep the builds' difference (the feminine hand the slimmer).
+  const B = c.fem ? BUILDS.fem : BUILDS.masc;
+  const [upperHand, trappedHand] = handsOf(c, P, map, scope, B.armW / BUILDS.masc.armW);
   const fs = frameShape(c.frame);
   const hides = (what) => frameHides(c.frame, what);
   const hideKit = hides("kit");
@@ -2167,7 +2190,9 @@ function fallenParts(c) {
     under:
       kit.back +
       acc.back +
-      recolor(fr.under + trappedArm.body + trappedSleeve + lowerLeg.body + lowerLegKit + upperLeg.body + upperLegKit + torso({ hips: !hides("hips") }) + fr.torso, map) +
+      recolor(fr.under + trappedArm.body + trappedSleeve, map) +
+      trappedHand.body +
+      recolor(lowerLeg.body + lowerLegKit + upperLeg.body + upperLegKit + torso({ hips: !hides("hips") }) + fr.torso, map) +
       (fs.softTorso || hideKit ? "" : chestTrim(c)) +
       (hideKit ? "" : insignia(c) + kit.front + variantTrim(c)) +
       fallenDamage() +
@@ -2177,11 +2202,19 @@ function fallenParts(c) {
     nape: h.nape ? headTf(h.nape) : "",
     neck: collarOf(c, showFace, map, !hides("collar")) + acc.front,
     head: headTf(h.front + helmBadge + (showFace ? "" : visorCracks(c)) + acc.head),
-    over: recolor((capeOff ? "" : capeFlap()) + upperArm.body + upperSleeve + shoulderAt(-1, 14), map) + leftBadge + armBadge + acc.top,
+    over:
+      recolor((capeOff ? "" : capeFlap()) + upperArm.body + upperSleeve, map) +
+      upperHand.body +
+      recolor(shoulderAt(-1, 14), map) +
+      leftBadge +
+      armBadge +
+      acc.top,
     glow:
       recolor(limb(lowerLeg.glow + upperLeg.glow) + (fs.softTorso || hideKit ? BELT_GLOW : TORSO_GLOW) + limb(upperArm.glow), map) +
       (hideKit ? "" : kit.glow) +
       upperSide.glow +
+      // The free hand's light; the trapped hand's would shine through the body.
+      upperHand.glow +
       acc.glow,
     headGlow: headTf(h.glow + acc.headGlow),
     sparks: recolor(FALLEN_SPARKS, map),

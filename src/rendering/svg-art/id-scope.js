@@ -1,5 +1,5 @@
 /**
- * Scoped SVG ids for piece painters (wardrobe frames, helmets, shoulders and
+ * Scoped SVG ids for piece painters (wardrobe frames, helmets, shoulders, gloves and
  * accessories). Several figures share a page (the creator grid, the title
  * hero beside the HUD portrait) and looks are cached, so a painter never
  * writes a bare id: it asks its kit for one and registers what it defines.

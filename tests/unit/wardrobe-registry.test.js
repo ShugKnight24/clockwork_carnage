@@ -425,7 +425,7 @@ describe("painters name only their own ids and the rig's shared defs", () => {
     }
   };
   const lookOf = (ids) => buildAgentParts(lookFromIds(ids)).look;
-  const PIECE = /^(frame|helmet|shoulder|acc)-/;
+  const PIECE = /^(frame|helmet|shoulder|glove|acc)-/;
 
   it("RIG_DEFS is what every figure defines", () => {
     for (const ids of [{}, { camo: CAMO_STYLES[1].id }, { body: "fem" }]) {

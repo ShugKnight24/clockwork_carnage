@@ -8,12 +8,12 @@ export default {
   short: "Issue",
   /** Body frames: the silhouette the suit is built on. Any armour style can be worn on any frame. */
   frames: [
-    { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },
-    { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
-    { id: "vanguard", name: "Vanguard", desc: "Sleek sculpted plate, panel lines and glowing seams" },
-    { id: "operator", name: "Operator", desc: "Soft kit: fabric sleeves and trousers, chest rig, elbow pads", hides: ["shoulders", "limbGlow"] },
-    { id: "wraith", name: "Wraith", desc: "Hooded long coat, wrapped forearms and shins", hides: ["cape", "limbGlow"] },
-    { id: "breacher", name: "Breacher", desc: "Ballistic chest plate, riot vambrace, grenade belt, heavy boots" },
+    { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar", glove: "standard" },
+    { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders", glove: "standard" },
+    { id: "vanguard", name: "Vanguard", desc: "Sleek sculpted plate, panel lines and glowing seams", glove: "standard" },
+    { id: "operator", name: "Operator", desc: "Soft kit: fabric sleeves and trousers, chest rig, elbow pads", hides: ["shoulders", "limbGlow"], glove: "standard" },
+    { id: "wraith", name: "Wraith", desc: "Hooded long coat, wrapped forearms and shins", hides: ["cape", "limbGlow"], glove: "standard" },
+    { id: "breacher", name: "Breacher", desc: "Ballistic chest plate, riot vambrace, grenade belt, heavy boots", glove: "standard" },
   ],
   /**
    * Helmets. `face: true`: an open helmet, the face shows under it.

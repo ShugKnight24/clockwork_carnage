@@ -10,11 +10,15 @@
  * where `short` is the name for a tight caption (a one-tile group in the
  * creator's grids: "Marshal" for Frontier Marshal).
  * with each entry `{ id, name, desc, tier?, unlock?, bonuses?, visor?, face? }`,
- * a frame entry also `hides?`, and a helmet entry also `seats?` and `faceSlots?`:
+ * a frame entry also `hides?` and `glove?`, and a helmet entry also `seats?`
+ * and `faceSlots?`:
  *   hides: the stock rig layers the frame replaces, words from HIDES (see
  *     there for what each one removes); left out, it hides none. A frame
  *     that hides the shoulders wears no shoulder piece, so the pick is
  *     neither drawn nor counted (gearBonuses in src/data/cosmetics.js).
+ *   glove: the glove the frame's hands wear, a glove id from the themes' art
+ *     (GLOVE_ART in src/rendering/svg-art/wardrobe-themes/); left out, the
+ *     standard glove (see frameGlove).
  *   seats: which accessory seats the helmet takes, words from HELMET_SEATS
  *     mapped to booleans; a seat left out is taken. A helmet that already
  *     wears what a seat holds (the Centurion's crest) turns it off, and the
@@ -112,6 +116,20 @@ export function frameHides(id, what) {
   const e = FRAME_ENTRY.get(id);
   if (!e) throw new Error(`frameHides: no frame "${id}"`);
   return (e.hides || []).includes(what);
+}
+
+/** The glove a frame that names none wears: the steel glove the suit is issued with. */
+export const DEFAULT_GLOVE = "standard";
+
+/**
+ * The glove a frame's hands wear (its entry's `glove`). A frame that names
+ * none wears the standard glove, and so does an id no theme lists: unlike
+ * a guessed `hides`, which would misdraw the frame, a glove is only dress.
+ * @param {string} id frame id
+ * @returns {string} glove id
+ */
+export function frameGlove(id) {
+  return FRAME_ENTRY.get(id)?.glove ?? DEFAULT_GLOVE;
 }
 
 const HELMET_ENTRY = new Map(WARDROBE_THEMES.flatMap((t) => t.helmets.map((e) => [e.id, e])));

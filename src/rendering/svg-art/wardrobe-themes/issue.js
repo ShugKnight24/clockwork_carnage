@@ -16,8 +16,9 @@
  *
  * Shoulders: none (bare cap), pads, spikes (Jagged), pauldrons, armored
  * (Bulwark), slab, dome, ordnance (Launcher), layered.
+ * Gloves: standard, the steel glove the suit is issued with.
  */
-import { INK, RIM, f, pt, lerp, mirror, shape, line, part, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
+import { INK, RIM, f, pt, lerp, mirror, shape, line, part, energy, muscle, armJoints, polar, heading, LIMB, STEEL_GLOVE } from "../models/hero.js";
 import { STEEL, STEEL_DK, SUIT, CANDY, CANDY_HI, AMBER, plateAt, lineAt, mirrorIf, k, T, S } from "../frame-kit.js";
 
 const NONE = { under: "", legs: "", torso: "", arms: "", glow: "" };
@@ -338,6 +339,9 @@ export default {
   },
   helmets: HELMETS,
   shoulders: SHOULDERS,
+  // The issued glove is the stock hero's (models/hero.js), which wears it
+  // without a look; here it is armour, recoloured with the look's.
+  gloves: { standard: { ...STEEL_GLOVE, armour: true } },
 };
 
 // ── Strider: lean, modular, a jump-kit ──────────────────────────────────────

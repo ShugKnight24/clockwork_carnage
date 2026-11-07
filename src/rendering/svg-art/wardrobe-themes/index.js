@@ -1,8 +1,8 @@
 /**
  * Art for the wardrobe themes (src/data/wardrobe-themes/), merged by id.
  *
- * Each theme module's default export: `{ id, frames, helmets, shoulders }`,
- * its id the same as its data module's.
+ * Each theme module's default export: `{ id, frames, helmets, shoulders,
+ * gloves? }`, its id the same as its data module's.
  *
  *   frames: { [id]: { shape, layers(P, c, K) -> { under, legs, torso, arms, glow } } }
  *     shape: { width, shoulder, softTorso?, rightShoulder? }
@@ -22,7 +22,8 @@
  *       P.legs, so walk them with map and never index them. A limb's own
  *       light goes in `glow`, drawn from that limb's joints inside the same
  *       map: the rig splits glow per limb (the fallen agent leaves out the
- *       light of the arm trapped under the body).
+ *       light of the arm trapped under the body). The hands are not a
+ *       frame's to draw: its glove (below) dresses them.
  *
  *   helmets: { [id]: { paint(c, K) -> { front, glow, nape? }, anchors } }
  *     paint: the whole head under the helmet (not called for a face peek,
@@ -82,8 +83,39 @@
  *       piece (a large piece that would swamp a broad frame caps it); the
  *       rig draws it at min(frame shoulder, maxShoulderScale).
  *
- *   Every kit (frames', helmets', shoulders', and the accessory painters'
- *   in ../accessories/) also has K.uid(name) and K.defs(markup), from
+ *   gloves: { [id]: { shape?, armour?, paint(H, c, K) -> { palm?, back,
+ *       fingers, thumb, cuff?, glow? } } }
+ *     Keyed by glove id, which a frame's data entry names (`glove`; left out,
+ *       the standard glove, see frameGlove). Ids name the glove, not the
+ *       theme, so any frame may wear any theme's glove.
+ *     shape: { width?, finger? } — the shared hand made broader (width) or
+ *       its digits thicker (finger), 1 being the issued glove's
+ *     armour: true for a glove that is part of the armour: the rig recolours
+ *       it with the look's armour as it does the arm (accents to the
+ *       palette, speculars knocked down on matte plate). Any other glove
+ *       keeps its own materials, as the theme pieces do.
+ *     paint: dresses one hand's geometry, H (handGeom in ../models/hero.js,
+ *       which documents it): the back of the hand, the palm where it shows,
+ *       the fingers (index first) and the thumb, each a digit along its
+ *       joints; the rig stacks the parts in the pose's order. One hand at a
+ *       time, in any pose (at rest, open on the floor, on the rifle's two
+ *       grips), so a painter draws from H alone: never from the pose or
+ *       P.arms. `fingers` is one markup per H.fingers entry; `cuff` is drawn
+ *       last, in the cuff's coordinates (origin the wrist, +y down the
+ *       forearm into the hand, H.wrist wide, H.out the side away from the
+ *       body); `glow` is the glove's light, in the hand's coordinates. K is
+ *       the rig's kit with the hand kit (HAND_KIT in ../models/hero.js):
+ *         K.digit(F, fill, o?) — a digit in one material, inked, lit, creased
+ *         K.span(F, a, b, o?) — the digit's outline from a to b along it
+ *           (a fingerless glove stops short of the tip; a plate rides a joint)
+ *         K.across(F, at, inset?) — a line across the digit (a hem, a seam)
+ *         K.along(F, a, b, side?) — a line down it (stitching, a lit edge)
+ *         K.mix(a, b, t) — blend two hex colours
+ *     The standard glove is the stock hero's (STEEL_GLOVE in
+ *       ../models/hero.js): the cutscene hero wears it without a look.
+ *
+ *   Every kit (frames', helmets', shoulders', gloves', and the accessory
+ *   painters' in ../accessories/) also has K.uid(name) and K.defs(markup), from
  *   ../id-scope.js: a piece that needs its own gradient, clip, mask or
  *   pattern defines it with K.defs under an id from K.uid and refers to it
  *   as url(#${K.uid(name)}). Ids come out scoped to the figure and the
@@ -109,7 +141,7 @@
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
-import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS, HIDES } from "../../../data/wardrobe-themes/index.js";
+import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS, HIDES, DEFAULT_GLOVE, frameGlove } from "../../../data/wardrobe-themes/index.js";
 import { ACCESSORIES, FACE_SLOTS, TINT_HEX } from "../../../data/accessories.js";
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
@@ -164,16 +196,35 @@ export function shoulderArt(id) {
   return art;
 }
 
+/** Glove art by glove id. */
+export const GLOVE_ART = Object.freeze(Object.assign({}, ...ART_THEMES.map((t) => t.gloves || {})));
+
+/**
+ * The glove a frame's hands wear: its data entry's glove (frameGlove, the
+ * standard glove when it names none). validateWardrobe holds every frame's
+ * glove to an art entry, so an id with no art is a bug and throws.
+ * @param {string} frame frame id
+ */
+export function frameGloveArt(frame) {
+  const id = frameGlove(frame);
+  const art = GLOVE_ART[id];
+  if (!art) throw new Error(`frameGloveArt: no glove "${id}" (frame "${frame}")`);
+  return art;
+}
+
 // The helmets' accessory seats and face room, and the stock layers a frame
 // hides, live on their data entries (src/data/wardrobe-themes/index.js),
 // where the data layer can read them; re-exported here for the art's readers.
-export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock, HIDES, frameHides } from "../../../data/wardrobe-themes/index.js";
+export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock, HIDES, frameHides, DEFAULT_GLOVE, frameGlove } from "../../../data/wardrobe-themes/index.js";
 
 /** The anchor numbers every helmet's art declares. */
 const HELMET_ANCHORS = ["top", "half", "rail"];
 
 /** The numbers a helmet's badge point declares. */
 const BADGE_POINT = ["x", "y", "rot", "size"];
+
+/** The shape numbers a glove may set. */
+const GLOVE_SHAPE = ["width", "finger"];
 
 /**
  * Check the data and art registries against each other, and the accessory
@@ -208,9 +259,28 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
     for (const [id, theme] of seen) if (!art.has(id)) errors.push(`${table}: "${id}" (theme "${theme}") has no art`);
     for (const [id, theme] of art) if (!seen.has(id)) errors.push(`${table}: art "${id}" (theme "${theme}") has no entry`);
   }
-  // Hides, seats and face room, on the data entries.
+  // Gloves: art by id across the themes, the standard glove among them, and
+  // every frame's glove one of them.
+  const gloves = new Map();
+  for (const t of artThemes) {
+    for (const [id, a] of Object.entries(t.gloves || {})) {
+      if (gloves.has(id)) errors.push(`gloves: duplicate art "${id}" in themes "${gloves.get(id)}" and "${t.id}"`);
+      else gloves.set(id, t.id);
+      if (typeof a.paint !== "function") errors.push(`gloves: "${id}" has no paint function`);
+      for (const key of Object.keys(a.shape || {})) {
+        if (!GLOVE_SHAPE.includes(key)) errors.push(`gloves: "${id}" shape.${key} is not a glove shape number (${GLOVE_SHAPE.join(", ")})`);
+        else if (!(Number.isFinite(a.shape[key]) && a.shape[key] > 0)) errors.push(`gloves: "${id}" shape.${key} is not a positive number`);
+      }
+      if ("armour" in a && typeof a.armour !== "boolean") errors.push(`gloves: "${id}" armour is not true or false`);
+    }
+  }
+  // A frame that names no glove wears the standard one, so a registry with
+  // gloves must hold it (one with none, a test's, draws no hands from it).
+  if (gloves.size && !gloves.has(DEFAULT_GLOVE)) errors.push(`gloves: no art for the standard glove "${DEFAULT_GLOVE}"`);
+  // Hides, seats, face room and gloves, on the data entries.
   for (const t of themes) {
     for (const e of t.frames || []) {
+      if ("glove" in e && !gloves.has(e.glove)) errors.push(`frames: "${e.id}" wears glove "${e.glove}", which has no art`);
       if (e.hides === undefined) continue;
       if (!Array.isArray(e.hides)) errors.push(`frames: "${e.id}" hides is not a list`);
       else for (const word of e.hides) if (!HIDES.includes(word)) errors.push(`frames: "${e.id}" hides unknown layer "${word}"`);
