@@ -548,6 +548,67 @@ test("the canvas creator's preview moves in to the bust on the hair, eyes and fa
   await page.screenshot({ path: "screenshots/legacy-preview-bust.png" });
 });
 
+test("an expression picked in the showroom changes the face, shows on the LED mask and survives a reload", async ({ page }) => {
+  await openCreator(page);
+  await tab(page, "face").click();
+  const figure = () => room(page).locator(".figure").innerHTML();
+  const idx = (id) => page.evaluate(async (k) => (await import("/src/data/cosmetics.js")).EXPRESSIONS.findIndex((e) => e.id === k), id);
+  const note = room(page).locator('[data-note="mouth"]');
+  // Under the stock closed helmet the Face tab shows the bare head: the pick
+  // draws, and the note says the helmet will hide it.
+  await expect(note).toBeVisible();
+  await expect(note).toContainText("Hidden under the");
+  const before = await figure();
+  await opt(page, "expression", await idx("grin")).click();
+  expect(await page.evaluate(() => window.ccDebug.game.character.expression)).toBe("grin");
+  await expect(opt(page, "expression", await idx("grin"))).toHaveAttribute("aria-checked", "true");
+  await expect.poll(figure).not.toBe(before);
+  // Every tile is drawn: a face close-up wearing its expression.
+  expect(await room(page).locator('.opt[data-key="expression"] .thumb svg').count()).toBe(8);
+  // On the LED mask the stage keeps the mask on and the note says it lights the pick.
+  await page.evaluate(() => {
+    Object.assign(window.ccDebug.game.character, { helmet: "ledmask" });
+    document.querySelector("agent-showroom").renderAll();
+  });
+  await opt(page, "expression", await idx("frown")).evaluate((el) => el.click());
+  await expect(note).toContainText("lights this pick in pixels");
+  expect(await page.evaluate(() => document.querySelector("agent-showroom").stagePeek(window.ccDebug.game.character))).toBe(false);
+  await room(page).locator(".save").click();
+  await page.reload();
+  await page.waitForFunction(() => window.ccDebug?.game);
+  expect(await page.evaluate(() => window.ccDebug.game.character.expression)).toBe("frown");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cc_character")).expression)).toBe("frown");
+});
+
+test("presets and looks saved before expressions keep the expression picked", async ({ page }) => {
+  await openCreator(page);
+  const ch = () => page.evaluate(() => ({ ...window.ccDebug.game.character }));
+  const idx = (id) => page.evaluate(async (k) => (await import("/src/data/cosmetics.js")).EXPRESSIONS.findIndex((e) => e.id === k), id);
+  await tab(page, "face").click();
+  await opt(page, "expression", await idx("smirk")).click();
+  // A preset sets the cut and the rest, never the expression.
+  await room(page).locator('.preset[data-preset="0"]').click();
+  expect(await ch()).toMatchObject({ hair: "short", expression: "smirk" });
+  // Two looks saved before expressions: one of table positions, one of ids.
+  await page.evaluate(() => {
+    localStorage.setItem("cc_saved_looks", JSON.stringify([
+      { name: "Old", look: { colorIndex: 3, hairIndex: 12 } },
+      { name: "Mid", look: { version: 2, color: "solar_gold", hair: "afro" } },
+    ]));
+    document.querySelector("agent-showroom").renderLooks();
+  });
+  await room(page).locator(".look .preset").nth(0).click();
+  expect(await ch()).toMatchObject({ color: "void_purple", hair: "long", expression: "smirk" });
+  await room(page).locator(".look .preset").nth(1).click();
+  expect(await ch()).toMatchObject({ color: "solar_gold", hair: "afro", expression: "smirk" });
+  // A look saved with an expression wears it again.
+  await room(page).locator(".save-look").click();
+  await opt(page, "expression", await idx("shout")).click();
+  expect((await ch()).expression).toBe("shout");
+  await room(page).locator(".look .preset").nth(2).click();
+  expect((await ch()).expression).toBe("smirk");
+});
+
 test("no console errors across the new tabs", async ({ page }) => {
   const errors = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -889,6 +950,56 @@ test("canvas creator preview never blanks while a new look decodes", async ({ pa
   });
   for (const r of runs) console.log(`canvas preview: ${r.frame} decoded in ${r.decodeMs} ms (${r.frames} frames on the last look)`);
   for (const r of runs) expect(r.minLit, `${r.frame}: the preview never empties`).toBeGreaterThan(base * 0.3);
+});
+
+test("legacy EXPRESSION tab picks by key and by row, and notes a helmet over the mouth", async ({ page }) => {
+  await openLegacyCreator(page);
+  await legacyTab(page, "expression");
+  const expression = () => page.evaluate(() => window.ccDebug.game.character.expression);
+  await page.keyboard.press("ArrowDown");
+  expect(await expression()).toBe("smile");
+  await page.keyboard.press("ArrowUp");
+  expect(await expression()).toBe("default");
+  // The preview moves in to the bust, the face bare under the closed helmet.
+  const wanted = () =>
+    page.evaluate(async () => {
+      const { previewFigure } = await import("/src/ui/character-creator.js");
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return previewFigure().wanted;
+    });
+  expect(await wanted()).toMatch(/^bust:idle:1:/);
+  // A click on a row picks it.
+  const rowAt = (id) =>
+    page.evaluate(async (k) => {
+      const { getCreatorLayout, listWindow, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+      const { EXPRESSIONS } = await import("/src/data/cosmetics.js");
+      const { getIndex } = await import("/src/core/character-fields.js");
+      const g = window.ccDebug.game;
+      const cat = CREATOR_CATEGORIES.find((c) => c.key === "expression");
+      const rect = g.canvas.getBoundingClientRect();
+      const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
+      const row = listWindow(L, cat, g.character, getIndex(g.character, "expression")).find((r) => r.type === "item" && r.i === EXPRESSIONS.findIndex((e) => e.id === k));
+      const sx = rect.width / g.canvas.width;
+      return { x: rect.left + (L.contentX + L.listW / 2) * sx, y: rect.top + (row.y + L.itemH / 2) * sx };
+    }, id);
+  const p = await rowAt("shocked");
+  await page.mouse.click(p.x, p.y);
+  expect(await expression()).toBe("shocked");
+  // The LED mask lights it: no peek, no note. The brim's bandana covers it.
+  const foot = (helmet) =>
+    page.evaluate(async (h) => {
+      const { getCreatorLayout, faceSlotFoot, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
+      const g = window.ccDebug.game;
+      g.character.helmet = h;
+      const L = getCreatorLayout(g.canvas.width, g.canvas.height, false, false);
+      return faceSlotFoot(L, CREATOR_CATEGORIES.find((c) => c.key === "expression"), g.character)?.head.join(" ") ?? null;
+    }, helmet);
+  expect(await foot("ledmask")).toBeNull();
+  expect(await wanted()).toMatch(/^bust:idle:0:/);
+  expect(await foot("brim")).toBe("COVERED BY THE MARSHAL'S BRIM");
+  expect(await foot("standard")).toBe("HIDDEN UNDER THE STANDARD DOME");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "screenshots/legacy-expression.png" });
 });
 
 test("legacy creator tabs wrap on screen and stay clickable", async ({ page }) => {

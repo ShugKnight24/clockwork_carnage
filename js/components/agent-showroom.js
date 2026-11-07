@@ -1,4 +1,4 @@
-import { AGENT_VIEW, GEAR_VIEW, buildAgentSvg, buildRifleSvg, camoPattern, hairOf } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, MOUTH_VIEW, buildAgentSvg, buildRifleSvg, camoPattern, hairOf } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
@@ -21,6 +21,7 @@ import {
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
   EYE_COLORS,
+  EXPRESSIONS,
   HAIR_COLORS,
   HAIR_STYLES,
   HELMET_STYLES,
@@ -36,7 +37,7 @@ import {
 import { bonusText } from "../../src/data/gear-stats.js";
 import { classStats } from "../../src/ui/class-stats.js";
 import { frameShape } from "../../src/rendering/svg-art/frames.js";
-import { faceSlotBlock, frameHides } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
+import { faceSlotBlock, frameHides, helmetMouth, mouthBlock } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import * as Skins from "../../src/data/weapon-skins.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
@@ -54,14 +55,14 @@ import { clamp } from "../../src/utils/math.js";
  * is exactly one input path.
  */
 
-const APPEARANCE = ["color", "skinTone", "hair", "hairColor", "eye", "armor", "helmet", "visor", "shoulder", "weaponSkin", "armorVariant"];
+const APPEARANCE = ["color", "skinTone", "hair", "hairColor", "expression", "eye", "armor", "helmet", "visor", "shoulder", "weaponSkin", "armorVariant"];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 /** Saved looks: storage key, how many, and the appearance fields they keep. */
 const LOOKS_KEY = "cc_saved_looks";
 const MAX_LOOKS = 5;
 const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voice", "backstory", "loadout", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
-const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "expression", "eye"]);
 /** The head-and-shoulders crop of preset and saved-look thumbnails. */
 const THUMB_VIEW = [-22, -106, 44, 44];
 /**
@@ -78,7 +79,7 @@ const CAMERAS = ["full", "bust", "face"];
  * in it, or a pick) moves the stage to this camera, and leaving it moves
  * back, unless the player has picked a camera this visit (frameSection).
  */
-const CLOSE_UP = { eye: "face", hair: "face", hairColor: "face", "acc.eyes": "face", "acc.face": "face" };
+const CLOSE_UP = { eye: "face", expression: "face", hair: "face", hairColor: "face", "acc.eyes": "face", "acc.face": "face" };
 
 /** A library badge worn at the given places. */
 const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
@@ -191,6 +192,9 @@ const CATEGORIES = [
     sections: [
       { key: "skinTone", title: "Skin", data: SKIN_TONES, kind: "skin" },
       { key: "eye", title: "Eyes", data: EYE_COLORS, kind: "eye" },
+      // Each tile is the face close-up wearing that expression, as the helmet
+      // worn shows it: on the bare face, or lit on the LED mask.
+      { key: "expression", title: "Expression", data: EXPRESSIONS, kind: "expression" },
       { key: "hair", title: "Hair", data: HAIR_STYLES, kind: "hair" },
       // Under the cuts: each swatch shows the colour on the cut worn
       // (refreshContent), so Natural and Chrono Charged read true.
@@ -265,6 +269,8 @@ const SECTION_NOTES = {
   shoulder: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
   // Eyes and face: the helmet worn may hide the face or leave the slot no room.
   ...Object.fromEntries(FACE_SLOTS.map((slot) => [`acc.${slot}`, `<p class="snote" data-note="face-slot" data-slot="${slot}" hidden></p>`])),
+  // The expression: the helmet worn may hide or cover the mouth, or light it.
+  expression: `<p class="snote" data-note="mouth" hidden></p>`,
 };
 
 /**
@@ -330,6 +336,19 @@ function faceSlotNote(ch, slot) {
   return "";
 }
 
+/**
+ * What the helmet worn does with the expression, or "": hides it (a closed
+ * helmet), covers it (the brim's bandana), or lights it (the LED mask).
+ * `muted` when the pick is kept but not drawn.
+ */
+function mouthNote(ch) {
+  const helmet = pieceOf(ch, "helmet");
+  const block = mouthBlock(helmet.id);
+  if (block === "hidden") return { text: `Hidden under the ${helmet.name}: this pick shows with an open helmet.`, muted: true };
+  if (block === "covered") return { text: `Covered by the ${helmet.name}: this pick shows with another helmet.`, muted: true };
+  if (helmetMouth(helmet.id) === "led") return { text: `The ${helmet.name} lights this pick in pixels.`, muted: false };
+  return { text: "", muted: false };
+}
 
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -619,7 +638,7 @@ svg { display: block; }
 .arm-save[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
-.grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.torso, .grid.head, .grid.hair, .grid.expression { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .grid.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .grid.camo { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .grid.camo .thumb svg { width: 100%; height: 100%; display: block; }
@@ -681,7 +700,7 @@ svg { display: block; }
 .thumb { position: relative; aspect-ratio: 1; background: radial-gradient(circle at 45% 38%, #1a2a3e, #050910 78%); box-shadow: inset 0 0 0 1px var(--cc-ink), inset 0 2px 0 rgba(0, 0, 0, 0.55); overflow: hidden; }
 .thumb svg { width: 100%; height: 100%; }
 .oname { font: 700 var(--cc-type-label)/1.1 var(--cc-font); letter-spacing: 0.6px; text-transform: uppercase; color: inherit; padding: 0 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.rifle .oname, .grid.gear .oname,
+.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.expression .oname, .grid.rifle .oname, .grid.gear .oname,
 .grid.badgePreset .oname, .grid.symbol .oname, .grid.frame .oname, .grid.finish .oname { min-height: 2.2em; letter-spacing: 0.2px; }
 .card .oname { font-size: var(--cc-type-row); letter-spacing: var(--cc-track-row); }
 .tier { display: flex; gap: 2px; padding: 0 2px 2px; align-items: center; font: 700 var(--cc-type-micro)/1 var(--cc-font); color: var(--cc-text-dim); letter-spacing: 1px; white-space: nowrap; }
@@ -937,7 +956,7 @@ button:focus-visible { outline: none; }
   .figure-wrap { bottom: 16%; height: 66%; }
   .pedestal { bottom: 12%; width: 70%; }
   .toast { bottom: 58px; }
-  .grid.torso, .grid.head, .grid.hair, .groups.theme.torso, .groups.theme.head { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .grid.torso, .grid.head, .grid.hair, .grid.expression, .groups.theme.torso, .groups.theme.head { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   .opt { min-height: 44px; }
   .hero-well { grid-template-columns: 96px 1fr; gap: 12px; padding: 6px 12px 6px 6px; }
   .hero-art { width: 96px; height: 96px; }
@@ -1563,6 +1582,8 @@ class AgentShowroom extends HTMLElement {
     this.previewSection = on && sec ? sec.dataset.key || null : null;
     // Focus arriving anywhere frames (or unframes) the stage for what it edits.
     if (on) this.frameSection(this.previewSection);
+    // And may take the helmet off or put it back (stagePeek): a no-op when not.
+    this.renderStage();
   }
 
   /**
@@ -1785,7 +1806,9 @@ class AgentShowroom extends HTMLElement {
       return;
     }
     this.turnFor(key);
-    // A tap picks without focusing on some browsers (Safari): frame here too.
+    // A tap picks without focusing on some browsers (Safari): frame here too,
+    // and stage the section as focus would (an expression on the LED mask).
+    this.previewSection = key;
     this.frameSection(key);
     if (getId(this.character, key) === item.id) {
       this.preview = null;
@@ -1892,6 +1915,8 @@ class AgentShowroom extends HTMLElement {
       hair: any(HAIR_STYLES),
       // Mostly natural; a dye now and then.
       hairColor: Math.random() < 0.6 ? "natural" : any(HAIR_COLORS),
+      // At rest about half the time.
+      expression: Math.random() < 0.5 ? "default" : any(EXPRESSIONS),
       eye: any(EYE_COLORS),
       armor: any(ARMOR_STYLES),
       helmet: any(HELMET_STYLES),
@@ -2345,11 +2370,14 @@ class AgentShowroom extends HTMLElement {
   }
 
   stagePeek(ch) {
-    if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
     const helm = pieceOf(ch, "helmet").id;
+    const key = this.preview?.key || this.previewSection;
+    // An expression on the LED mask shows in its pixels, so the stage keeps
+    // the mask on while one is picked (unless the player took the helmet off).
+    if (!this.helmetOff && key === "expression" && helmetMouth(helm) === "led") return false;
+    if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
     if (FACE_HELMETS.has(helm)) return false;
     // Face edits show the face even under a closed helmet.
-    const key = this.preview?.key || this.previewSection;
     return FACE_KEYS.has(key);
   }
 
@@ -3100,6 +3128,10 @@ class AgentShowroom extends HTMLElement {
         case "hair":
           thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, peek: true, idPrefix: id, realistic });
           break;
+        case "expression":
+          // The face, brows to chin, bare unless the helmet lights the mouth (the LED mask).
+          thumb.innerHTML = buildAgentSvg(variant, { view: MOUTH_VIEW, idPrefix: id, lighting: "flat", realistic, peek: helmetMouth(ch.helmet) !== "led" });
+          break;
         case "torso":
           thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat", realistic });
           break;
@@ -3163,6 +3195,13 @@ class AgentShowroom extends HTMLElement {
       note.hidden = !note.textContent;
       note.closest(".section").classList.toggle("muted", !note.hidden);
     });
+    const mouth = this.shadowRoot.querySelector('.content [data-note="mouth"]');
+    if (mouth) {
+      const note = mouthNote(ch);
+      mouth.textContent = note.text;
+      mouth.hidden = !note.text;
+      mouth.closest(".section").classList.toggle("muted", note.muted);
+    }
     const frameNote = this.shadowRoot.querySelector('.content [data-note="frame-shoulders"]');
     if (frameNote) {
       frameNote.textContent = shoulderNote(ch);

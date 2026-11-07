@@ -1635,6 +1635,13 @@ export const GEAR_VIEW = {
   face: [-16, -102, 32, 32],
 };
 
+/**
+ * The face from brow to chin, for the expression tiles: the stage's face
+ * camera (AGENT_VIEW.face) takes in the neck and collar too, which leaves
+ * the mouth a few pixels wide on a tile.
+ */
+export const MOUTH_VIEW = Object.freeze([-11, -92, 22, 22]);
+
 /** Pectoral seam paths (left/right), shared by chestTrim and variantTrim so they never drift apart. */
 const SEAM_L = "M-15.2,-49.6 C-11,-45 -5,-45.2 -1.2,-47.6";
 const SEAM_R = "M15.2,-49.6 C11,-45 5,-45.2 1.2,-47.6";

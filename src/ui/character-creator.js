@@ -3,6 +3,7 @@ import {
   SKIN_TONES,
   HAIR_STYLES,
   HAIR_COLORS,
+  EXPRESSIONS,
   EYE_COLORS,
   ARMOR_STYLES,
   HELMET_STYLES,
@@ -25,9 +26,9 @@ import { getIndex, withIndex, lookKey, pieceOf } from "../core/character-fields.
 import { unlockState } from "../systems/unlocks.js";
 import { getLayerImage, layerFailed } from "../rendering/svg-art/raster.js";
 import { renderBadge, resolveTreatment } from "../rendering/svg-art/insignia/compose.js";
-import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW } from "../rendering/svg-art/agent-rig.js";
+import { buildAgentParts, hairOf, AGENT_VIEW, GEAR_VIEW, MOUTH_VIEW } from "../rendering/svg-art/agent-rig.js";
 import { FACE_HELMETS, WARDROBE_THEMES } from "../data/wardrobe-themes/index.js";
-import { faceSlotBlock } from "../rendering/svg-art/wardrobe-themes/index.js";
+import { faceSlotBlock, helmetMouth, mouthBlock } from "../rendering/svg-art/wardrobe-themes/index.js";
 import { drawPrompt } from "./input-glyphs.js";
 
 // ── Shared category definitions (used by render + click handler) ──
@@ -50,6 +51,8 @@ export const CREATOR_CATEGORIES = [
   { name: "FACE", shortLabel: "FACE", data: SKIN_TONES, key: "skinTone" },
   { name: "HAIR", shortLabel: "HAIR", data: HAIR_STYLES, key: "hair" },
   { name: "EYES", shortLabel: "EYES", data: EYE_COLORS, key: "eye" },
+  // The mouth's expression, each row with a close-up of the face wearing it.
+  { name: "EXPRESSION", shortLabel: "EXPR", data: EXPRESSIONS, key: "expression" },
   { name: "BODY", shortLabel: "BODY", data: BODY_TYPES, key: "body" },
   { name: "ARMOR", shortLabel: "ARMR", data: ARMOR_STYLES, key: "armor" },
   // The suit's silhouette, theme by theme (listWindow captions), as the showroom's Frame grid.
@@ -421,12 +424,24 @@ const NOTE_CHAR = 6.1;
 export const PAINT_SWATCH_MIN_TOUCH = HAIR_SWATCH_MIN_TOUCH;
 
 /**
- * The foot of the list panel on the eyes and face tabs, bottom up: the
- * paint swatches when the item worn takes a colour of its own (War Paint),
- * and above them a note when the helmet worn hides the slot ("Hidden under
- * the …") or leaves it no room ("No room under the …"), the way the visor
- * tab notes a helmet with no visor. Null when there is neither. Shared by
- * the renderer and the click handler, like hairColorSwatches.
+ * What a foot note says for each reason a pick is not drawn: the heading
+ * before the helmet's name, the line under it, and the heading that names
+ * no helmet, for a short screen.
+ */
+const FOOT_NOTES = {
+  hidden: ["Hidden under the", "Shows with an open helmet", "HIDDEN UNDER THIS HELMET"],
+  room: ["No room under the", "Shows with another helmet", "NO ROOM UNDER THIS HELMET"],
+  covered: ["Covered by the", "Shows with another helmet", "COVERED BY THIS HELMET"],
+};
+
+/**
+ * The foot of the list panel on the eyes, face and expression tabs, bottom
+ * up: the paint swatches when the item worn takes a colour of its own (War
+ * Paint), and above them a note when the helmet worn hides the slot or the
+ * mouth ("Hidden under the …"), leaves the slot no room ("No room under the
+ * …") or covers the mouth ("Covered by the …"), the way the visor tab notes
+ * a helmet with no visor. Null when there is neither. Shared by the
+ * renderer and the click handler, like hairColorSwatches.
  * `head` lines are the note's heading and `sub` the line under it (both
  * empty without a note), baselines from `noteY`, one NOTE_LINE apart.
  * `tint` is the colour row: the slot, the item's label, the label's
@@ -437,15 +452,17 @@ export const PAINT_SWATCH_MIN_TOUCH = HAIR_SWATCH_MIN_TOUCH;
  */
 export function faceSlotFoot(L, curCat, ch) {
   const slot = curCat.slot;
-  if (!FACE_SLOTS.includes(slot)) return null;
+  const mouth = curCat.key === "expression";
+  if (!mouth && !FACE_SLOTS.includes(slot)) return null;
   const helmet = pieceOf(ch, "helmet");
-  const block = faceSlotBlock(helmet.id, slot);
-  const tintable = accessoryItem(slot, ch.accessories?.[slot])?.tint;
+  const block = mouth ? mouthBlock(helmet.id) : faceSlotBlock(helmet.id, slot);
+  const tintable = mouth ? null : accessoryItem(slot, ch.accessories?.[slot])?.tint;
   if (!block && !tintable) return null;
   const pad = L.touch ? 6 : 10;
   const max = Math.max(8, Math.floor((L.listW - 20) / NOTE_CHAR));
-  let head = block ? wrapChars(`${block === "hidden" ? "Hidden" : "No room"} under the ${helmet.name}`.toUpperCase(), max) : [];
-  let sub = block ? wrapChars(block === "hidden" ? "Shows with an open helmet" : "Shows with another helmet", max) : [];
+  const words = block && FOOT_NOTES[block];
+  let head = block ? wrapChars(`${words[0]} ${helmet.name}`.toUpperCase(), max) : [];
+  let sub = block ? wrapChars(words[1], max) : [];
   let tintH = 0;
   let row = null;
   if (tintable) {
@@ -468,7 +485,7 @@ export function faceSlotFoot(L, curCat, ch) {
   const room = L.panelH - 16 - 2 * L.itemH - pad - tintH;
   const noteOf = () => (block ? (head.length + sub.length) * NOTE_LINE + pad : 0);
   if (noteOf() > room) sub = [];
-  if (noteOf() > room) head = [block === "hidden" ? "HIDDEN UNDER THIS HELMET" : "NO ROOM UNDER THIS HELMET"];
+  if (noteOf() > room) head = [words[2]];
   const noteH = noteOf();
   const h = pad + noteH + tintH;
   const top = L.contentY + L.panelH - h;
@@ -575,12 +592,12 @@ function badgeLayer(ch, detail = "high") {
 // showroom uses (js/components/agent-showroom.js): the rifle only exists in the
 // armed pose, and the face is only drawn under a closed helmet when asked for.
 const ARMED_KEYS = new Set(["loadout", "weaponSkin"]);
-const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "eye"]);
-// Tabs whose pieces are small on the whole figure (the FACE, HAIR and EYES
-// tabs, and the eyewear and face gear): the preview moves in to the bust
-// while one is open, as the showroom's stage does (CLOSE_UP there), and
-// stands back for every other tab.
-const CLOSE_UP_KEYS = new Set(["skinTone", "hair", "eye", "acc.eyes", "acc.face"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "expression", "eye"]);
+// Tabs whose pieces are small on the whole figure (the FACE, HAIR, EYES and
+// EXPRESSION tabs, and the eyewear and face gear): the preview moves in to
+// the bust while one is open, as the showroom's stage does (CLOSE_UP there),
+// and stands back for every other tab.
+const CLOSE_UP_KEYS = new Set(["skinTone", "hair", "eye", "expression", "acc.eyes", "acc.face"]);
 const IDLE_STAGE = { pose: "idle", peek: false, view: "full" };
 
 /** The preview's camera on a tab: "bust" on a close-up tab, else the whole figure. */
@@ -592,6 +609,7 @@ function stageFor(key, ch) {
   const helmet = pieceOf(ch, "helmet").id;
   return {
     pose: ARMED_KEYS.has(key) ? "hero" : "idle",
+    // The LED mask is open, so an expression shows in its pixels, unpeeked.
     peek: FACE_KEYS.has(key) && !FACE_HELMETS.has(helmet),
     view: previewView(key),
   };
@@ -692,6 +710,10 @@ function optionTile(curCat, idx, ch, sig) {
   if (BADGE_TILE_KEYS.has(curCat.key)) {
     const layer = badgeLayer(variant, "low");
     tile = { id: layer.id, box: BADGE_BOX, defs: "", markup: layer.markup };
+  } else if (curCat.key === "expression") {
+    // The face, brows to chin, bare unless the helmet lights the mouth (the LED mask).
+    const stage = { pose: "idle", peek: helmetMouth(pieceOf(ch, "helmet").id) !== "led" };
+    tile = { id: `legacy-mouth:${stage.peek ? 1 : 0}:${lookKey(variant)}`, box: MOUTH_VIEW, ...agentMarkup(variant, stage) };
   } else if (curCat.slot) {
     // Eyes and face tiles show the bare head, so the item reads whatever the helmet.
     const stage = FACE_SLOTS.includes(curCat.slot) ? { pose: "idle", peek: true } : IDLE_STAGE;
@@ -918,7 +940,7 @@ export function renderCharacterCreator(
     ? Math.min(Math.max(placementSel | 0, 0), items.length - 1)
     : getIndex(char, curCat.key);
   const lookSig = lookKey(char);
-  const hasTile = BADGE_TILE_KEYS.has(curCat.key) || !!curCat.slot;
+  const hasTile = BADGE_TILE_KEYS.has(curCat.key) || !!curCat.slot || curCat.key === "expression";
   const listX = L.contentX;
   const listH = L.panelH;
 
