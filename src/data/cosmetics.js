@@ -415,7 +415,7 @@ export const LOADOUT_CLASSES = [
     // Earned with the sidearms every agent starts with.
     unlock: { type: "weaponKills", weapons: [0, 6], count: 40, label: "Score 40 pistol kills", unit: "kills" },
     startWeapons: [0, 1],
-    bonuses: { fireRateMultiplier: 0.9 },
+    bonuses: { fireRateMultiplier: 1.1 },
   },
   {
     id: "enforcer",

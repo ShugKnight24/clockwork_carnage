@@ -18,10 +18,10 @@ describe("class fire rate", () => {
     }
   });
 
-  it("shows the Gunslinger's 0.9 as slower than standard", () => {
+  it("shows the Gunslinger's 1.1 as faster than standard", () => {
     const gunslinger = LOADOUT_CLASSES.find((c) => c.id === "gunslinger");
     const fr = bar(gunslinger, "Fire rate");
-    expect(fr.value).toBeLessThan(fr.base);
-    expect(fr.fmt(fr.value)).toBe("90%");
+    expect(fr.value).toBeGreaterThan(fr.base);
+    expect(fr.fmt(fr.value)).toBe("110%");
   });
 });
