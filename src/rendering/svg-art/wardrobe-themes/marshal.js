@@ -9,7 +9,7 @@
  *   poncho — a short woven serape over the shoulders, fringed at the hem
  */
 import { INK, f, pt, lerp, shape, line, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
-import { STEEL, STEEL_DK, plateAt, lineAt, mirrorIf, k, T } from "../frame-kit.js";
+import { STEEL, STEEL_DK, angle, plateAt, lineAt, mirrorIf, k, T } from "../frame-kit.js";
 
 const BRASS = "#d9a842";
 const BRASS_HI = "#fbe3a0";
@@ -103,25 +103,60 @@ function duster(P, c, K) {
     line("M-19.2,-26 L-23.6,35.6", coat, 0.6, 0.7) +
     shape("M-1.4,36.4 L0,18 L1.4,36.4 Z", "#140d08", 0.5);
 
-  // Legs: spurs at the heel and a strap over each boot.
+  // Legs: a spur on each boot, drawn in the foot's own frame (origin at the
+  // ankle, +y down the shin) so it turns with the leg, the fallen agent's
+  // included. From the front the spur's heel band shows only where it wraps
+  // round the outside of the ankle; a leather strap crosses the instep to a
+  // buckle on that side, and the shank reaches back off the heel to the
+  // rowel, a spiked wheel seen nearly edge-on, so the spikes above and below
+  // its hub are long and those to the sides foreshortened.
+  const SPUR = "#4b535c";
+  const SPUR_HI = "#b9c3cc";
   const legs = P.legs
-    .map(({ an }, i) => {
+    .map(({ kn, an }, i) => {
       const s = i === 0 ? -1 : 1;
-      const x = an[0] + s * 6.4;
-      const y = an[1] + 5.2;
-      let rowel = "";
+      const L = (d, col, w, op) => line(mirrorIf(s, d), col, w, op);
+      const H = (d, fill, w) => shape(mirrorIf(s, d), fill, w);
+      const [rx, ry, cx, cy] = [0.75, 2.1, 8.9, 4.7];
+      let spikes = "";
       for (let j = 0; j < 8; j++) {
-        const a = (j * 45 * Math.PI) / 180;
-        rowel += `M${pt(x, y)} L${pt(x + Math.cos(a) * 2.4, y + Math.sin(a) * 2.4)} `;
+        const a = ((j * 45 + 22.5) * Math.PI) / 180;
+        const [ca, sa] = [Math.cos(a), Math.sin(a)];
+        spikes += `M${f(cx + rx * ca)},${f(cy + ry * sa)} L${f(cx + rx * 1.9 * ca)},${f(cy + ry * 1.5 * sa)} `;
       }
+      // Ellipses as Béziers, which mirrorIf flips point by point (an arc's
+      // sweep flag would not flip with it).
+      const oval = (ex, ey, a, b) => {
+        const [h, v] = [a * 0.5523, b * 0.5523];
+        return (
+          `M${f(ex)},${f(ey - b)} C${f(ex + h)},${f(ey - b)} ${f(ex + a)},${f(ey - v)} ${f(ex + a)},${f(ey)} ` +
+          `C${f(ex + a)},${f(ey + v)} ${f(ex + h)},${f(ey + b)} ${f(ex)},${f(ey + b)} ` +
+          `C${f(ex - h)},${f(ey + b)} ${f(ex - a)},${f(ey + v)} ${f(ex - a)},${f(ey)} ` +
+          `C${f(ex - a)},${f(ey - v)} ${f(ex - h)},${f(ey - b)} ${f(ex)},${f(ey - b)} Z`
+        );
+      };
       return (
-        line(`M${pt(an[0] - 4.6, an[1] + 2.4)} C${pt(an[0] - 1.5, an[1] + 3.6)} ${pt(an[0] + 1.5, an[1] + 3.6)} ${pt(an[0] + 4.6, an[1] + 2.4)}`, INK, 2, 1) +
-        line(`M${pt(an[0] - 4.6, an[1] + 2.4)} C${pt(an[0] - 1.5, an[1] + 3.6)} ${pt(an[0] + 1.5, an[1] + 3.6)} ${pt(an[0] + 4.6, an[1] + 2.4)}`, LEATHER, 1.2, 1) +
-        line(`M${pt(an[0] + s * 4, an[1] + 4.6)} L${pt(x, y)}`, INK, 1.6, 1) +
-        line(`M${pt(an[0] + s * 4, an[1] + 4.6)} L${pt(x, y)}`, "#9aa3ad", 0.8, 1) +
-        line(rowel, INK, 1.1, 1) +
-        line(rowel, "#cfd8e0", 0.5, 1) +
-        `<circle cx="${f(x)}" cy="${f(y)}" r=".8" fill="${BRASS}" stroke="${INK}" stroke-width=".35"/>`
+        `<g transform="translate(${pt(...an)}) rotate(${f(angle(kn, an))})">` +
+        // The strap over the instep.
+        L("M-4.8,1.4 C-1.6,3 1.8,3 4.8,1.6", INK, 2, 1) +
+        L("M-4.8,1.4 C-1.6,3 1.8,3 4.8,1.6", LEATHER, 1.2, 1) +
+        L("M-3.8,1.7 C-1.4,2.6 1.2,2.6 3.6,1.9", "#6a4630", 0.35, 0.8) +
+        // The heel band round the outside of the ankle, then the shank.
+        L("M4.4,1.2 C6,1.2 7,2 7.4,3.2", INK, 1.9, 1) +
+        L("M4.4,1.2 C6,1.2 7,2 7.4,3.2", SPUR, 1.1, 1) +
+        L("M7,2.8 L8.5,4.2", INK, 1.5, 1) +
+        L("M7,2.8 L8.5,4.2", SPUR, 0.75, 1) +
+        L("M4.8,0.9 C6,0.9 6.8,1.5 7.2,2.4 L8.2,3.6", SPUR_HI, 0.3, 0.8) +
+        // The buckle where the strap meets the band.
+        H("M3.7,0.4 L5.5,0.6 L5.4,2.8 L3.6,2.6 Z", "none", 0.75) +
+        L("M3.9,0.7 L5.3,0.8 L5.2,2.5 L3.8,2.4 Z M4.6,0.8 L4.5,2.5", SPUR_HI, 0.3, 0.95) +
+        // The rowel: spikes behind the wheel, the wheel, the pin.
+        L(spikes, INK, 0.9, 1) +
+        L(spikes, "#8a949e", 0.4, 1) +
+        H(oval(cx, cy, rx, ry), SPUR, 0.5) +
+        L(`M${f(cx - rx * 0.4)},${f(cy - ry * 0.7)} C${f(cx - rx * 0.8)},${f(cy - ry * 0.2)} ${f(cx - rx * 0.8)},${f(cy + ry * 0.2)} ${f(cx - rx * 0.4)},${f(cy + ry * 0.7)}`, SPUR_HI, 0.3, 0.9) +
+        H(oval(cx, cy, 0.35, 0.35), SPUR_HI, 0.25) +
+        `</g>`
       );
     })
     .join("");

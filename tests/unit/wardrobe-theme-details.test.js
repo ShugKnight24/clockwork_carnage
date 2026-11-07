@@ -18,4 +18,15 @@ describe("the Frontier Marshal's duster", () => {
     for (const P of [STAND, FALLEN]) expect(frameLayers("duster", P, c).glow).toBe("");
     expect(frameLayers("duster", STAND, c).torso).not.toContain(c.energy);
   });
+
+  it("the spurs ride each foot's own frame, so they move and turn with the leg, standing or fallen", () => {
+    // Moved bodily, a leg's spur markup changes only where its groups are placed.
+    const placed = (m) => m.replace(/translate\([^)]*\)/g, "translate()");
+    const shift = (P, dx, dy) => ({ ...P, legs: P.legs.map((leg) => Object.fromEntries(Object.entries(leg).map(([k, [x, y]]) => [k, [x + dx, y + dy]]))) });
+    for (const P of [STAND, FALLEN]) {
+      const legs = frameLayers("duster", P, c).legs;
+      expect(legs).toContain("translate(");
+      expect(placed(frameLayers("duster", shift(P, 5, -7), c).legs)).toBe(placed(legs));
+    }
+  });
 });
