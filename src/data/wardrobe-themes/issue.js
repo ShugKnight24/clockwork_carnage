@@ -19,8 +19,9 @@ export default {
    * Helmets. `face: true`: an open helmet, the face shows under it.
    * `visor: false`: the head has no visor to fit, so the pick is neither drawn
    * nor counted (see takesVisor in src/data/cosmetics.js). `seats` and
-   * `faceSlots`: the accessory seats and face slots the helmet turns off
-   * (see src/data/wardrobe-themes/index.js).
+   * `faceSlots`: the accessory seats and face slots the helmet turns off,
+   * and `mouth` how it shows the expression (see
+   * src/data/wardrobe-themes/index.js).
    */
   helmets: [
     { id: "standard", name: "Standard Dome", desc: "Regulation sphere shell", tier: 1 },
@@ -39,7 +40,9 @@ export default {
       unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
     },
     { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { fireRateAdd: 0.03 } },
-    { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false },
+    // The wrap leaves the whole face bare (its painter draws it), though the
+    // helmet is not listed open: the mouth's expression shows all the same.
+    { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false, mouth: "face" },
   ],
   /** Shoulder pieces, drawn on both shoulders. */
   shoulders: [

@@ -7,6 +7,7 @@ import {
   CHARACTER_COLORS,
   SKIN_TONES,
   HAIR_STYLES,
+  EXPRESSIONS,
   EYE_COLORS,
   ARMOR_STYLES,
   VISOR_STYLES,
@@ -199,7 +200,22 @@ function buildMatrix() {
     const name = `paint-${paint}-${color}-${skinTone}-${body}-idle`;
     face.push({ name, ids: { helmet: "wide", hair: "buzz", color, skinTone, body, accessories: wearing("none", "warpaint"), accessoryTints: { face: hex } }, opts: { pose: "idle" }, kind: "svg" });
   }
-  return [...issue, ...[...themed, ...hair, ...face].map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
+  // Mouth expressions, appended: every expression on a bare face under an
+  // open helmet and lit on the LED mask, in both builds, and the face items
+  // that follow the mouth (the beard's opening, the lip ring, the cigar).
+  const mouths = [];
+  for (const expression of ids(EXPRESSIONS)) {
+    for (const body of ids(BODY_TYPES)) {
+      for (const [helmet, hair] of [["wide", "short"], ["ledmask", "hawk"]]) {
+        mouths.push({ name: `mouth-${expression}-${helmet}-${body}-idle`, ids: { helmet, hair, body, expression }, opts: { pose: "idle" }, kind: "svg" });
+      }
+    }
+  }
+  for (const [expression, item, body] of [["grin", "beard", "masc"], ["shout", "piercings", "fem"], ["shocked", "cigar", "masc"], ["smirk", "cigar", "fem"]]) {
+    const name = `mouth-${expression}-${item}-wide-${body}-idle`;
+    mouths.push({ name, ids: { helmet: "wide", hair: "buzz", body, expression, accessories: wearing("none", item) }, opts: { pose: "idle" }, kind: "svg" });
+  }
+  return [...issue, ...[...themed, ...hair, ...face, ...mouths].map((e) => (e.kind === "svg" ? { ...e, opts: { ...e.opts, idPrefix: `${e.name}-` } } : e))];
 }
 
 /** Eyes item, face item, helmet and hair cut of the appended face looks. */

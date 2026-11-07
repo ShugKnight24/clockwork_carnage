@@ -16,6 +16,7 @@
 
 import { hexRgb, mixHex as mix } from "../../../utils/color.js";
 import { accessoryItem } from "../../../data/accessories.js";
+import { beardMouthOf, cigarAt, lipRingAt } from "../expressions.js";
 
 const f = (n) => Math.round(n * 100) / 100;
 const INK = "#0a0d12";
@@ -97,14 +98,32 @@ export const EYES = {
 };
 
 /**
- * Where the piercings go on each build's face (agent-rig.js face(), EYE and
- * the mouths): the brow bar's two beads, above and below the outer right
- * brow, and the point on the lower lip the ring leaves from.
+ * Where the brow bar goes on each build's face (agent-rig.js face() and
+ * EYE): its two beads, above and below the outer right brow. The lip ring's
+ * point on the lower lip follows the expression (lipRingAt).
  */
 const PIERCE = {
-  masc: { brow: ["4.4,-85.35", "4.75,-83.75"], lip: [1.4, -73.2] },
-  fem: { brow: ["4.4,-85.95", "4.75,-84.35"], lip: [1.4, -73.35] },
+  masc: { brow: ["4.4,-85.35", "4.75,-83.75"] },
+  fem: { brow: ["4.4,-85.95", "4.75,-84.35"] },
 };
+
+/**
+ * The cigar: its body, band, ash and smoke, and its lit tip, each point
+ * passed through `at` (the body, turned with the mouth) or `rise` (the
+ * smoke, which only moves: smoke rises whatever the cigar does).
+ */
+function cigarArt(at, rise) {
+  const d = (pts, close = true) => `M${pts.map(([x, y]) => at(x, y)).join(" L")}${close ? " Z" : ""}`;
+  const smoke = [[4.2, -73.1], [4.8, -73.9], [3.9, -74.6], [4.4, -75.5], [4.8, -76.2], [4.2, -76.8], [4.5, -77.5]].map(([x, y]) => rise(x, y));
+  return {
+    face:
+      fill(d([[2.29, -74.49], [3.92, -72.86], [3.14, -72.08], [1.51, -73.71]]), "#5a3a22", 0.45) +
+      stroke(d([[2.64, -74.14], [1.86, -73.36]], false), BRASS, 0.5) +
+      fill(d([[3.92, -72.86], [4.31, -72.47], [3.53, -71.69], [3.14, -72.08]]), "#6a6a6a", 0.35) +
+      stroke(`M${smoke[0]} C${smoke[1]} ${smoke[2]} ${smoke[3]} C${smoke[4]} ${smoke[5]} ${smoke[6]}`, "#d8dde2", 0.4, 0.35),
+    glow: `<path d="M${at(3.92, -72.08)} L${at(3.92, -72.08)}" stroke="#ff7a2a" stroke-width=".9" stroke-linecap="round"/>`,
+  };
+}
 
 /** Everything else worn on the face. */
 export const FACE = {
@@ -138,15 +157,25 @@ export const FACE = {
   // A short cigar drooping from the right corner of the mouth, its lit tip
   // over the chin and neck: clear of every cut that frames the face (the
   // long cut's locks start at x 6.2, the back hair beside the neck at 4.5).
-  // A thin wisp of smoke rises over the cheek, not into the hair.
-  cigar: () => ({
-    face:
-      fill("M2.29,-74.49 L3.92,-72.86 L3.14,-72.08 L1.51,-73.71 Z", "#5a3a22", 0.45) +
-      stroke("M2.64,-74.14 L1.86,-73.36", BRASS, 0.5) +
-      fill("M3.92,-72.86 L4.31,-72.47 L3.53,-71.69 L3.14,-72.08 Z", "#6a6a6a", 0.35) +
-      stroke("M4.2,-73.1 C4.8,-73.9 3.9,-74.6 4.4,-75.5 C4.8,-76.2 4.2,-76.8 4.5,-77.5", "#d8dde2", 0.4, 0.35),
-    glow: `<path d="M3.92,-72.08 L3.92,-72.08" stroke="#ff7a2a" stroke-width=".9" stroke-linecap="round"/>`,
-  }),
+  // A thin wisp of smoke rises over the cheek, not into the hair. It follows
+  // the expression (cigarAt): gripped in the right corner wherever a closed
+  // mouth or a grin puts it; a mouth too open to grip it (the shout, the
+  // shocked O) leaves it stuck to the lower lip, hanging steeper.
+  cigar: (A, c) => {
+    const pose = cigarAt(c);
+    if (!pose) return cigarArt((x, y) => `${f(x)},${f(y)}`, (x, y) => `${f(x)},${f(y)}`);
+    const { move, turn, about } = pose;
+    const [cos, sin] = [Math.cos((turn * Math.PI) / 180), Math.sin((turn * Math.PI) / 180)];
+    const turned = (x, y) => [about[0] + (x - about[0]) * cos - (y - about[1]) * sin, about[1] + (x - about[0]) * sin + (y - about[1]) * cos];
+    const at = (x, y) => {
+      const [tx, ty] = turned(x, y);
+      return `${f(tx + move[0])},${f(ty + move[1])}`;
+    };
+    // The smoke leaves the lit tip, wherever the turn has taken it.
+    const [tipX, tipY] = turned(3.92, -72.08);
+    const rise = (x, y) => `${f(x + tipX - 3.92 + move[0])},${f(y + tipY + 72.08 + move[1])}`;
+    return cigarArt(at, rise);
+  },
   nosestrip: () => ({
     face: fill("M-2.8,-79.4 L2.8,-79.6 L2.9,-78.2 L-2.7,-78 Z", "#e8e2d6", 0.4) + stroke("M-1.6,-79.2 L-1.5,-78.2 M0,-79.3 L0.1,-78.2 M1.6,-79.4 L1.7,-78.3", "#b8b0a2", 0.3),
   }),
@@ -154,11 +183,12 @@ export const FACE = {
   // and a ring through the lower lip: it leaves the lip at two points and
   // only its lower loop shows, the rest inside the lip. Placed on each
   // build's own brow and lip (the feminine brow arches higher, her lower lip
-  // is fuller), before the jaw's warp narrows them with the face.
+  // is fuller), the lip as the expression sets it (lipRingAt), before the
+  // jaw's warp narrows them with the face.
   piercings: (A, c) => {
     const metal = "#d6dde5";
-    const { brow, lip } = c.fem ? PIERCE.fem : PIERCE.masc;
-    const [x, y] = lip;
+    const { brow } = c.fem ? PIERCE.fem : PIERCE.masc;
+    const [x, y] = lipRingAt(c);
     const ring = `M${f(x - 0.55)},${f(y)} C${f(x - 0.6)},${f(y + 1.35)} ${f(x + 0.6)},${f(y + 1.35)} ${f(x + 0.55)},${f(y)}`;
     const bead = ([bx, by]) => `M${bx},${by} L${bx},${by}`;
     return {
@@ -181,12 +211,11 @@ export const FACE = {
     const beard =
       "M-6.9,-79 C-6.6,-76 -5.4,-73.4 -3.6,-72 C-2.2,-70.8 -1,-70.4 0,-70.4 C1,-70.4 2.2,-70.8 3.6,-72 C5.4,-73.4 6.6,-76 6.9,-79 " +
       "C6,-77 5,-75.8 3.6,-75.6 C2.4,-75.4 1.6,-76.4 0,-76.4 C-1.6,-76.4 -2.4,-75.4 -3.6,-75.6 C-5,-75.8 -6,-77 -6.9,-79 Z";
-    const mouth = "M-2.4,-74.6 C-1,-75 1,-75 2.4,-74.6 C1.2,-73.2 -1.2,-73.2 -2.4,-74.6 Z";
     return {
       face:
         `<path d="${beard}" fill="${hair}" opacity=".88"/>` +
-        `<path d="${mouth}" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
-        stroke("M-2.6,-74.6 C-1.2,-74.1 1.2,-74.1 2.6,-74.6", INK, 0.45, 0.8) +
+        // The mouth through the beard, in the expression the face shows.
+        beardMouthOf(c, INK) +
         stroke("M-4.6,-73.6 C-2,-71.4 2,-71.4 4.6,-73.6", mix(hair, "#ffffff", 0.3), 0.35, 0.5),
     };
   },

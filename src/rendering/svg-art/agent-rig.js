@@ -55,7 +55,8 @@ import { ENAMELS, METALS } from "../../data/badges.js";
 import { paintAccessories } from "./accessories/index.js";
 import { frameShape, frameLayers } from "./frames.js";
 import { CANDY, CANDY_HI, AMBER } from "./frame-kit.js";
-import { frameGlove, frameGloveArt, frameHides, helmetArt, helmetFaceSlots, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
+import { frameGlove, frameGloveArt, frameHides, helmetArt, helmetFaceSlots, helmetMouth, helmetSeats, shoulderArt } from "./wardrobe-themes/index.js";
+import { mouthOf } from "./expressions.js";
 import { FACE_HELMETS } from "../../data/wardrobe-themes/index.js";
 import { idScope } from "./id-scope.js";
 import { ACCESSORY_SLOTS, FACE_SLOTS, tintFor } from "../../data/accessories.js";
@@ -141,7 +142,11 @@ export function hairOf(ch, pal = pieceOf(ch, "color")) {
   return { ...cut, color, brow };
 }
 
-function resolve(ch) {
+/**
+ * A look resolved for drawing. `peek` is a bare-headed peek under a closed
+ * helmet, which shows the whole face whatever the helmet.
+ */
+function resolve(ch, peek = false) {
   const pal = pieceOf(ch, "color");
   const armorPiece = pieceOf(ch, "armor");
   const armor = armorPiece.id;
@@ -171,6 +176,12 @@ function resolve(ch) {
     skin: pieceOf(ch, "skinTone"),
     hair: hairOf(ch, pal),
     eyes: pieceOf(ch, "eye").color,
+    // The expression picked, and the one the bare face shows: the default
+    // wherever the helmet covers the mouth or lights it itself (the LED
+    // mask's pixels take `expression`), so a covered face keeps the mouth
+    // it always had under the cloth and the shell.
+    expression: pieceOf(ch, "expression").id,
+    mouth: peek || helmetMouth(pieceOf(ch, "helmet").id) === "face" ? pieceOf(ch, "expression").id : "default",
     variant: ch.armorVariant ? armorPiece.variant || null : null,
     energy: pal.accent,
     core: mix(pal.accent, "#ffffff", 0.72),
@@ -455,30 +466,13 @@ function eyes(c) {
   return eye(-1) + eye(1);
 }
 
-/** Feminine mouth: a cupid's-bow upper lip over a fuller lower lip. */
-function femMouth(c) {
-  const lip = mix(c.skin.color, "#b0474f", 0.42);
-  return (
-    `<path d="M-2.5,-74 C-1.6,-74.9 -0.6,-74.9 0,-74.4 C0.6,-74.9 1.6,-74.9 2.5,-74 C1.2,-73.75 -1.2,-73.75 -2.5,-74 Z" fill="${mix(lip, "#000000", 0.12)}"/>` +
-    `<path d="M-2.4,-73.9 C-1.2,-73.7 1.2,-73.7 2.4,-73.9 C1.6,-72.3 -1.6,-72.3 -2.4,-73.9 Z" fill="${lip}"/>` +
-    line("M-2.6,-74 C-1.2,-73.6 1.2,-73.6 2.6,-74", mix(c.skin.shadow, "#000000", 0.35), 0.4, 0.85) +
-    `<ellipse cx=".5" cy="-73.1" rx="1" ry=".32" fill="#fff" opacity=".22"/>`
-  );
-}
-
-/** Face without hair (head top -91.6, chin -71.2). Feminine faces get their own eyes, cheeks and mouth, then the jaw taper. */
+/** Face without hair (head top -91.6, chin -71.2). Feminine faces get their own eyes, cheeks and mouth (mouthOf), then the jaw taper. */
 function face(c) {
   const shadow = c.skin.shadow;
   const ear = "M-7,-83.6 C-8.9,-84.4 -9.6,-82 -9.2,-79.8 C-8.9,-78.2 -8,-77.4 -6.8,-77.8 Z";
   const synthetic = c.skin.id === "synthetic";
   const fem = c.fem;
   const blush = mix(c.skin.color, "#d0605a", 0.35);
-  const mouth = fem
-    ? femMouth(c)
-    : // Mouth: a level, slightly lifted line (the old curve read as a frown).
-      `<path d="M-2.4,-74 C-1,-74.3 1,-74.3 2.4,-74 C1.2,-73.3 -1.2,-73.3 -2.4,-74 Z" fill="${mix(c.skin.shadow, "#a04040", 0.3)}"/>` +
-      line("M-2.6,-74.05 C-1.2,-73.55 1.2,-73.55 2.6,-74.05", mix(shadow, "#000000", 0.4), 0.5, 0.9) +
-      line("M-1.3,-72.75 C-0.5,-72.5 0.5,-72.5 1.3,-72.75", mix(c.skin.color, "#ffffff", 0.3), 0.4, 0.45);
   const markup =
     shape(ear, "url(#skin)", 0.8) +
     shape(mirror(ear), mix(c.skin.color, shadow, 0.55), 0.8) +
@@ -499,7 +493,8 @@ function face(c) {
         line("M-6.2,-78.4 C-5.4,-77 -4.4,-76.4 -3.4,-76.2", shadow, 0.3, 0.18) +
         line("M6.2,-78.4 C5.4,-77 4.4,-76.4 3.4,-76.2", shadow, 0.3, 0.26)
       : "") +
-    mouth +
+    // The mouth in the expression the face shows (expressions.js).
+    mouthOf(c) +
     (synthetic
       ? line("M-6.6,-79.6 L-4.4,-77.4 L-4.6,-74.4 M6.6,-79.6 L4.4,-77.4 L4.6,-74.4 M0,-91.4 L0,-87.8", "#3a424e", 0.4, 0.8)
       : "") +
@@ -1819,7 +1814,7 @@ const collarOf = (c, showFace, map, plate = true) =>
  * @param {{ pose?: "idle"|"hero"|"bust", peek?: boolean }} opts
  */
 export function buildAgentParts(character, { pose = "idle", peek = false } = {}) {
-  const c = resolve(character || {});
+  const c = resolve(character || {}, peek);
   const scope = idScope();
   const armed = pose === "hero";
   const B = c.fem ? BUILDS.fem : BUILDS.masc;

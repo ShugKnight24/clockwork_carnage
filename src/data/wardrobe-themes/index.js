@@ -10,8 +10,8 @@
  * where `short` is the name for a tight caption (a one-tile group in the
  * creator's grids: "Marshal" for Frontier Marshal).
  * with each entry `{ id, name, desc, tier?, unlock?, bonuses?, visor?, face? }`,
- * a frame entry also `hides?` and `glove?`, and a helmet entry also `seats?`
- * and `faceSlots?`:
+ * a frame entry also `hides?` and `glove?`, and a helmet entry also `seats?`,
+ * `faceSlots?` and `mouth?`:
  *   hides: the stock rig layers the frame replaces, words from HIDES (see
  *     there for what each one removes); left out, it hides none. A frame
  *     that hides the shoulders wears no shoulder piece, so the pick is
@@ -29,6 +29,8 @@
  *     eyes or the jaw (the LED mask's band and shell) turns that slot off,
  *     and the item worn there is kept but not drawn. A closed helmet hides
  *     both slots and declares none.
+ *   mouth: how the helmet shows the mouth's expression, a word from MOUTHS
+ *     (see helmetMouth); left out, it follows the face slot.
  *
  * Data only: nothing here imports rendering code.
  */
@@ -184,4 +186,37 @@ export function faceSlotBlock(id, slot) {
   if (!FACE_SLOTS.includes(slot)) throw new Error(`faceSlotBlock: "${slot}" is not a face slot (${FACE_SLOTS.join(", ")})`);
   if (!FACE_HELMETS.has(id)) return "hidden";
   return helmetFaceSlots(id)[slot] ? null : "room";
+}
+
+/**
+ * How a helmet can show the mouth's expression (EXPRESSIONS in
+ * src/data/cosmetics.js): "face", on the bare face as its own mouth, or
+ * "led", lit on the helmet itself (the LED mask's pixels).
+ */
+export const MOUTHS = Object.freeze(["face", "led"]);
+
+/**
+ * How a helmet shows the mouth's expression: its entry's `mouth`, a word
+ * from MOUTHS, or null where the mouth is covered. Left out, an open helmet
+ * whose face slot has room shows the bare mouth and every other covers it:
+ * whatever takes the jaw's room (the brim's bandana) covers the mouth too.
+ * @param {string} id helmet id
+ * @returns {"face"|"led"|null}
+ */
+export function helmetMouth(id) {
+  const e = helmetEntry(id);
+  if ("mouth" in e) return e.mouth;
+  return helmetFaceSlots(id).face ? "face" : null;
+}
+
+/**
+ * Why the expression does not show under a helmet, for the creator's note:
+ * "hidden" under a helmet that hides the face, "covered" under an open one
+ * that covers the mouth, null when it shows (on the face or in lights).
+ * @param {string} id helmet id
+ * @returns {"hidden"|"covered"|null}
+ */
+export function mouthBlock(id) {
+  if (helmetMouth(id)) return null;
+  return FACE_HELMETS.has(id) ? "covered" : "hidden";
 }

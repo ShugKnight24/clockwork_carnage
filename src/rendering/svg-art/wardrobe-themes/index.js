@@ -141,7 +141,7 @@
  * `c` is the resolved look (agent-rig.js resolve): c.pal (primary, dark,
  * accent), c.energy, c.core, c.rim, c.skin, c.hair, c.eyes, c.fem, c.armor.
  */
-import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS, HIDES, DEFAULT_GLOVE, frameGlove } from "../../../data/wardrobe-themes/index.js";
+import { WARDROBE_THEMES, THEME_TABLES, HELMET_SEATS, MOUTHS, HIDES, DEFAULT_GLOVE, frameGlove } from "../../../data/wardrobe-themes/index.js";
 import { ACCESSORIES, FACE_SLOTS, TINT_HEX } from "../../../data/accessories.js";
 import { deepFreeze } from "../../../utils/freeze.js";
 import issue from "./issue.js";
@@ -215,7 +215,7 @@ export function frameGloveArt(frame) {
 // The helmets' accessory seats and face room, and the stock layers a frame
 // hides, live on their data entries (src/data/wardrobe-themes/index.js),
 // where the data layer can read them; re-exported here for the art's readers.
-export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock, HIDES, frameHides, DEFAULT_GLOVE, frameGlove } from "../../../data/wardrobe-themes/index.js";
+export { HELMET_SEATS, helmetSeats, helmetFaceSlots, faceSlotBlock, MOUTHS, helmetMouth, mouthBlock, HIDES, frameHides, DEFAULT_GLOVE, frameGlove } from "../../../data/wardrobe-themes/index.js";
 
 /** The anchor numbers every helmet's art declares. */
 const HELMET_ANCHORS = ["top", "half", "rail"];
@@ -290,6 +290,7 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
         if (!HELMET_SEATS.includes(seat)) errors.push(`helmets: "${e.id}" seats unknown seat "${seat}" (${HELMET_SEATS.join(", ")})`);
         else if (typeof on !== "boolean") errors.push(`helmets: "${e.id}" seats.${seat} is not true or false`);
       }
+      if ("mouth" in e && !MOUTHS.includes(e.mouth)) errors.push(`helmets: "${e.id}" mouth "${e.mouth}" is not one of ${MOUTHS.join(", ")}`);
       if (!("faceSlots" in e)) continue;
       if (e.face !== true) errors.push(`helmets: "${e.id}" declares faceSlots but hides the face (its entry has no face: true)`);
       for (const [slot, on] of Object.entries(e.faceSlots || {})) {
@@ -321,7 +322,7 @@ export function validateWardrobe(themes = WARDROBE_THEMES, artThemes = ART_THEME
           if (!Number.isFinite(badge?.[key])) errors.push(`helmets: "${id}" anchors.badge.${key} is not a finite number (or set badge: false)`);
         }
       }
-      for (const key of ["seats", "faceSlots"]) {
+      for (const key of ["seats", "faceSlots", "mouth"]) {
         if (key in a) errors.push(`helmets: art "${id}" declares ${key}, which belongs on its data entry`);
       }
     }

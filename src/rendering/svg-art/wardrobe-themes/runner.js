@@ -12,6 +12,7 @@
  */
 import { INK, f, pt, lerp, shape, line, energy, muscle, armJoints, polar, heading, LIMB } from "../models/hero.js";
 import { STEEL, STEEL_DK, plateAt, lineAt, mirrorIf, k, CHROME, cuffPath, wristMid } from "../frame-kit.js";
+import { LED_COLUMNS, LED_ROWS, ledCells } from "../expressions.js";
 
 const PAINT = "url(#paint)";
 const TAPE = "#c9ccc4";
@@ -215,14 +216,13 @@ function ledmask(c, K) {
   const shell = "#14171c";
   const mask = maskPath(c.fem);
   const w = c.fem ? 0.86 : 1;
-  // The pixel grin: a row of lit cells, curling up at the corners.
-  const cells = [
-    [-4, -75.4], [-3, -74.4], [-2, -74], [-1, -74], [0, -74], [1, -74], [2, -74], [3, -74.4], [4, -75.4],
-    [-2, -72.8], [-1, -72.4], [0, -72.4], [1, -72.4], [2, -72.8],
-  ];
+  // The lit cells: the expression picked (ledCells), at rest the pixel grin
+  // curling up at the corners. The face under the shell keeps its own mouth
+  // at rest (the rig resolves it so), as only the pixels show.
+  const cells = ledCells(c.expression);
   const grid = cells.map(([x, y]) => `<rect x="${f(x * w - 0.42)}" y="${f(y - 0.42)}" width=".84" height=".84"/>`).join("");
   const dark = [];
-  for (let x = -5; x <= 5; x++) for (const y of [-76.6, -75.4, -74.2, -73, -71.8]) dark.push(`<rect x="${f(x * w - 0.36)}" y="${f(y - 0.36)}" width=".72" height=".72"/>`);
+  for (const x of LED_COLUMNS) for (const y of LED_ROWS) dark.push(`<rect x="${f(x * w - 0.36)}" y="${f(y - 0.36)}" width=".72" height=".72"/>`);
   const jack = (s) =>
     `<rect x="${f(s * 7.6 - 1.3)}" y="-82" width="2.6" height="3.4" rx=".6" fill="${STEEL_DK}" stroke="${INK}" stroke-width=".5"/>` +
     `<circle cx="${f(s * 7.6)}" cy="-80.3" r=".7" fill="${CHROME}" stroke="${INK}" stroke-width=".3"/>`;

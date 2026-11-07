@@ -622,10 +622,19 @@ describe("validateWardrobe", () => {
     expect(run({ eyes: false }, false)).toEqual([expect.stringMatching(/"h" declares faceSlots but hides the face/)]);
   });
 
-  it("reports seats or faceSlots declared on a helmet's art: they belong on its data entry", () => {
+  it("reports a mouth that is not a MOUTHS word", () => {
+    const run = (mouth) => validateWardrobe(withHelmet({ mouth }), [{ id: "a", helmets: { h: helm() } }]);
+    expect(run("face")).toEqual([]);
+    expect(run("led")).toEqual([]);
+    expect(run("lips")).toEqual([expect.stringMatching(/"h" mouth "lips" is not one of face, led/)]);
+    expect(run(true)).toEqual([expect.stringMatching(/"h" mouth "true" is not one of/)]);
+  });
+
+  it("reports seats, faceSlots or mouth declared on a helmet's art: they belong on its data entry", () => {
     const run = (art) => validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: { ...helm(), ...art } } }]);
     expect(run({ seats: { crown: false } })).toEqual([expect.stringMatching(/art "h" declares seats, which belongs on its data entry/)]);
     expect(run({ faceSlots: { eyes: false } })).toEqual([expect.stringMatching(/art "h" declares faceSlots, which belongs on its data entry/)]);
+    expect(run({ mouth: "led" })).toEqual([expect.stringMatching(/art "h" declares mouth, which belongs on its data entry/)]);
   });
 
   it("reports a shoulder without art, shoulder art without an entry, and one filed under another theme", () => {
