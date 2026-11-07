@@ -51,6 +51,6 @@ export default {
     { id: "slab", name: "Slab", desc: "Oversized rounded shoulder slabs", tier: 3, bonuses: { maxHealthAdd: 18, armorAdd: 4, moveSpeedAdd: -0.12 } },
     { id: "dome", name: "Domed", desc: "Deep crusader half-shells with a raised rim", tier: 3, bonuses: { armorAdd: 9, moveSpeedAdd: -0.08 } },
     { id: "ordnance", name: "Launcher", desc: "Vented ordnance housing on a rail", tier: 3, bonuses: { armorAdd: 6, ammoCapAdd: 0.1, moveSpeedAdd: -0.1 } },
-    { id: "layered", name: "Layered", desc: "Stepped overlapping plates", tier: 2, bonuses: { maxStaminaAdd: 14, moveSpeedAdd: 0.1 } },
+    { id: "layered", name: "Layered", desc: "Stepped overlapping plates", tier: 2, bonuses: { armorAdd: 4 } },
   ],
 };

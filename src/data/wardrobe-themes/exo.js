@@ -13,5 +13,6 @@ export default {
       // A cage to take hits and a targeting canopy.
       bonuses: { armorAdd: 2, fireRateAdd: 0.06 } }],
   shoulders: [{ id: "pods", name: "Missile Pods", desc: "Six-tube launcher pods on hinge arms", tier: 3,
-      bonuses: { armorAdd: 5, moveSpeedAdd: -0.08 } }],
+      // Racks of rounds carried high: more to fire, more to haul.
+      bonuses: { ammoCapAdd: 0.25, moveSpeedAdd: -0.08 } }],
 };

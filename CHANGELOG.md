@@ -40,6 +40,7 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
   - Pilot helmet: +10 stamina → +3% fire rate.
   - Slit visor: +10 chrono energy → +2 armour.
   - Dual Lens visor: +10 stamina → +3% fire rate.
+  - Layered shoulders: +14 stamina, +3% move speed → +4 armour.
   - Launcher shoulders: +6 armour, +10 max health, -3% move speed → +6 armour, +10% ammo capacity, -3% move speed.
   - Tactical Backpack: +8 stamina → +10% ammo capacity.
   - Utility Belt: +5 max health → +0.1 health per second.

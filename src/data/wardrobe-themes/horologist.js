@@ -12,5 +12,5 @@ export default {
   helmets: [{ id: "clockface", name: "Clockface", desc: "Round brass helmet whose visor is a glowing clock face, wound at the crown", tier: 3, visor: false, bonuses: { maxChronoEnergyAdd: 20 },
       // The winding crown stands on top and the dial fills the front to the bezel.
       seats: { crown: false, brow: false } }],
-  shoulders: [{ id: "gearrim", name: "Gear Rim", desc: "Round pauldrons rimmed with gear teeth round an inner cog", tier: 2, bonuses: { maxChronoEnergyAdd: 10 } }],
+  shoulders: [{ id: "gearrim", name: "Gear Rim", desc: "Round pauldrons rimmed with gear teeth round an inner cog", tier: 2, bonuses: { armorAdd: 2 } }],
 };

@@ -7,8 +7,8 @@ export default {
   name: "Ronin",
   short: "Ronin",
   frames: [{ id: "lamellar", name: "Ronin", desc: "Laced chrono-steel lamellar, hanging tassets, an obi with a short blade and a back banner", tier: 2,
-      // Plate that moves with you: laced scales flex and breathe.
-      bonuses: { armorAdd: 2, staminaRegenAdd: 0.1 } }],
+      // Laced steel scales: real plate, and a little weight to carry.
+      bonuses: { armorAdd: 4, moveSpeedAdd: -0.04 } }],
   // The war mask covers the face; there is no visor to fit.
   helmets: [{ id: "kabuto", name: "Kabuto", desc: "Crescent-crested helm, flared neck guard and a snarling war mask", tier: 3, visor: false, bonuses: { maxHealthAdd: 8, armorAdd: 3 },
       // The crest holds the crown and its clock fitting the brow.

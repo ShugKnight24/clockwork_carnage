@@ -125,12 +125,12 @@ describe("gearValue", () => {
 const THEME_STATS = {
   frame: {
     exo: { armorAdd: 3, maxHealthAdd: 10, moveSpeedAdd: -0.1 },
-    duster: { armorAdd: 1, ammoCapAdd: 0.1 },
-    lamellar: { armorAdd: 2, staminaRegenAdd: 0.1 },
+    duster: { ammoCapAdd: 0.15 },
+    lamellar: { armorAdd: 4, moveSpeedAdd: -0.04 },
     clockwork: { maxChronoEnergyAdd: 15 },
     streetwear: { moveSpeedAdd: 0.1, dashCostAdd: -2 },
     diving: { maxHealthAdd: 12, moveSpeedAdd: -0.08 },
-    spacesuit: { maxStaminaAdd: 10, regenAdd: 0.1 },
+    spacesuit: { regenAdd: 0.25, moveSpeedAdd: -0.05 },
     vestment: { maxChronoEnergyAdd: 12, regenAdd: 0.08 },
   },
   helmet: {
@@ -144,10 +144,10 @@ const THEME_STATS = {
     hood: { maxChronoEnergyAdd: 20 },
   },
   shoulder: {
-    pods: { armorAdd: 5, moveSpeedAdd: -0.08 },
+    pods: { ammoCapAdd: 0.25, moveSpeedAdd: -0.08 },
     poncho: null,
     sode: { armorAdd: 3 },
-    gearrim: { maxChronoEnergyAdd: 10 },
+    gearrim: { armorAdd: 2 },
     spikepad: { armorAdd: 2 },
     lantern: null,
     patches: null,
@@ -165,7 +165,7 @@ const AUDITED = {
     pilot: { fireRateAdd: 0.03 },
   },
   visor: { slit: { armorAdd: 2 }, split: { fireRateAdd: 0.03 } },
-  shoulder: { ordnance: { armorAdd: 6, ammoCapAdd: 0.1, moveSpeedAdd: -0.1 } },
+  shoulder: { ordnance: { armorAdd: 6, ammoCapAdd: 0.1, moveSpeedAdd: -0.1 }, layered: { armorAdd: 4 } },
   "acc.back": { backpack: { ammoCapAdd: 0.1 } },
   "acc.waist": { belt: { regenAdd: 0.1 }, holster: { ammoCapAdd: 0.05 }, grenades: null },
   "acc.legs": { thigh: { ammoCapAdd: 0.05 } },
