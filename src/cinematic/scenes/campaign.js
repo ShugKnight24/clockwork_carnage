@@ -49,7 +49,7 @@ import { decay } from "../../utils/math.js";
 import { prefetchIdleEnemy } from "../../rendering/svg-art/sprites/enemies.js";
 import { generateModernEnv } from "../../rendering/textures.js";
 import { isModernArt, isRealisticArt } from "../../rendering/art-style.js";
-import { prefetchViewmodel } from "../../rendering/svg-art/viewmodels.js";
+import { prefetchViewmodel, viewmodelLook } from "../../rendering/svg-art/viewmodels.js";
 import { WEAPONS } from "../../data/weapons.js";
 import { pieceOf } from "../../core/character-fields.js";
 import { whenIdle } from "../../utils/schedule.js";
@@ -261,13 +261,15 @@ async function warmViewmodels(game, weapons, realistic, live) {
   const h = game.renderer?.height;
   if (!ctx || !h || !weapons.length) return;
   const until = performance.now() + 3000;
+  // The hands the shot will draw: the player's suit gloves, as drawWeapon passes them.
+  const look = game.character ? viewmodelLook(game.character) : null;
   for (;;) {
     let ready = true;
     for (const id of weapons) {
       const def = WEAPONS[id];
       if (!def) continue;
       const accent = game.character ? pieceOf(game.character, "color").accent : def.color;
-      if (!prefetchViewmodel(ctx, h, def.id ?? id, accent, realistic, 1)) ready = false;
+      if (!prefetchViewmodel(ctx, h, def.id ?? id, accent, realistic, 1, look)) ready = false;
     }
     if (ready || performance.now() > until || !live()) return;
     await idle();

@@ -15,6 +15,7 @@ import { GAMEPAD_ACTIONS } from "../src/systems/pad-actions.js";
 import { loadPadBinds, STORAGE_KEY_PADBINDS } from "../src/systems/remap.js";
 import { initXInputUsb } from "./xinput-usb.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
+import { viewmodelLook } from "../src/rendering/svg-art/viewmodels.js";
 import {
   spawnPickupBurst as _spawnPickupBurst,
   spawnEnergyBurst as _spawnEnergyBurst,
@@ -3496,7 +3497,8 @@ export class Game {
       weaponKick: this.player.weaponKick,
       weaponSwayX: this.settings.weaponBob ? this.player.weaponSwayX : 0,
       weaponSwayY: this.settings.weaponBob ? this.player.weaponSwayY : 0,
-      skinTone: pieceOf(this.character, "skinTone").color,
+      // The suit's gloves on the hands (and the skin of bare fingertips).
+      ...viewmodelLook(this.character),
       weaponAnimFrame: this.weaponAnimFrame,
       time: this.time,
       lastFireTime: this.player.lastFireTime || 0,

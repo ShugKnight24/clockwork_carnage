@@ -25,6 +25,7 @@
  */
 
 import { INK, f, mix } from "./geom.js";
+import { STANDARD_GLOVE } from "./gloves.js";
 import { lerpPoint as lerp } from "../../../utils/math.js";
 
 const pt = ([x, y]) => `${f(x)},${f(y)}`;
@@ -57,22 +58,6 @@ export const HAND_DEFS = `
 <radialGradient id="vmAO"><stop offset="0" stop-color="#000" stop-opacity=".55"/>
   <stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>`;
 
-// Material tones per art style.
-const TONES = {
-  modern: {
-    base: "#333b46", hi: "#c3d0dc", hiOp: 0.16, sh: "#05070a", shOp: 0.5,
-    edge: INK, edgeOp: 1, edgeW: 0.36, crease: INK, creaseOp: 0.42,
-    pad: "#3f4854", seam: "#a9b7c5", seamOp: 0.34, plateHi: "#eef6ff", plateHiOp: 0.42,
-    sleeve: "url(#vmSleeve)", cuff: "url(#vmCuff)",
-  },
-  real: {
-    base: "#2c2f33", hi: "#b8bec4", hiOp: 0.09, sh: "#020304", shOp: 0.55,
-    edge: "#050607", edgeOp: 0.55, edgeW: 0.24, crease: "#000000", creaseOp: 0.34,
-    pad: "#35393e", seam: "#8b9299", seamOp: 0.24, plateHi: "#d9dde1", plateHiOp: 0.2,
-    sleeve: "url(#vmSleeveR)", cuff: "url(#vmCuffR)",
-  },
-};
-
 /** Convex hull (monotone chain) of 2D points. */
 function hull2(points) {
   const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -103,6 +88,26 @@ function spline(p) {
       `${pt([p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6])} ${pt(p2)}`;
   }
   return d;
+}
+
+/** Segment i of spline(p) as a cubic Bézier [p1, c1, c2, p2]. */
+function splineSeg(p, i) {
+  const p0 = p[Math.max(0, i - 1)];
+  const p1 = p[i];
+  const p2 = p[i + 1];
+  const p3 = p[Math.min(p.length - 1, i + 2)];
+  return [p1, [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6], p2];
+}
+
+/** A cubic Bézier split at t (de Casteljau): [first part, second part]. */
+function splitCubic([a, b, c, d], t) {
+  const ab = lerp(a, b, t);
+  const bc = lerp(b, c, t);
+  const cd = lerp(c, d, t);
+  const abc = lerp(ab, bc, t);
+  const bcd = lerp(bc, cd, t);
+  const m = lerp(abc, bcd, t);
+  return [[a, ab, abc, m], [m, bcd, cd, d]];
 }
 
 /**
@@ -205,7 +210,8 @@ function walk(rg, start, lengths, dir = 1) {
 export function createHandArt(sc) {
   const { accent, P, k } = sc;
   const real = !!sc.real;
-  const T = real ? TONES.real : TONES.modern;
+  // The suit's glove (./gloves.js): its tones and dress over the same hand.
+  const T = (sc.glove || STANDARD_GLOVE)[real ? "real" : "modern"];
   // Nominal device px per unit for this build's detail tier: fine lines are
   // dropped once they would render too small to read (LOD).
   const PX = sc.detailPx || 4;
@@ -216,11 +222,28 @@ export function createHandArt(sc) {
     sc.target(name);
   };
   const grow = (p, pad = 0) => sc.grow(sc.layers[layer], p, pad);
-  const emit = (m) => sc.emit(m);
+  const emit = (m) => {
+    // Hand art under a weapon part (a sidearm's thumbs, an aimed long gun's
+    // support hand) makes the body layer depend on the glove (viewmodels.js).
+    if (layer === "body") sc.handInBody = true;
+    sc.emit(m);
+  };
+  // Emissive glove light goes in the hand bloom layer, Modern only; under a
+  // weapon part it would bloom through the part, so it is left off there.
+  const glowing = () => !real && layer !== "body";
+  function bloom(markup, pts2, pad = 6) {
+    const prev = layer;
+    sc.target("handGlow");
+    for (const p of pts2) sc.grow(sc.layers.handGlow, p, pad);
+    sc.emit(markup);
+    use(prev);
+  }
   const edgeAttr = `stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${T.edgeW}" stroke-linejoin="round"`;
 
+  const line = (pts2, color = INK, w = 0.3, op = 0.55, extra = "") =>
+    `<path d="M${pts2.map(pt).join("L")}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${f(w)}" stroke-linecap="round" stroke-linejoin="round"${extra}/>`;
   function stroke(pts2, color = INK, w = 0.3, op = 0.55, extra = "") {
-    emit(`<path d="M${pts2.map(pt).join("L")}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${f(w)}" stroke-linecap="round" stroke-linejoin="round"${extra}/>`);
+    emit(line(pts2, color, w, op, extra));
   }
   function curve(a, c, b, color = INK, w = 0.3, op = 0.55, extra = "") {
     emit(`<path d="M${pt(a)}Q${pt(c)} ${pt(b)}" fill="none" stroke="${color}" stroke-opacity="${op}" stroke-width="${f(w)}" stroke-linecap="round"${extra}/>`);
@@ -280,13 +303,43 @@ export function createHandArt(sc) {
       b.reverse();
       return `M${pt(a[0])}${spline(a)}L${pt(b[0])}${spline(b)}Z`;
     };
-    const rPx = r[1] * PX;
+    // A point on bone i, t along it, s radii off its axis.
+    const on = (i, t, s = 0) => {
+      const p = lerp(j[i], j[i + 1], t);
+      const n = lerp(ns[i], ns[i + 1], t);
+      const rr = r[i] + (r[i + 1] - r[i]) * t;
+      return [p[0] + n[0] * rr * s, p[1] + n[1] * rr * s];
+    };
     let m = `<path d="${d}" fill="${T.base}"/>`;
+    // The fingertip from `at` along its bone: bare skin past a fingerless
+    // glove's cut, or a grip pad. The cap follows the finger's own outline
+    // (the same spline segments, split there), so no glove shows at its edge.
+    let hem = null;
+    if (T.tip) {
+      const [, a] = splitCubic(splineSeg(left, last - 1), T.tip.at);
+      const [b] = splitCubic(splineSeg(right.slice().reverse(), 0), 1 - T.tip.at);
+      m += `<path d="M${pt(a[0])}C${pt(a[1])} ${pt(a[2])} ${pt(a[3])}${cap}C${pt(b[1])} ${pt(b[2])} ${pt(b[3])}Z" fill="${T.tip.skin ?? T.tip.fill}"/>`;
+      if (T.tip.hem) hem = [a[0], b[3]];
+    }
     // Cylindrical shade: core shadow on the far side, a matte sheen on the lit side.
     m += `<path d="${ribbon(-lit * 0.3, -lit * 1)}" fill="${T.sh}" fill-opacity="${T.shOp}"/>`;
     m += `<path d="${ribbon(lit * 0.18, lit * 0.62)}" fill="${T.hi}" fill-opacity="${T.hiOp}"/>`;
+    // Only thumbs go without the padded strip.
+    const thumb = !pad;
+    const plate = (i, t0, t1, fill) => {
+      const q = [on(i, t0, 0.66), on(i, t1, 0.66), on(i, t1, -0.66), on(i, t0, -0.66)];
+      m += `<path d="${roundPath(q, 0.3)}" fill="${fill}" stroke="${T.edge}" stroke-opacity="${T.edgeOp * 0.8}" stroke-width="${f(Math.max(0.16, r[i] * 0.05))}"/>`;
+      if (T.plates && r[i] * PX >= 12) {
+        const s = lit * 0.45;
+        m += `<path d="M${pt(on(i, t0 + 0.08, s))}L${pt(on(i, t1 - 0.08, s))}" stroke="${T.plates.hi}" stroke-opacity="${T.plates.hiOp}" stroke-width="${f(r[i] * 0.09)}" stroke-linecap="round"/>`;
+      }
+    };
+    if (T.plates && r[0] * PX >= 9) {
+      // Steel plates, one to a bone, clear of the knuckles.
+      for (let i = 0; i < last; i++) plate(i, i ? 0.14 : 0.24, i === last - 1 ? 0.8 : 0.86, T.plates.fill);
+    } else if (thumb && T.thumbPlate && r[0] * PX >= 9) plate(0, 0.2, 0.84, T.thumbPlate);
     // Padded strip over the proximal phalanx (dorsal side faces the camera).
-    if (pad && r[0] * PX >= 9) {
+    if (pad && T.pad && !T.plates && r[0] * PX >= 9) {
       const a0 = lerp(j[0], j[1], 0.22);
       const a1 = lerp(j[0], j[1], 0.74);
       const n0 = ns[0];
@@ -313,11 +366,33 @@ export function createHandArt(sc) {
         m += `<path d="M${pt([cc[0] + ns[i][0] * rr * 0.62, cc[1] + ns[i][1] * rr * 0.62])}Q${pt([cc[0] - t[0] * rr * 0.28, cc[1] - t[1] * rr * 0.28])} ${pt([cc[0] - ns[i][0] * rr * 0.62, cc[1] - ns[i][1] * rr * 0.62])}" fill="none" stroke="${T.crease}" stroke-opacity="${T.creaseOp * (s < 0 ? 1 : 0.6)}" stroke-width="${f(Math.max(0.16, rr * 0.07))}" stroke-linecap="round"/>`;
       }
     }
-    if (r[last] * PX >= 12) {
+    // A line down the back of the finger (stitching, a lit edge, a wet gloss).
+    if (T.along && r[0] * PX >= 9) {
+      const s = (T.along.side || 0) * lit;
+      const ends = T.tip ? last - 1 : last;
+      const pts2 = [on(0, 0.2, s)];
+      for (let i = 1; i < ends; i++) pts2.push(on(i, 0, s));
+      pts2.push(T.tip ? on(last - 1, T.tip.at * 0.6, s) : on(last - 1, 0.7, s));
+      const w = Math.max(0.16, r[1] * 0.06);
+      m += line(pts2, T.along.color, w, T.along.op, T.along.dash ? stitch(w) : "");
+    }
+    // A cloth binding's turns round each bone short of the bare tip.
+    if (T.turns && r[0] * PX >= 9) {
+      for (let i = 0; i < (T.tip ? last - 1 : last); i++) {
+        for (const t of [0.32, 0.7]) m += `<path d="M${pt(on(i, t, 0.9))}Q${pt(on(i, t + 0.12, 0))} ${pt(on(i, t, -0.9))}" fill="none" stroke="${T.turns}" stroke-opacity=".85" stroke-width="${f(Math.max(0.16, r[i] * 0.08))}" stroke-linecap="round"/>`;
+      }
+    }
+    if (r[last] * PX >= 12 && T.tipSeam !== false) {
       const a = tipAt(0.78, -0.35);
       const b = tipAt(-0.78, -0.35);
       const c = tipAt(0, 0.15);
       m += `<path d="M${pt(a)}Q${pt(c)} ${pt(b)}" fill="none" stroke="${T.seam}" stroke-opacity="${T.seamOp}" stroke-width="${f(r[last] * 0.07)}"${stitch(r[last] * 0.07)}/>`;
+    }
+    if (hem) {
+      // The glove's rolled edge where it stops, bowed toward the tip.
+      const c = lerp(hem[0], hem[1], 0.5);
+      const b = [c[0] + u[0] * r[last] * 0.35, c[1] + u[1] * r[last] * 0.35];
+      m += `<path d="M${pt(hem[0])}Q${pt(b)} ${pt(hem[1])}" fill="none" stroke="${T.tip.hem}" stroke-opacity=".9" stroke-width="${f(Math.max(0.2, r[last] * 0.2))}" stroke-linecap="round"/>`;
     }
     m += `<path d="${d}" fill="none" ${edgeAttr}/>`;
     if (near && (onlyNear || (occluders.length && near.some((v) => !v)))) {
@@ -343,9 +418,85 @@ export function createHandArt(sc) {
     return { j, r };
   }
 
+  /**
+   * What a glove wears on the back of the hand, inside its panel `inner`
+   * (centre c, line width w, clipped to `clip`): tendon stitching, a riveted gear, a piston, a
+   * binding's turns, and an LED trace or a rune that Modern lights in the
+   * hand bloom layer. Laid out along the panel's long axis, which runs from
+   * the wrist to the knuckles in every pose.
+   */
+  function backDress(B, inner, c, w, clip) {
+    let a = inner[0];
+    let b = inner[1];
+    let far = 0;
+    for (const q of inner) {
+      for (const s of inner) {
+        const dd = Math.hypot(q[0] - s[0], q[1] - s[1]);
+        if (dd > far) [far, a, b] = [dd, q, s];
+      }
+    }
+    const ax = [(b[0] - a[0]) / far, (b[1] - a[1]) / far];
+    const nx = [-ax[1], ax[0]];
+    // Half the panel's width across the axis.
+    const half = Math.max(...inner.map((q) => Math.abs((q[0] - c[0]) * nx[0] + (q[1] - c[1]) * nx[1]))) || far * 0.25;
+    const at = (t, s) => [a[0] + ax[0] * far * t + nx[0] * half * s, a[1] + ax[1] * far * t + nx[1] * half * s];
+    let m = "";
+    if (B.rays) {
+      for (const s of [-0.42, 0, 0.42]) {
+        m += line([at(B.rays.from ?? 0.24, s), at(0.82, s * 1.1)], B.rays.color, w * 1.3, B.rays.op, B.rays.dash ? stitch(w * 1.3) : "");
+      }
+    }
+    if (B.turns) {
+      for (const t of [0.3, 0.5, 0.7]) m += line([at(t - 0.04, -0.85), at(t + 0.04, 0.85)], B.turns, w * 2.2, 0.85);
+    }
+    if (B.piston) {
+      // A rod from the wrist to the knuckles in a cylinder, pinned at both ends.
+      const [p0, p1] = [at(0.3, 0.35), at(0.72, 0.35)];
+      const t = half * 0.2;
+      m += line([p0, lerp(p0, p1, 0.55)], T.edge, t + w * 2, T.edgeOp) + line([p0, lerp(p0, p1, 0.55)], B.piston, t, 1);
+      m += line([lerp(p0, p1, 0.5), p1], T.edge, t * 0.5 + w * 2, T.edgeOp) + line([lerp(p0, p1, 0.5), p1], "#c8d2dc", t * 0.5, 1);
+      for (const q of [p0, p1]) m += `<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(t * 0.7)}" fill="${B.piston}" stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${f(w)}"/>`;
+    }
+    if (B.stud) {
+      // A small gear riveted on, its teeth round a hub.
+      const [x, y] = at(0.45, 0);
+      const R = half * 0.42;
+      let d = "";
+      for (let i = 0; i < 16; i++) {
+        const t = (i * Math.PI) / 8;
+        const rr = i % 2 ? R * 0.78 : R;
+        d += `${i ? "L" : "M"}${pt([x + Math.cos(t) * rr, y + Math.sin(t) * rr])}`;
+      }
+      m += `<path d="${d}Z" fill="${B.stud.fill}" stroke="${B.stud.ink}" stroke-width="${f(w)}" stroke-linejoin="round"/>`;
+      m += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(R * 0.32)}" fill="${B.stud.ink}"/>`;
+    }
+    const lit = (d, ink, wd, pts2) => {
+      m += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${f(wd * 1.8)}" stroke-opacity=".9" stroke-linecap="round" stroke-linejoin="round"/>`;
+      if (!glowing()) return;
+      m += `<path d="${d}" fill="none" stroke="${mix(accent, "#ffffff", 0.35)}" stroke-width="${f(wd * 0.8)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      // Its light stays on the hand too (the hand bloom layer is drawn over everything).
+      const id = `hc${clipSeq++}`;
+      bloom(`<clipPath id="${id}"><path d="${clip}"/></clipPath><g clip-path="url(#${id})"><path d="${d}" fill="none" stroke="${accent}" stroke-width="${f(wd * 2.6)}" stroke-opacity=".75" stroke-linecap="round" stroke-linejoin="round" filter="url(#vmBloom)"/></g>`, pts2, 6);
+    };
+    if (B.trace) {
+      // The LED trace: a circuit run toward the knuckles, ending in a pad.
+      const q = [at(0.2, 0.3), at(0.48, 0.3), at(0.62, -0.25), at(0.84, -0.25)];
+      const end = q[q.length - 1];
+      lit(`M${q.map(pt).join("L")}M${pt(end)}h.01`, B.trace, w * 2.6, q);
+    }
+    if (B.rune) {
+      // The rune (RUNES[2] in ../wardrobe-themes/chronomancer.js), upright on the hand.
+      const [x, y] = at(0.5, 0);
+      const s = half * 0.38;
+      const g = [[-1.2, 1.4], [0, -1.4], [1.2, 1.4], [-0.6, 0.2], [0.6, 0.2]].map(([u, v]) => [x + u * s, y + v * s]);
+      lit(`M${pt(g[0])}L${pt(g[1])}L${pt(g[2])}M${pt(g[3])}L${pt(g[4])}`, B.rune, w * 2.6, g);
+    }
+    return m;
+  }
+
   /** Padded glove mass (back of hand, palm heel) through 3D outline points. */
   function mass(pts3, o = {}) {
-    const { panel = 0, creases = [], round = 0.4 } = o;
+    const { panel = 0, creases = [], round = 0.4, palm = false } = o;
     const p = pts3.map(P);
     p.forEach((q) => grow(q));
     const d = roundPath(p, round);
@@ -356,8 +507,34 @@ export function createHandArt(sc) {
       const c = p.reduce((a, q) => [a[0] + q[0] / p.length, a[1] + q[1] / p.length], [0, 0]);
       const inner = p.map((q) => lerp(c, q, panel));
       const w = Math.max(0.16, span * 0.004);
-      m += `<path d="${roundPath(inner, 0.45)}" fill="${T.pad}" fill-opacity=".5" stroke="${T.sh}" stroke-opacity=".5" stroke-width="${f(w * 1.4)}"/>`;
-      m += `<path d="${roundPath(p.map((q) => lerp(c, q, panel + 0.07)), 0.45)}" fill="none" stroke="${T.seam}" stroke-opacity="${T.seamOp}" stroke-width="${f(w)}"${stitch(w)}/>`;
+      // The glove's dress on the back of the hand; a palm shows none of it.
+      const B = palm ? null : T.back;
+      if (B?.panel) {
+        // A steel plate in place of the padding, lit along its upper edge.
+        m += `<path d="${roundPath(inner, 0.3)}" fill="${B.panel.fill}" stroke="${T.edge}" stroke-opacity="${T.edgeOp * 0.8}" stroke-width="${f(w * 1.6)}"/>`;
+        let best = 0;
+        let top = -Infinity;
+        inner.forEach((q, i) => {
+          const n = inner[(i + 1) % inner.length];
+          const s = ((q[0] + n[0]) / 2 - c[0]) * LS[0] + ((q[1] + n[1]) / 2 - c[1]) * LS[1];
+          if (s > top) [top, best] = [s, i];
+        });
+        const e0 = lerp(c, inner[best], 0.9);
+        const e1 = lerp(c, inner[(best + 1) % inner.length], 0.9);
+        m += `<path d="M${pt(e0)}L${pt(e1)}" stroke="${B.panel.hi}" stroke-opacity="${T.plateHiOp}" stroke-width="${f(w * 2.4)}" stroke-linecap="round"/>`;
+      } else if (T.pad) {
+        m += `<path d="${roundPath(inner, 0.45)}" fill="${T.pad}" fill-opacity=".5" stroke="${T.sh}" stroke-opacity=".5" stroke-width="${f(w * 1.4)}"/>`;
+      }
+      if (!B?.panel && T.seamRing !== false) {
+        m += `<path d="${roundPath(p.map((q) => lerp(c, q, panel + 0.07)), 0.45)}" fill="none" stroke="${T.seam}" stroke-opacity="${T.seamOp}" stroke-width="${f(w)}"${stitch(w)}/>`;
+      }
+      if (B) {
+        // Kept inside the panel: a narrow panel's long axis can run past its sides.
+        const clip = roundPath(p.map((q) => lerp(c, q, panel + 0.12)), 0.45);
+        const id = `hc${clipSeq++}`;
+        const dress = backDress(B, inner, c, w, clip);
+        if (dress) m += `<clipPath id="${id}"><path d="${clip}"/></clipPath><g clip-path="url(#${id})">${dress}</g>`;
+      }
     }
     m += `<path d="${d}" fill="none" ${edgeAttr}/>`;
     emit(m);
@@ -410,7 +587,7 @@ export function createHandArt(sc) {
     let m = `<linearGradient id="${id}g" gradientUnits="userSpaceOnUse" x1="${f(g0[0])}" y1="${f(g0[1])}" x2="${f(g1[0])}" y2="${f(g1[1])}">` +
       `<stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
       `<mask id="${id}" maskUnits="userSpaceOnUse" x="-500" y="-500" width="1000" height="1000"><path d="${d}" fill="url(#${id}g)"/></mask>` +
-      `<g mask="url(#${id})"><path d="${d}" fill="${T.base}"/><path d="${d}" fill="${T.sh}" fill-opacity="${real ? 0.22 : 0.16}"/>`;
+      `<g mask="url(#${id})"><path d="${d}" fill="${T.knuckle ?? T.base}"/><path d="${d}" fill="${T.sh}" fill-opacity="${real ? 0.22 : 0.16}"/>`;
     for (let i = 1; i < n; i++) {
       // Valley crease running into the hand between two knuckles.
       const r = Math.min(ks[i - 1].r, ks[i].r);
@@ -424,6 +601,14 @@ export function createHandArt(sc) {
       m += `<path d="M${pt(a)}L${pt(b)}" stroke="${T.plateHi}" stroke-opacity="${T.plateHiOp * 0.55}" stroke-width="${f(r * 0.2)}" stroke-linecap="round"/>`;
     }
     m += `</g><path d="${edge}" fill="none" ${edgeAttr}/>`;
+    if (T.knuckleLine && rin * PX >= 9) {
+      // A seam, a pleat or the thread trim running across the knuckles.
+      const q = ks.map(({ r }, i) => out(lerp(v[i], v[i + 1], 0.5), r * 0.3));
+      q.unshift(out(v[0], rin * 0.1));
+      q.push(out(v[n], rin * 0.1));
+      const w = Math.max(0.16, rin * 0.1);
+      m += `<path d="M${pt(q[0])}${spline(q)}" fill="none" stroke="${T.knuckleLine}" stroke-opacity=".8" stroke-width="${f(w)}" stroke-linecap="round"${T.knuckleDash ? stitch(w) : ""}/>`;
+    }
     emit(m);
   }
 
@@ -486,10 +671,15 @@ export function createHandArt(sc) {
       }
     }
     // Glove cuff over the wrist end of the sleeve, closed by a wrist strap.
-    const [c1a, c1b] = at(trimAt * 0.7);
-    const ca = lerp(wa, ea, -0.03);
-    const cb = lerp(wb, eb, -0.03);
-    emit(`<path d="${roundPath([ca, cb, c1b, c1a], 0.18)}" fill="${T.cuff}" ${edgeAttr}/>`);
+    if (T.cuffShade) {
+      cuff(at, trimAt, wb[0] > wa[0]);
+      if (T.strap === null) return;
+    } else {
+      const [c1a, c1b] = at(trimAt * 0.7);
+      const ca = lerp(wa, ea, -0.03);
+      const cb = lerp(wb, eb, -0.03);
+      emit(`<path d="${roundPath([ca, cb, c1b, c1a], 0.18)}" fill="${T.cuff}" ${edgeAttr}/>`);
+    }
     const [sa, sb] = at(trimAt * 0.22);
     const [sa2, sb2] = at(trimAt * 0.52);
     const strap = [lerp(sa, sb, 0.02), lerp(sa, sb, 0.78), lerp(sa2, sb2, 0.8), lerp(sa2, sb2, 0.02)];
@@ -499,6 +689,73 @@ export function createHandArt(sc) {
       stroke([lerp(strap[0], strap[3], 0.2), lerp(strap[1], strap[2], 0.2)], T.seam, w, T.seamOp, stitch(w));
       stroke([lerp(strap[0], strap[3], 0.8), lerp(strap[1], strap[2], 0.8)], T.seam, w, T.seamOp, stitch(w));
     }
+  }
+
+  /**
+   * A wardrobe glove's cuff over the wrist (`at(s)`: the sleeve's two edges
+   * s along it from the wrist): its length and flare, then its fastening —
+   * a ring, a hazard band and hinge drum, crossed laces, knit ribs and a
+   * tab, a latch, lines across. `outerB`: the sleeve's b edge is the outer
+   * side, where tabs, drums and latches sit.
+   */
+  function cuff(at, trimAt, outerB) {
+    const len = trimAt * 0.7 * (T.cuffLen || 1);
+    const flare = T.cuffFlare || 1;
+    // Cuff point t along it (0 at the hand, 1 up the sleeve), x across it from the inner side.
+    const X = (t, x) => {
+      const [a, b] = at(-0.03 + (len + 0.03) * t);
+      const k = 1 + (flare - 1) * t;
+      const [i, o] = outerB ? [a, b] : [b, a];
+      return lerp(i, o, 0.5 + (x - 0.5) * k);
+    };
+    const quad = (t0, t1, x0 = 0, x1 = 1) => [X(t0, x0), X(t0, x1), X(t1, x1), X(t1, x0)];
+    const across = (t, x0 = 0.04, x1 = 0.96) => [X(t, x0), X(t, x1)];
+    const body = quad(0, 1);
+    emit(`<path d="${roundPath(body, 0.18)}" fill="${T.cuff}" ${edgeAttr}/><path d="${roundPath(body, 0.18)}" fill="url(#vmGloveSh)"/>`);
+    // Line weights from the cuff's length along the arm.
+    const L = Math.hypot(...[0, 1].map((i) => lerp(...across(1, 0, 1), 0.5)[i] - lerp(...across(0, 0, 1), 0.5)[i]));
+    const w = Math.max(0.2, L * 0.05);
+    const small = PX < 3;
+    for (const { at: t, color, op, dash } of T.cuffLines || []) stroke(across(t), color, w * 1.2, op, dash ? stitch(w) : "");
+    if (T.band) {
+      // A ring round the wrist, proud of the cuff.
+      const ring = quad(0.32, 0.68, -0.03, 1.03);
+      emit(`<path d="${roundPath(ring, 0.2)}" fill="${T.band.fill}" stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${f(w * 0.8)}"/>`);
+      if (T.band.hi) stroke(across(0.4, 0, 1), T.band.hi, w * 0.9, 0.7);
+      if (T.band.lo) stroke(across(0.6, 0, 1), T.band.lo, w * 0.9, 0.8);
+      if (T.band.rivets && !small) {
+        for (const x of [0.2, 0.5, 0.8]) {
+          const q = X(0.5, x);
+          emit(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(w * 1.5)}" fill="${T.band.fill}" stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${f(w * 0.5)}"/>`);
+        }
+      }
+    }
+    if (T.hazard) {
+      // Hazard band: yellow, chequered in ink.
+      const [a, b] = across(0.68, 0, 1);
+      stroke([a, b], T.hazard, L * 0.24, 0.95);
+      emit(`<path d="M${pt(a)}L${pt(b)}" stroke="${INK}" stroke-opacity=".7" stroke-width="${f(L * 0.24)}" stroke-dasharray="${f(L * 0.2)} ${f(L * 0.2)}"/>`);
+    }
+    if (T.drum) {
+      // The hinge drum on the outer side.
+      const q = X(0.4, 1);
+      emit(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(L * 0.3)}" fill="${T.drum}" stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${f(w * 0.8)}"/>` +
+        `<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(L * 0.12)}" fill="${T.edge}" fill-opacity=".6"/>`);
+    }
+    if (T.lace) {
+      // Cords crossed over the wrist, tied off in a knot.
+      const cords = [[X(0.15, 0.08), X(0.5, 0.92), X(0.85, 0.08)], [X(0.15, 0.92), X(0.5, 0.08), X(0.85, 0.92)]];
+      for (const c of cords) stroke(c, INK, w * 2.4, 0.9);
+      for (const c of cords) stroke(c, T.lace.color, w * 1.2, 1);
+      const k = X(0.5, 0.5);
+      emit(`<circle cx="${f(k[0])}" cy="${f(k[1])}" r="${f(w * 1.6)}" fill="${T.lace.knot}" stroke="${INK}" stroke-width="${f(w * 0.6)}"/>`);
+    }
+    if (T.ribs && !small) {
+      // Knit ribs down the cuff.
+      for (let x = 0.1; x < 0.75; x += 0.09) stroke([X(0.1, x), X(0.92, x)], T.ribs, w * 0.8, 0.45);
+    }
+    if (T.tab) emit(`<path d="${roundPath(quad(0.12, 0.8, 0.78, 1.02), 0.2)}" fill="${T.tab}" stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${f(w * 0.6)}"/>`);
+    if (T.latch) emit(`<path d="${roundPath(quad(0.25, 0.75, 0.8, 1.04), 0.2)}" fill="${T.latch}" stroke="${T.edge}" stroke-opacity="${T.edgeOp}" stroke-width="${f(w * 0.6)}"/>`);
   }
 
   /** Soft contact shadow under a hand where it presses on the weapon. */
@@ -809,7 +1066,7 @@ export function clampHand(A, hg, layer = "handL", ads = false) {
     WA,
     [-hw - 12, y0 - 6, zc - 30],
     [-hw - 6, y0 - 3, zc + 26],
-  ], { panel: 0.45 });
+  ], { panel: 0.45, palm: true });
   A.ao([0, y0 - 1, zc + 6], 26, 0.45);
   // Fingers from under the handguard, round its lower far edge and up the far
   // flank, which faces away from the eye: seen along the barrel they vanish

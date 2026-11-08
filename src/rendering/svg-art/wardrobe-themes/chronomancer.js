@@ -36,7 +36,7 @@ function hueSat(hex) {
  * own colour (the tabard, the mantle plates) and the thread stand out on it
  * rather than the whole robe going one colour.
  */
-const cloth = (c, mix) => {
+export const cloth = (c, mix) => {
   const base = mix("#1a1622", c.pal.dark, 0.3);
   const [h, sat] = hueSat(c.pal.primary);
   const trim = h > 30 && h < 66 && sat > 0.4 ? SILVER_THREAD : GOLD_THREAD;

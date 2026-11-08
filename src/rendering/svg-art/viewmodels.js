@@ -14,8 +14,11 @@
 import { getLayerImage, layerBaked, scaleBucket } from "./raster.js";
 import { createScene, mix, INK } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
+import { GLOVE_DEFS, STANDARD_GLOVE, fpGlove } from "./viewmodel/gloves.js";
 import { WEAPON_MODELS, MATERIALS } from "./viewmodel/weapons.js";
 import { activeFinish, finishKey } from "../../data/weapon-skins.js";
+import { frameGlove } from "../../data/wardrobe-themes/index.js";
+import { pieceOf } from "../../core/character-fields.js";
 import { smoothDamp } from "../../systems/aim.js";
 import { isRealisticArt } from "../art-style.js";
 import { clamp01, lerp } from "../../utils/math.js";
@@ -35,6 +38,7 @@ const DEFS =
   `<rect width=".4" height=".4" fill="#fff" opacity=".06"/><rect x=".8" y=".8" width=".4" height=".4" fill="#fff" opacity=".05"/>` +
   `<rect x=".8" width=".4" height=".4" fill="#000" opacity=".16"/><rect y=".8" x=".2" width=".4" height=".4" fill="#000" opacity=".12"/></pattern>` +
   HAND_DEFS +
+  GLOVE_DEFS +
   SKIN_PATTERN_DEFS();
 
 // Weapon bloom goes under the gloves so a hand covering an emitter hides it;
@@ -46,7 +50,10 @@ const UNIT = 4;
 const LIMIT = { x0: -240, x1: 240, y0: -100, y1: 170 };
 const MAX_SIDE_PX = 1100;
 
-const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}|${finish}` -> viewmodel
+const built = new Map(); // `${id}|${accent}|${pose}|${tier}|${style}|${finish}[|${glove}]` -> viewmodel
+// Every weapon in both poses, a few times over (art styles, tiers, gloves):
+// past that the least recently drawn are rebuilt from markup when next asked.
+const MAX_BUILT = 96;
 
 /**
  * Overlay patterns for weapon finishes, in viewmodel units, as tone only
@@ -98,17 +105,45 @@ function sceneSkin(finish) {
 }
 
 /**
- * The viewmodel for weapon `id` in `pose`, wearing `finish` (by default the
- * one the player chose for that weapon; src/data/weapon-skins.js).
+ * The suit's hands for the viewmodel, from a game.character-shaped record:
+ * the frame's glove (frameGlove), the skin for bare fingertips and the
+ * palette a glove's laces, rings and cloth take. Spread into drawViewmodel's
+ * options, and passed to prefetchViewmodel, so warm-ups bake the same hands.
  */
-function build(id, accent, pose, tier = "hi", real = false, finish = activeFinish(id)) {
-  const key = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}|${finishKey(finish)}`;
+export function viewmodelLook(character) {
+  return { glove: frameGlove(pieceOf(character, "frame").id), skinTone: pieceOf(character, "skinTone").color, palette: pieceOf(character, "color") };
+}
+
+/** The resolved glove (viewmodel/gloves.js) for a look's options; the stock glove without one. */
+const gloveOf = (look) => (look?.glove ? fpGlove(look.glove, look.skinTone, look.palette) : STANDARD_GLOVE);
+
+/**
+ * The viewmodel for weapon `id` in `pose`, wearing `finish` (by default the
+ * one the player chose for that weapon; src/data/weapon-skins.js) and the
+ * suit's `glove` (fpGlove).
+ *
+ * Layer bitmaps are keyed by what their markup depends on: the hands by the
+ * glove, the weapon's bloom never, and its body only when hand art is painted
+ * into it (a sidearm's thumbs under the slide, an aimed long gun's support
+ * hand behind the receiver). A suit change re-bakes the hands and leaves the
+ * rest of the weapons' bitmaps as they are. The stock glove adds nothing to
+ * any key, so its bitmaps are the ones it always had.
+ */
+function build(id, accent, pose, tier = "hi", real = false, finish = activeFinish(id), glove = STANDARD_GLOVE) {
+  const base = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}|${finishKey(finish)}`;
+  const key = glove.key ? `${base}|${glove.key}` : base;
   let vm = built.get(key);
-  if (vm) return vm;
+  if (vm) {
+    // Most recently used last, so the cap drops what has not been drawn.
+    built.delete(key);
+    built.set(key, vm);
+    return vm;
+  }
   const model = WEAPON_MODELS[id];
   if (!model) return null;
   const sc = createScene(model.cams[pose], finish?.energy ?? accent, { real, skin: sceneSkin(finish) });
   sc.detailPx = tier === "lo" ? 2 : 4;
+  sc.glove = glove;
   const info = model.build(sc, createHandArt(sc), pose);
   const layers = [];
   for (const name of LAYERS) {
@@ -119,10 +154,12 @@ function build(id, accent, pose, tier = "hi", real = false, finish = activeFinis
     const x1 = Math.ceil(Math.min(LIMIT.x1, L.max[0] + 1.5));
     const y1 = Math.ceil(Math.min(LIMIT.y1, L.max[1] + 1.5));
     if (x1 - x0 < 1 || y1 - y0 < 1) continue; // entirely off screen
-    layers.push({ name, id: `vm:${key}:${name}`, box: [x0, y0, x1 - x0, y1 - y0], markup: L.svg, bloom: name === "glow" || name === "handGlow" });
+    const owner = name === "glow" || (name === "body" && !sc.handInBody) ? base : key;
+    layers.push({ name, id: `vm:${owner}:${name}`, box: [x0, y0, x1 - x0, y1 - y0], markup: L.svg, bloom: name === "glow" || name === "handGlow" });
   }
   vm = { layers, muzzle: sc.P(info.muzzle), eject: sc.P(info.eject), pivot: sc.P(info.pivot), sight: sc.P(info.sight), muzzleK: sc.k(info.muzzle), gripK: sc.k(info.pivot), sleeves: sc.sleeveEnds || [] };
   built.set(key, vm);
+  capCache(built, MAX_BUILT);
   return vm;
 }
 
@@ -138,15 +175,18 @@ const request = (vm, px, prefetch = false) => vm.layers.map((L) => getLayerImage
 
 let warmQueue = null;
 let warmReal = false;
+let warmGlove = "";
 /**
  * Decode the other weapons one per frame so switching never shows procedural
  * art. Queued, as any prefetch: on an art style change they used to decode
  * at once, a weapon a frame, each frame 50-80 ms.
  */
-function warmStep(accent, px, tier, real, owned = null) {
-  if (!warmQueue || warmReal !== real) {
+function warmStep(accent, px, tier, real, owned = null, glove = STANDARD_GLOVE) {
+  // A new suit's gloves are new hand bitmaps for every weapon: warm them all again.
+  if (!warmQueue || warmReal !== real || warmGlove !== glove.key) {
     warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);
     warmReal = real;
+    warmGlove = glove.key;
   }
   // The guns in hand first: a weapon just picked up, or one the player can
   // switch to now, jumps the queue ahead of the rest of the arsenal.
@@ -156,7 +196,7 @@ function warmStep(accent, px, tier, real, owned = null) {
   }
   const next = warmQueue[0];
   if (!next) return;
-  const vm = build(next[0], accent, next[1], tier, real);
+  const vm = build(next[0], accent, next[1], tier, real, undefined, glove);
   // Stay on a weapon until every layer is baked, not just decoded: the bake
   // is the costly part (the GPU rasterises the SVG), and left to the first
   // frame a weapon was drawn it made switching to it a 60-110 ms hitch.
@@ -175,15 +215,17 @@ function warmStep(accent, px, tier, real, owned = null) {
  * (`real`) whichever is showing: a reel warms the set a shot flips to before
  * the flip. Queued like any prefetch; call once a frame until it returns true.
  * `max` caps how many layers are decoding at once, to spread the work.
+ * `look` names the suit's hands as drawViewmodel's options do (viewmodelLook).
  */
-export function prefetchViewmodel(ctx, h, id, accent, real, max = Infinity) {
+export function prefetchViewmodel(ctx, h, id, accent, real, max = Infinity, look = null) {
   if (typeof Image === "undefined" || typeof ctx?.getTransform !== "function") return true;
   const m = ctx.getTransform();
   const px = Math.hypot(m.a, m.b) * UNIT * (h / 720) || UNIT;
   const tier = px >= 3 ? "hi" : "lo";
+  const glove = gloveOf(look);
   let busy = 0;
   for (const pose of ["hip", "ads"]) {
-    const vm = build(id, accent, pose, tier, real);
+    const vm = build(id, accent, pose, tier, real, undefined, glove);
     for (const L of vm?.layers ?? []) {
       if (busy >= max) return false;
       const scale = layerScale(px, L.box);
@@ -497,13 +539,15 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   // Detail tier: small renders (phones, low render scale) get a simplified glove.
   const tier = px >= 3 ? "hi" : "lo";
   const real = isRealisticArt();
-  const hip = build(wep.id, accent, "hip", tier, real);
-  const aim = build(wep.id, accent, "ads", tier, real);
+  // The suit's gloves (o.glove, o.skinTone, o.palette; viewmodelLook).
+  const glove = gloveOf(o);
+  const hip = build(wep.id, accent, "hip", tier, real, undefined, glove);
+  const aim = build(wep.id, accent, "ads", tier, real, undefined, glove);
   if (!hip || !aim) return false;
   // Both poses stay decoded so the blend never has to fall back mid-motion.
   const hipImgs = request(hip, px);
   const aimImgs = request(aim, px);
-  warmStep(accent, px, tier, real, o.owned);
+  warmStep(accent, px, tier, real, o.owned, glove);
   const b = clamp01(blend);
   const s = smoothstep(clamp01(b / MORPH_END));
   const u = smoothstep(clamp01((b - MORPH_END) / (1 - MORPH_END)));
@@ -689,8 +733,8 @@ export function weaponProfile(id, accent, finish = activeFinish(id)) {
   return p;
 }
 
-/** Tooling: the built layers (id, box, markup) and shared defs for a weapon pose. */
-export function viewmodelLayers(id, accent, pose = "hip", tier = "hi", real = false) {
-  const vm = build(id, accent, pose, tier, real);
+/** Tooling: the built layers (id, box, markup) and shared defs for a weapon pose; `look` as prefetchViewmodel's. */
+export function viewmodelLayers(id, accent, pose = "hip", tier = "hi", real = false, look = null) {
+  const vm = build(id, accent, pose, tier, real, undefined, gloveOf(look));
   return vm && { defs: DEFS, layers: vm.layers, muzzle: vm.muzzle };
 }
