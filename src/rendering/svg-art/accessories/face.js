@@ -32,6 +32,18 @@ const lum = (hex) => {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 };
 
+/**
+ * An edge that parts `color` from the skin under it: dark on light skin and
+ * light on deep skin, thicker when the colour is close to the skin's own.
+ */
+const skinEdge = (c, color) => {
+  const skin = lum(c.skin.color);
+  return {
+    edge: skin > 0.42 ? mix(c.skin.shadow, "#000000", 0.55) : mix(c.skin.color, "#ffffff", 0.55),
+    width: Math.abs(skin - lum(color)) < 0.3 ? 0.5 : 0.32,
+  };
+};
+
 /** A teardrop lens round an eye, on side s (-1 left, 1 right). */
 const tear = (s) =>
   `M${f(s * 0.9)},-83.2 C${f(s * 3)},-83.8 ${f(s * 5.8)},-83.8 ${f(s * 6.6)},-82.8 C${f(s * 7)},-80.6 ${f(s * 6)},-78.4 ${f(s * 4)},-78.2 C${f(s * 2)},-78.2 ${f(s * 0.9)},-79.6 ${f(s * 0.8)},-81.4 Z`;
@@ -142,9 +154,7 @@ export const FACE = {
   // (x 7.2), the way a fingertip lifts off.
   warpaint: (A, c) => {
     const paint = c.tints?.face ?? accessoryItem("face", "warpaint").tint.default;
-    const skin = lum(c.skin.color);
-    const edge = skin > 0.42 ? mix(c.skin.shadow, "#000000", 0.55) : mix(c.skin.color, "#ffffff", 0.55);
-    const width = Math.abs(skin - lum(paint)) < 0.3 ? 0.5 : 0.32;
+    const { edge, width } = skinEdge(c, paint);
     // A stripe on side s from its inner end at (1.8, y), t thick, its tip at x `tip`.
     const stripe = (s, y, t, tip) =>
       `M${f(s * 1.8)},${f(y)} C${f(s * 3.4)},${f(y - 0.45)} ${f(s * (tip - 1.4))},${f(y - 0.75)} ${f(s * tip)},${f(y - 0.6)} ` +
@@ -206,14 +216,17 @@ export const FACE = {
     // Dots as round-capped strokes of no length, so they narrow with the feminine jaw.
     return { skin: `<path d="${pts.map(([x, y]) => `M${x},${y} L${x},${y}`).join(" ")}" stroke="${tone}" stroke-width=".64" stroke-linecap="round" opacity=".7"/>` };
   },
+  // The beard is the hair's colour, edged against the skin like war paint,
+  // so a dark beard still reads on deep skin and a fair one on pale skin.
   beard: (A, c) => {
     const hair = c.hair.color;
+    const { edge, width } = skinEdge(c, hair);
     const beard =
       "M-6.9,-79 C-6.6,-76 -5.4,-73.4 -3.6,-72 C-2.2,-70.8 -1,-70.4 0,-70.4 C1,-70.4 2.2,-70.8 3.6,-72 C5.4,-73.4 6.6,-76 6.9,-79 " +
       "C6,-77 5,-75.8 3.6,-75.6 C2.4,-75.4 1.6,-76.4 0,-76.4 C-1.6,-76.4 -2.4,-75.4 -3.6,-75.6 C-5,-75.8 -6,-77 -6.9,-79 Z";
     return {
       face:
-        `<path d="${beard}" fill="${hair}" opacity=".88"/>` +
+        `<path d="${beard}" fill="${hair}" fill-opacity=".88" stroke="${edge}" stroke-width="${width}" stroke-linejoin="round"/>` +
         // The mouth through the beard, in the expression the face shows.
         beardMouthOf(c, INK) +
         stroke("M-4.6,-73.6 C-2,-71.4 2,-71.4 4.6,-73.6", mix(hair, "#ffffff", 0.3), 0.35, 0.5),

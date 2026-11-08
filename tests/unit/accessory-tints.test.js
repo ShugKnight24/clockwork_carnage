@@ -60,6 +60,21 @@ describe("war paint colour", () => {
     expect(lum(edge("deep_brown"))).toBeGreaterThan(lum("#b0302a"));
   });
 
+  it("edges a beard against the skin the same way, so a dark beard reads on deep skin", () => {
+    const edge = (skinTone, hairColor) => {
+      const ch = lookFromIds({ skinTone, hairColor, hair: "short" });
+      const head = buildAgentParts({ ...ch, accessories: { ...ch.accessories, face: "beard" } }, { peek: true }).head;
+      return head.match(/data-acc="beard"><path [^>]*stroke="([^"]+)" stroke-width="([^"]+)"/).slice(1);
+    };
+    const lum = (hex) => [1, 3, 5].reduce((s, i, k) => s + parseInt(hex.slice(i, i + 2), 16) * [0.2126, 0.7152, 0.0722][k], 0) / 255;
+    const [onDeep, deepWidth] = edge("deep_brown", "brown");
+    expect(lum(onDeep)).toBeGreaterThan(lum("#6b3d2e"));
+    expect(deepWidth).toBe("0.5"); // dark brown on deep brown: the thicker edge
+    const [onFair, fairWidth] = edge("cool_fair", "brown");
+    expect(lum(onFair)).toBeLessThan(lum("#e2bda3"));
+    expect(fairWidth).toBe("0.32");
+  });
+
   it("tints keep only valid hex for tintable worn items", () => {
     const worn = { face: "warpaint", waist: "belt" };
     expect(normalizeAccessoryTints({ face: "red" }, worn)).toEqual({});

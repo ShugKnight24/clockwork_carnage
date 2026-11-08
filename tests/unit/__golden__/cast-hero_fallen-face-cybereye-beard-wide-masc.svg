@@ -466,7 +466,7 @@
 <path d="M5.8,-85 L7.2,-86.2 M6.8,-81.8 L7.6,-81.8" fill="none" stroke="#5a6470" stroke-width="0.45" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
 <g data-acc="beard">
-<path d="M-6.9,-79 C-6.6,-76 -5.4,-73.4 -3.6,-72 C-2.2,-70.8 -1,-70.4 0,-70.4 C1,-70.4 2.2,-70.8 3.6,-72 C5.4,-73.4 6.6,-76 6.9,-79 C6,-77 5,-75.8 3.6,-75.6 C2.4,-75.4 1.6,-76.4 0,-76.4 C-1.6,-76.4 -2.4,-75.4 -3.6,-75.6 C-5,-75.8 -6,-77 -6.9,-79 Z" fill="#1b1512" opacity="0.88"/>
+<path d="M-6.9,-79 C-6.6,-76 -5.4,-73.4 -3.6,-72 C-2.2,-70.8 -1,-70.4 0,-70.4 C1,-70.4 2.2,-70.8 3.6,-72 C5.4,-73.4 6.6,-76 6.9,-79 C6,-77 5,-75.8 3.6,-75.6 C2.4,-75.4 1.6,-76.4 0,-76.4 C-1.6,-76.4 -2.4,-75.4 -3.6,-75.6 C-5,-75.8 -6,-77 -6.9,-79 Z" fill="#1b1512" fill-opacity="0.88" stroke="#40291b" stroke-width="0.32" stroke-linejoin="round"/>
 <path d="M-2.4,-74.6 C-1,-75 1,-75 2.4,-74.6 C1.2,-73.2 -1.2,-73.2 -2.4,-74.6 Z" fill="#94533d"/>
 <path d="M-2.6,-74.6 C-1.2,-74.1 1.2,-74.1 2.6,-74.6" fill="none" stroke="#0a0d12" stroke-width="0.45" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M-4.6,-73.6 C-2,-71.4 2,-71.4 4.6,-73.6" fill="none" stroke="#5f5b59" stroke-width="0.35" stroke-opacity="0.5" stroke-linecap="round" stroke-linejoin="round"/>
