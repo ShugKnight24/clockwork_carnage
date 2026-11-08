@@ -426,7 +426,10 @@ svg { display: block; }
   box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.42), inset 5px 0 0 var(--cc-cyan), inset 0 0 0 2px rgba(34, 230, 255, 0.6), inset 0 0 26px rgba(34, 230, 255, 0.14); }
 .plate:active { background: var(--cc-steel); }
 
-.root { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity var(--cc-dur-base) var(--cc-ease);
+/* clip, not hidden: the floor and the figure reach past the frame, and a
+   hidden overflow is still scrollable, so scrolling a tile into view would
+   scroll the whole creator and push the tab strip off the screen. */
+.root { position: absolute; inset: 0; overflow: clip; opacity: 0; transition: opacity var(--cc-dur-base) var(--cc-ease);
   background:
     radial-gradient(ellipse 70% 55% at 32% 30%, rgba(34, 230, 255, 0.07), transparent 70%),
     radial-gradient(ellipse at 36% 36%, #0d1826 0%, #05070d 70%, #020306 100%); }

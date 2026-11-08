@@ -75,6 +75,19 @@ const grantAll = (page) =>
 const posOf = (page, key, id) =>
   page.evaluate(async ([k, i]) => (await import("/src/core/character-fields.js")).getIndex({ [k]: i, accessories: { [k.slice(4)]: i } }, k), [key, id]);
 
+test("scrolling a tile into view never scrolls the creator itself", async ({ page }) => {
+  await openCreator(page);
+  await grantAll(page);
+  await tab(page, "helmet").click();
+  // A tile low in the grid, brought into view to be clicked (a keyboard
+  // move scrolls the same way).
+  await opt(page, "helmet", await posOf(page, "helmet", "brim")).click();
+  expect(await room(page).evaluate((host) => host.shadowRoot.querySelector(".root").scrollTop)).toBe(0);
+  const top = await tab(page, "gear").boundingBox();
+  expect(top.y).toBeGreaterThanOrEqual(0);
+  await tab(page, "gear").click();
+});
+
 test("eyewear and a face item show under an open helmet; a closed helmet says they are hidden", async ({ page }) => {
   await openCreator(page);
   await grantAll(page);
