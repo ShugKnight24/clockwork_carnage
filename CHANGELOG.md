@@ -25,10 +25,16 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
 - **Analytics.** Level events are sent only after consent, with a privacy note and a "Share Play Data" setting to withdraw (#19).
 - **Soft locks.** Fixed two: the Foundry's sentry staying silent after a retry (II-7), and a collapse walling you into a side room (IV-1) (#20).
 - **Hitches.** The station arrival and level starts no longer re-upload the wall art or build the lamp field mid-play (#20).
+- **Wardrobe themes.** Eight themed sets join the Field Issue suit, each with its own frame, helmet, shoulders and glove: Exo-Frame, Frontier Marshal, Ronin, Horologist, Neon Runner, Abyssal Diver, Void Ranger and Chronomancer. Pieces mix freely across sets, and they unlock across the acts.
+  - **Creator.** Pieces are grouped by theme with one-tap sets. Hair colour is picked apart from the cut. New Eyewear and Face slots (shades, an eyepatch, a monocle, war paint in a colour you pick, a cigar, piercings, a beard and more). A mouth expression shows on bare faces and on the LED Mask. The canvas creator draws its preview from the same rig as the showroom.
+  - **Hands.** Every hand is drawn from one posed rig, in the glove its suit names, and the first-person hands wear that glove too: its material and cuff, with bare fingertips for fingerless gloves.
+  - **Do-Rag.** Eyewear and face items now show under it. It takes a headset, but nothing that mounts on a helmet shell.
+  - **Gunslinger** fires 10% faster instead of 10% slower.
+  - **Saves** store every look by piece id, so new pieces never shuffle an old look. Saves from earlier builds keep their look.
 - **Only gear you can see counts.** A piece your look keeps but does not draw gives no stats:
   - shoulders on a frame that wears none (the Operator frame no longer counts shoulder stats);
   - a visor on a helmet that has no visor (the Cockpit and the other visorless helmets ignore visor stats);
-  - helmet gear on a helmet with no place for it (nothing on the Bubble's glass);
+  - helmet gear on a helmet with no place for it (nothing on the Bubble's glass; only a headset on the Do-Rag);
   - eyewear and face items under a closed helmet, or where an open helmet has no room for them (anything on the face under the LED Mask, or a face item under the Marshal's Brim).
   - A frame that covers the chest kit, the collar or the cape keeps every stat: it changes the look, not the gear.
 - **Gear on a continued run.** Continuing a campaign or arena run counts your gear once: gear changed since the save swaps its stats cleanly, and a piece picked up later no longer adds your whole kit's stats again. Saves from earlier builds move to the new gear stats on their first continue. An arena continue also keeps your class's and gear's stamina.
@@ -55,6 +61,7 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
 - `?debug` and `?bench` no longer load the dev tools on the live site: they load only on the Vite dev server (#18).
 - CI is one job. It runs unit tests, the build, smoke, and a **Pages test** of the site served the way GitHub Pages serves it (#18).
 - `dist/` is no longer tracked (#18).
+- Wardrobe pieces live in theme modules (`src/data/wardrobe-themes/` for data, `src/rendering/svg-art/wardrobe-themes/` for art) behind a validated contract, and every rig piece is pinned by an SVG golden snapshot.
 - A 29-level fighting bot sweep: `ccTest.sweep`, `CC_SWEEP=1 npm run test:sweep` (#20).
 - Phase 4 code health:
   - dead code removed;
