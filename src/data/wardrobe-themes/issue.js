@@ -40,9 +40,11 @@ export default {
       unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
     },
     { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { fireRateAdd: 0.03 } },
-    // The wrap leaves the whole face bare (its painter draws it), though the
-    // helmet is not listed open: the mouth's expression shows all the same.
-    { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false, mouth: "face" },
+    // A cloth wrap over the skull, the face bare: eyewear and face items show.
+    // Cloth has nothing to mount a plume, night vision or a side rail on; a
+    // headset rides on its own band.
+    { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false, face: true,
+      seats: { crown: false, brow: false, side: false } },
   ],
   /** Shoulder pieces, drawn on both shoulders. */
   shoulders: [

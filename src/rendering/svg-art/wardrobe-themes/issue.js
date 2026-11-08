@@ -721,9 +721,14 @@ function bandana(c, K) {
     const y = i > 7 ? -89.6 : -92.2;
     dots += `<circle cx="${f(x)}" cy="${f(y + Math.abs(x) * 0.08)}" r=".32" fill="#5a6068"/>`;
   }
+  // The eyes and face items go on the bare face, under the wrap and its tails:
+  // the window is everything below the wrap's lower edge, so an eyepatch
+  // strap runs up under the cloth rather than over it.
+  const acc = K.faceAccessories({ window: "M-22,-84.4 L-7.8,-84.4 C-6.6,-86.8 -4,-87.8 0,-87.9 C4,-87.8 6.6,-86.8 7.8,-84.4 L22,-84.4 L22,-60 L-22,-60 Z" });
   return {
     front:
       K.face(c) +
+      acc.front +
       shape(tails, cloth, 0.7) +
       shape(wrap, cloth, 0.8) +
       `<path d="${wrap}" fill="url(#weave)" opacity=".5"/>` +
@@ -731,7 +736,9 @@ function bandana(c, K) {
       line("M-6.8,-86.6 C-3.6,-88.6 3.6,-88.6 6.8,-86.6", "#4a5058", 0.5, 0.8) +
       line("M-6,-91 C-3.6,-93 0,-93.4 2.6,-93", "#ffffff", 0.5, 0.18) +
       shape(knot, cloth, 0.7),
-    glow: K.eyeGlow(c, 0.3),
+    glow: K.eyeGlow(c, 0.3) + acc.glow,
+    // Hair long enough to hang below the wrap falls behind the neck.
+    nape: K.hairNape(c, true),
   };
 }
 

@@ -148,9 +148,11 @@ function helmetEntry(id) {
  * helmet-slot gear each holds (src/data/accessories.js `seat`):
  *   crown — on top of the shell (a plume)
  *   brow  — on the forehead above the visor (night vision)
- *   side  — on the side rail and over the ears (lamps, whips, a headset)
+ *   side  — on the shell's side rail (lamps, whips)
+ *   ears  — over the head and the ears on its own band (a headset), so a
+ *           soft head with no shell to mount on can still take it
  */
-export const HELMET_SEATS = Object.freeze(["crown", "brow", "side"]);
+export const HELMET_SEATS = Object.freeze(["crown", "brow", "side", "ears"]);
 
 /**
  * Which accessory seats a helmet takes: every seat, unless its entry turns one off.

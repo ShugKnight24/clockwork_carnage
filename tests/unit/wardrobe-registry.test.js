@@ -165,13 +165,13 @@ describe("helmets", () => {
   });
 
   it("FACE_HELMETS equals the open helmets, derived from the data and read-only", () => {
-    expect([...FACE_HELMETS].sort()).toEqual(["brim", "bubble", "ledmask", "mohawk", "wide"]);
+    expect([...FACE_HELMETS].sort()).toEqual(["bandana", "brim", "bubble", "ledmask", "mohawk", "wide"]);
     expect([...FACE_HELMETS].sort()).toEqual(HELMET_STYLES.filter((e) => e.face === true).map((e) => e.id).sort());
     expect(() => FACE_HELMETS.add("standard")).toThrow();
     expect(() => FACE_HELMETS.delete("wide")).toThrow();
     expect(() => FACE_HELMETS.clear()).toThrow();
     expect(FACE_HELMETS.has("wide")).toBe(true);
-    expect(FACE_HELMETS.size).toBe(5);
+    expect(FACE_HELMETS.size).toBe(6);
   });
 
   it("throws on an unknown helmet rather than drawing another", () => {
@@ -189,16 +189,21 @@ describe("helmets", () => {
     }
   });
 
-  it("seats accessories on every helmet but the Centurion's crown, and names the seats exactly", () => {
-    expect([...HELMET_SEATS]).toEqual(["crown", "brow", "side"]);
+  it("seats accessories on every helmet but the Centurion's crown and the Do-Rag's cloth, and names the seats exactly", () => {
+    expect([...HELMET_SEATS]).toEqual(["crown", "brow", "side", "ears"]);
     expect(Object.isFrozen(HELMET_SEATS)).toBe(true);
-    for (const id of LEGACY_HELMETS) {
-      expect(helmetSeats(id), id).toEqual({ crown: id !== "mohawk", brow: true, side: true });
+    for (const id of LEGACY_HELMETS.filter((h) => h !== "bandana")) {
+      expect(helmetSeats(id), id).toEqual({ crown: id !== "mohawk", brow: true, side: true, ears: true });
       expect(rigAnchors(STAND, [0, 0], "standing", id).seats, id).toEqual(helmetSeats(id));
     }
     const mohawk = HELMET_STYLES.find((e) => e.id === "mohawk");
     expect(mohawk.seats).toEqual({ crown: false });
     expect(Object.isFrozen(mohawk.seats)).toBe(true);
+    // Cloth has nothing to mount a plume, night vision or a rail lamp on; a
+    // headset rides on its own band.
+    expect(helmetSeats("bandana")).toEqual({ crown: false, brow: false, side: false, ears: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "bandana").seats).toEqual(helmetSeats("bandana"));
+    expect(ACCESSORIES.helmet.find((e) => e.id === "comms").seat).toBe("ears");
   });
 
   it("every helmet accessory names the seat it needs", () => {
@@ -230,7 +235,7 @@ describe("the Exo-Frame theme", () => {
   it("grows the silhouette, hides no stock layer, and seats the cockpit's gear on its cage and sensor blocks", () => {
     expect({ ...FRAME_ART.exo.shape }).toEqual({ width: 1.14, shoulder: 1.2 });
     expect(hidesOf("exo")).toEqual([]);
-    expect(helmetSeats("cockpit")).toEqual({ crown: true, brow: true, side: true });
+    expect(helmetSeats("cockpit")).toEqual({ crown: true, brow: true, side: true, ears: true });
     const A = rigAnchors(STAND, [0, 0], "standing", "cockpit");
     expect(A.crown.y).toBeCloseTo(-100.8, 10);
     expect(A.sideL.x).toBeCloseTo(-15.8, 10);
@@ -262,7 +267,7 @@ describe("the spike themes", () => {
   it("the Marshal's duster covers the kit, the hip plates, the cape and the limb light; the brim is an open hat with no brow seat", () => {
     expect(hidesOf("duster")).toEqual(["kit", "hips", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "brim")).toMatchObject({ face: true, visor: false });
-    expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true });
+    expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true, ears: true });
     expect(HELMET_ART.brim.anchors.badge).toBe(false);
   });
 });
@@ -273,7 +278,7 @@ describe("the Ronin theme", () => {
     expect(FRAME_ART.lamellar.shape.softTorso).toBe(true);
     expect(HELMET_STYLES.find((e) => e.id === "kabuto").visor).toBe(false);
     expect(FACE_HELMETS.has("kabuto")).toBe(false);
-    expect(helmetSeats("kabuto")).toEqual({ crown: false, brow: false, side: true });
+    expect(helmetSeats("kabuto")).toEqual({ crown: false, brow: false, side: true, ears: true });
     expect(rigAnchors(STAND, [0, 0], "standing", "kabuto").helmet).toEqual({ x: -15.6, y: -86.8, rot: -12, size: 3.8 });
   });
 });
@@ -284,7 +289,7 @@ describe("the Horologist theme", () => {
     expect(FRAME_ART.clockwork.shape.softTorso).toBe(true);
     expect(HELMET_STYLES.find((e) => e.id === "clockface").visor).toBe(false);
     expect(FACE_HELMETS.has("clockface")).toBe(false);
-    expect(helmetSeats("clockface")).toEqual({ crown: false, brow: false, side: true });
+    expect(helmetSeats("clockface")).toEqual({ crown: false, brow: false, side: true, ears: true });
     expect(rigAnchors(STAND, [0, 0], "standing", "clockface").helmet).toEqual({ x: -7.9, y: -90.3, rot: -10, size: 3.2 });
   });
 });
@@ -293,7 +298,7 @@ describe("the Neon Runner theme", () => {
   it("the jacket covers the kit, collar and limb light; the LED mask is a bare face with no crown seat", () => {
     expect(hidesOf("streetwear")).toEqual(["kit", "collar", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "ledmask")).toMatchObject({ face: true, visor: false });
-    expect(helmetSeats("ledmask")).toEqual({ crown: false, brow: true, side: true });
+    expect(helmetSeats("ledmask")).toEqual({ crown: false, brow: true, side: true, ears: true });
     expect(HELMET_ART.ledmask.anchors.badge).toBe(false);
   });
 });
@@ -303,7 +308,7 @@ describe("the Abyssal Diver theme", () => {
     expect(hidesOf("diving")).toEqual(["kit", "collar", "hips", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "porthole").visor).toBe(false);
     expect(FACE_HELMETS.has("porthole")).toBe(false);
-    expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true });
+    expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true, ears: true });
     expect(rigAnchors(STAND, [0, 0], "standing", "porthole").helmet).toEqual({ x: -10.4, y: -91.6, rot: -20, size: 3.8 });
   });
 });
@@ -312,7 +317,7 @@ describe("the Void Ranger theme", () => {
   it("the pressure suit covers the kit, collar, hip plates and limb light; the bubble is open glass that takes no gear", () => {
     expect(hidesOf("spacesuit")).toEqual(["kit", "collar", "hips", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "bubble")).toMatchObject({ face: true, visor: false });
-    expect(helmetSeats("bubble")).toEqual({ crown: false, brow: false, side: false });
+    expect(helmetSeats("bubble")).toEqual({ crown: false, brow: false, side: false, ears: false });
     expect(HELMET_ART.bubble.anchors.badge).toBe(false);
   });
 });
@@ -322,7 +327,7 @@ describe("the Chronomancer theme", () => {
     expect(hidesOf("vestment")).toEqual(["kit", "hips", "cape", "limbGlow"]);
     expect(HELMET_STYLES.find((e) => e.id === "hood").visor).toBe(false);
     expect(FACE_HELMETS.has("hood")).toBe(false);
-    expect(helmetSeats("hood")).toEqual({ crown: false, brow: false, side: true });
+    expect(helmetSeats("hood")).toEqual({ crown: false, brow: false, side: true, ears: true });
     expect(rigAnchors(STAND, [0, 0], "standing", "hood").helmet).toEqual({ x: 0, y: -64.6, rot: 0, size: 3.6 });
   });
 });

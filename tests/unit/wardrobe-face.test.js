@@ -34,7 +34,7 @@ const badged = (render, helmet) => render(look(helmet)) !== render(look(helmet, 
 describe("FACE_HELMETS is the one open-helmet set", () => {
   it("is derived from the data's face flags", () => {
     expect(validateWardrobe()).toEqual([]);
-    expect([...FACE_HELMETS].sort()).toEqual(["brim", "bubble", "ledmask", "mohawk", "open-fixture", "wide"]);
+    expect([...FACE_HELMETS].sort()).toEqual(["bandana", "brim", "bubble", "ledmask", "mohawk", "open-fixture", "wide"]);
   });
 
   it("the rig shows the bare neck and drops the helmet badge for a face helmet", () => {

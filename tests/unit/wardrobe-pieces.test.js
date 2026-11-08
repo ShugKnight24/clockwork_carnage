@@ -79,7 +79,7 @@ describe("helmets come from their art", () => {
     expect(A.sideL.x).toBeCloseTo(-ANCHORS.half + 0.2, 10);
     expect(A.sideL.y).toBe(ANCHORS.rail);
     expect(A.helmet).toEqual(ANCHORS.badge);
-    expect(A.seats).toEqual({ crown: true, brow: false, side: true });
+    expect(A.seats).toEqual({ crown: true, brow: false, side: true, ears: true });
     expect(rigAnchors(FALLEN, [14, -4], "fallen", "badgeless-fixture").helmet).toBeNull();
   });
 

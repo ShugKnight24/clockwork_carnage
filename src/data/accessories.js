@@ -51,8 +51,8 @@ export const ACCESSORIES = {
     { id: "grenades", name: "Grenade Rig", desc: "Canisters on a webbing belt", tier: 3 },
     { id: "canister", name: "Chrono Canister", desc: "Glowing energy cell at the hip", tier: 2 },
   ],
-  // Helmet gear sits on one of the helmet's seats (`seat`: crown, brow or
-  // side, HELMET_SEATS in src/data/wardrobe-themes/index.js); a
+  // Helmet gear sits on one of the helmet's seats (`seat`: crown, brow,
+  // side or ears, HELMET_SEATS in src/data/wardrobe-themes/index.js); a
   // helmet that turns a seat off does not draw the gear that needs it.
   helmet: [
     NONE,
@@ -60,7 +60,7 @@ export const ACCESSORIES = {
     { id: "whip", name: "Whip Antenna", desc: "Tall flexible aerial", tier: 1, bonuses: { maxChronoEnergyAdd: 5 }, seat: "side" },
     { id: "lamp", name: "Head Lamp", desc: "Side-mounted torch", tier: 1, seat: "side" },
     { id: "plume", name: "Plume", desc: "Parade crest", tier: 3, seat: "crown" },
-    { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1, seat: "side" },
+    { id: "comms", name: "Comms Headset", desc: "Ear cups and a boom mic over any helmet", tier: 1, seat: "ears" },
   ],
   arms: [
     NONE,

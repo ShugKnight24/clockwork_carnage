@@ -15,6 +15,6 @@ export default {
       // Its own air supply.
       bonuses: { staminaRegenAdd: 0.15 },
       // Clear glass takes no gear, and a headset would close across the face.
-      seats: { crown: false, brow: false, side: false } }],
+      seats: { crown: false, brow: false, side: false, ears: false } }],
   shoulders: [{ id: "patches", name: "Mission Patches", desc: "Quilted pads stitched with a mission patch", tier: 2 }],
 };
