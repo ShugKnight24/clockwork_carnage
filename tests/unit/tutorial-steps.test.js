@@ -236,3 +236,33 @@ describe("the calibration's stamina bar", () => {
     expect(player.stamina).toBe(12);
   });
 });
+
+// The Supervisor's set routes are straight legs: each crosses only open floor
+// or a door the prologue opens before he walks it.
+describe("the Supervisor's routes", () => {
+  const OPENED = { enter: ["door1"], ahead: ["door1", "door2"] };
+
+  it("walk through no wall and no shut door", async () => {
+    const { TUTORIAL_MAP } = await import("../../src/data/levels/tutorial.js");
+    const block = systemSource.slice(systemSource.indexOf("const SUP_ROUTES"), systemSource.indexOf("const SUP_AT_LIFT"));
+    for (const [, name, legs] of block.matchAll(/^ {2}(\w+): (\[\[.*\]\]),$/gm)) {
+      if (name === "leave") continue; // into Lift B, whose doors open for him
+      const open = new Set((OPENED[name] || []).flatMap((d) => TUTORIAL_MAP.doors[d].map((c) => `${c.x},${c.y}`)));
+      const pts = JSON.parse(legs);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [[ax, ay], [bx, by]] = [pts[i], pts[i + 1]];
+        for (let s = 0; s <= 100; s++) {
+          const x = Math.floor(ax + ((bx - ax) * s) / 100);
+          const y = Math.floor(ay + ((by - ay) * s) / 100);
+          if (TUTORIAL_MAP.grid[y][x] !== 0) expect(open.has(`${x},${y}`), `${name} at (${x}, ${y})`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("opens the range door as he goes on ahead to it", () => {
+    const suitUp = systemSource.slice(systemSource.indexOf("  suitUp: {"), systemSource.indexOf("  boot: {"));
+    expect(suitUp.indexOf('openDoors(g, "door2")')).toBeGreaterThan(-1);
+    expect(suitUp.indexOf('openDoors(g, "door2")')).toBeLessThan(suitUp.indexOf('supWalk(g, "ahead")'));
+  });
+});

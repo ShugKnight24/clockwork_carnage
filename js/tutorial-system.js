@@ -131,7 +131,7 @@ const SUP_ROUTES = {
   // In at the door and round the benches, to where the cadet can see him.
   enter: [[27.5, 41.5], [24.5, 41.5], [23.0, 43.5], [18.5, 44.3]],
   // He leaves you to the suit and goes on ahead to the range.
-  ahead: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5], [29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
+  ahead: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5], [29.5, 41.5], [36.5, 41.5], [37.5, 44.8]],
   atRange: [[37.5, 44.8]],
   // At the alarm he goes down to his people the only way there is: Lift B,
   // the car the thing came up in. He turns in it to look at you.
@@ -880,7 +880,13 @@ const LOGIC = {
     enter(t, g) {
       t.lockerLight(g, true);
       t.c.suited = false;
-      setTimeoutGame(t, 0.8, () => t.supWalk(g, "ahead"));
+      // He goes on ahead to the range, opening its door (door2, across his
+      // route) as he goes: shut, he walked through it. Its drills wait for
+      // their own steps, so the range open early holds nothing to find.
+      setTimeoutGame(t, 0.8, () => {
+        t.openDoors(g, "door2");
+        t.supWalk(g, "ahead");
+      });
     },
     update: (t) => t.c.suited,
     exit(t, g) {
