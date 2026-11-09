@@ -10,8 +10,9 @@
  * (hip and ADS anchors are matched to morph one pose into the other).
  */
 
-import { INK, rrect, circle } from "./geom.js";
-import { firingHand, sidearmGrip, supportThumb, clampHand, clampThumb } from "./hands.js";
+import { INK, rrect } from "./geom.js";
+import { pistolHands, gripFiringHand, handguardSupport } from "./hands.js";
+import { boxOccluder } from "./hand-rig.js";
 
 // Five-tone material ramps, deep shadow → specular.
 const STEEL = ["#0b1118", "#1c2733", "#3a4d61", "#6f8aa3", "#c3d6e6"];
@@ -36,6 +37,11 @@ export const MATERIALS = {
   grip: [POLYMER],
 };
 
+/** The long guns' cant at the hip (see hipCam). */
+const HIP_ROLL = -0.06;
+/** How far off (mm) the hip barrel is aimed, level all but this much. */
+const HIP_REACH = 3000;
+
 // Viewmodel focal length in units (4 px at 720p): a slightly wide lens exaggerates depth.
 const F = 230;
 
@@ -44,9 +50,22 @@ const F = 230;
  * the reticle, `oz` mm ahead of the eye; the muzzle then falls on the line to
  * the reticle, shrunk by (oz + len) / oz. `top` = receiver top height (mm).
  */
-function hipCam({ top, oz, rx, ry, kx = -0.24 }) {
+function hipCam({ top, oz, rx, ry, kx = -0.24, meet = 0, roll = 0 }) {
   const yTop = -(ry * oz) / F;
-  return { F, ox: (rx * oz) / F - kx * top, oy: yTop - top, oz, kx };
+  const cam = { F, ox: (rx * oz) / F - kx * top, oy: yTop - top, oz, kx, roll };
+  // `meet`: the gun toed in about its rear so the barrel would cross the
+  // reticle's ray `meet` mm along it: some of the left flank and the hands
+  // on it turned toward the eye. The shorter, the more of the flank shows.
+  // Its pitch is only what aims it at HIP_REACH: a barrel raised to meet the
+  // ray close up points over the target, at the ceiling.
+  // `roll` (radians, − turns the left flank toward the eye) cants a long gun
+  // about its barrel, as shooters' hip views do, so the grip and the fingers
+  // wrapped round it face the eye; the arms stay put (geom's `steady`).
+  if (meet) {
+    cam.yaw = Math.atan2(cam.ox, meet);
+    cam.pitch = Math.atan2(-cam.oy, HIP_REACH);
+  }
+  return cam;
 }
 /**
  * ADS camera: eye `above` mm over a sight line at (sightX, sightY), weapon
@@ -201,6 +220,28 @@ function triggerGuard(sc, y, z0, z1, drop) {
   sc.line(pts, "#2d3641", 1.3, 1);
 }
 
+/**
+ * Trigger blade hanging from the frame's underside at height `y`, `z` its
+ * root's rear edge: a curved steel blade (two convex pieces) inside the guard.
+ * Returns where the firing fingertip's pad presses on its face, and an
+ * occluder round it for the hands.
+ */
+function triggerBlade(sc, y, z, w = 2.6) {
+  const plate = (q, mat) => {
+    const A = q.map(([zz, yy]) => [-w, yy, zz]);
+    const B = q.map(([zz, yy]) => [w, yy, zz]);
+    const faces = [A, B];
+    for (let i = 0; i < q.length; i++) {
+      const j = (i + 1) % q.length;
+      faces.push([A[i], A[j], B[j], B[i]]);
+    }
+    sc.solid(faces, mat, { rim: 0.3, depth: false });
+  };
+  plate([[z, y + 1], [z + 8, y + 1], [z + 7.5, y - 9], [z - 0.5, y - 9]], GUNMETAL);
+  plate([[z - 0.5, y - 9], [z + 7.5, y - 9], [z + 3.5, y - 18], [z - 2.5, y - 17]], STEEL);
+  // The finger presses low on the blade's curve, clear of the frame above it.
+  return { pad: [0, y - 17, z + 5.5], occ: boxOccluder(-w, w, y - 18, y + 1, z - 3, z + 8) };
+}
 
 /** Detailing for a big rear bulkhead: inset access panel, bolts and a charge readout. */
 function rearPanel(sc, hw, y0, y1, trim) {
@@ -223,7 +264,7 @@ export const WEAPON_MODELS = {
   0: {
     // Sidearms keep more of the firing hand in frame than the long guns' hip drop.
     hipDrop: 3,
-    cams: { hip: hipCam({ top: 22, oz: 320, rx: 58, ry: 36, kx: -0.2 }), ads: adsCam({ sightY: 28.5, oz: 440 }) },
+    cams: { hip: hipCam({ top: 22, oz: 380, rx: 72, ry: 36, kx: 0.1, meet: 850 }), ads: adsCam({ sightY: 28.5, oz: 440 }) },
     build(sc, A, pose) {
       // Ported compensator ahead of the slide, the chrono crown glowing at its lip.
       brake(sc, 0, 11, 10, 192, 214, 2);
@@ -234,9 +275,9 @@ export const WEAPON_MODELS = {
       sc.boxZ(-16, 16, -98, -91, -44, 10, GUNMETAL, { ch: 2 });
       sc.boxZ(-13, 13, -14, 0.5, 5, 175, POLYMER, { ch: 2.5, matte: true });
       triggerGuard(sc, -14, 70, 125, 26);
+      const trig = triggerBlade(sc, -14, 86);
       for (const z of [140, 152, 164]) sc.poly(sideRect(13.05, -11, -3, z, z + 8), "#07090d", { stroke: INK, sw: 0.2 });
       screws(sc, [[13.1, -6, 38], [13.1, -6, 118]], 1.6);
-      supportThumb(A, g);
       // Slide.
       sc.prismZ([[-15, 0], [15, 0], [15, 17], [11, 22], [-11, 22], [-15, 17]], 0, 190, STEEL);
       sc.boxZ(-5, 5, 6, 14, -3, 0.5, STEEL, { ch: 2 });
@@ -262,7 +303,8 @@ export const WEAPON_MODELS = {
       sc.boxZ(-2.5, 2.5, 22, 27.5, 172, 186, GUNMETAL, { rim: 0.2 });
       sc.glowPoly(sc.disc([0, 25, 171.5], 1.6, "z", 10), { inner: false });
 
-      sidearmGrip(A, g, pose === "ads");
+      // Frame and slide: the parts of the pistol the hands can pass behind.
+      pistolHands(A, g, pose === "ads", [boxOccluder(-13, 13, -14, 0.5, 5, 175), boxOccluder(-15, 15, 0, 22, 0, 190), trig.occ], trig.pad);
       return { muzzle: [0, 11, 216], eject: [15, 16, 92], pivot: [0, -12, 20], sight: [0, 28, 8] };
     },
   },
@@ -270,11 +312,11 @@ export const WEAPON_MODELS = {
   // ── Temporal Shotgun ────────────────────────────────────────────────────────
   // Bronze receiver, twin steel barrels with a ribbed pump; temporal coils on the top edges.
   1: {
-    cams: { hip: hipCam({ top: 30, oz: 240, rx: 84, ry: 64, kx: -0.28 }), ads: adsCam({ sightY: 85, oz: 280 }) },
+    cams: { hip: hipCam({ top: 30, oz: 290, rx: 80, ry: 16, kx: -0.28, meet: 3850, roll: HIP_ROLL }), ads: adsCam({ sightY: 85, oz: 280 }) },
     build(sc, A, pose) {
-      const hg = { y0: -18, y1: 27, hw: 21, zc: 300 };
-      clampThumb(A, hg);
-      if (pose === "ads") clampHand(A, hg, "body", true);
+      const hg = { y0: -18, y1: 6, hw: 21, zc: 345 };
+      const handguard = boxOccluder(-23, 23, -18, 27, 290, 420);
+      if (pose === "ads") handguardSupport(A, hg, "body", true, [handguard]);
       sc.boxZ(-21, 21, -18, 6, 290, 420, BRONZE, { ch: 6 });
       grooves(sc, 21.05, -13, 1, range(300, 410, 11));
       for (const x of [-11.5, 11.5]) sc.cylZ(x, 16, 11, 225, 560, GUNMETAL, { n: 16 });
@@ -288,6 +330,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sc.disc([0, 35.5, 546], 1.4, "y", 8), { inner: false });
       const g = pistolGrip(sc, { yTop: -10, yBot: -76, zfT: 90, zbT: 40, zfB: 64, zbB: 14, hw: 14 });
       triggerGuard(sc, -12, 95, 150, 24);
+      const trig = triggerBlade(sc, -12, 106);
       sc.boxZ(-20, 20, -14, 30, 0, 230, BRONZE, { ch: 6 });
       // Loading port with a shell, and the coil channels.
       sc.poly(sideRect(20.05, 2, 22, 60, 150), "#0a0603", { stroke: INK, sw: 0.3 });
@@ -303,8 +346,8 @@ export const WEAPON_MODELS = {
 
       for (const x of [-8, 3]) sc.boxZ(x, x + 5, 30, 36, 6, 16, GUNMETAL, { rim: 0.3 });
       if (pose === "ads") ghostRing(sc, 30, 30.5, 20, 530, 85);
-      firingHand(A, g, pose === "ads");
-      if (pose !== "ads") clampHand(A, hg);
+      gripFiringHand(A, g, pose === "ads", { frameHw: 20, frameY: -14, trigger: trig.pad, occluders: [boxOccluder(-20, 20, -14, 30, 0, 230), trig.occ] });
+      if (pose !== "ads") handguardSupport(A, hg, "handL", false, [handguard, boxOccluder(-20, 20, -14, 30, 0, 230)]);
       return { muzzle: [0, 16, 570], eject: [20, 20, 110], pivot: [0, -10, 60], sight: pose === "ads" ? [0, 85, 20] : [0, 34, 10] };
     },
   },
@@ -312,11 +355,11 @@ export const WEAPON_MODELS = {
   // ── Phase Rifle ─────────────────────────────────────────────────────────────
   // Indigo handguard banded with phase emitter rings, optic up top, power cell below.
   2: {
-    cams: { hip: hipCam({ top: 30, oz: 260, rx: 84, ry: 66, kx: -0.28 }), ads: adsCam({ sightY: 86, oz: 280, above: 0 }) },
+    cams: { hip: hipCam({ top: 30, oz: 300, rx: 80, ry: 16, kx: -0.28, meet: 4300, roll: HIP_ROLL }), ads: adsCam({ sightY: 86, oz: 280, above: 0 }) },
     build(sc, A, pose) {
       const hg = { y0: -14, y1: 32, hw: 22, zc: 290 };
-      clampThumb(A, hg);
-      if (pose === "ads") clampHand(A, hg, "body", true);
+      const handguard = boxOccluder(-22, 22, -14, 32, 240, 452);
+      if (pose === "ads") handguardSupport(A, hg, "body", true, [handguard]);
       sc.cylZ(0, 12, 8, 440, 630, GUNMETAL, { n: 14 });
       coil(sc, 0, 12, 8.4, 462, 604, 5);
       brake(sc, 0, 12, 12, 610, 652, 3, STEEL);
@@ -325,6 +368,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sideRect(12.05, -52, -24, 160, 195));
       const g = pistolGrip(sc, { yTop: -14, yBot: -80, zfT: 100, zbT: 55, zfB: 76, zbB: 30, hw: 14 });
       triggerGuard(sc, -16, 105, 150, 22);
+      const trig = triggerBlade(sc, -16, 116);
       sc.prismZ(rrect(-22, 22, -14, 32, 8), 240, 452, INDIGO);
       for (const z of range(262, 432, 34)) sc.poly(sideRect(22.05, -6, 22, z + 8, z + 24), "#07071a", { stroke: INK, sw: 0.25 });
       for (const z of range(258, 428, 34)) sc.glowLine(sectionArc(-22, 22, -14, 32, 8, z), 0.55);
@@ -343,8 +387,9 @@ export const WEAPON_MODELS = {
       sc.boxZ(-3, 3, 36, ringY - 16, 104, 116, GUNMETAL);
       ringSight(sc, [0, ringY, 110], 16, 1.6);
 
-      firingHand(A, g, pose === "ads");
-      if (pose !== "ads") clampHand(A, hg);
+      // Receiver and power cell: what the firing hand can pass behind.
+      gripFiringHand(A, g, pose === "ads", { frameHw: 20, frameY: -16, trigger: trig.pad, occluders: [boxOccluder(-20, 20, -16, 30, 0, 240), boxOccluder(-12, 12, -62, -14, 150, 205), trig.occ] });
+      if (pose !== "ads") handguardSupport(A, hg, "handL", false, [handguard, boxOccluder(-20, 20, -16, 30, 0, 240)]);
       return { muzzle: [0, 12, 660], eject: [20, 22, 120], pivot: [0, -14, 70], sight: [0, ringY, 110] };
     },
   },
@@ -352,11 +397,11 @@ export const WEAPON_MODELS = {
   // ── Quantum Cannon ──────────────────────────────────────────────────────────
   // Heavy crimson chassis, tapering coil housing, exposed quantum core, aperture sights.
   3: {
-    cams: { hip: hipCam({ top: 44, oz: 225, rx: 82, ry: 58, kx: -0.24 }), ads: adsCam({ sightY: 100, sightX: -58, oz: 340 }) },
+    cams: { hip: hipCam({ top: 44, oz: 380, rx: 90, ry: 8, kx: -0.24, meet: 3000, roll: HIP_ROLL }), ads: adsCam({ sightY: 100, sightX: -58, oz: 340 }) },
     build(sc, A, pose) {
-      const hg = { y0: -24, y1: 36, hw: 30, zc: 330 };
-      clampThumb(A, hg);
-      if (pose === "ads") clampHand(A, hg, "body", true);
+      const hg = { y0: -24, y1: 36, hw: 30, zc: 355 };
+      const handguard = boxOccluder(-30, 30, -24, 40, 300, 470);
+      if (pose === "ads") handguardSupport(A, hg, "body", true, [handguard]);
       const housing = rrect(-30, 30, -20, 40, 10);
       sc.prismZ(housing, 300, 470, CRIMSON, { taper: 0.74, pivot: [0, 10] });
       for (const z of [330, 370, 410, 450]) {
@@ -368,6 +413,7 @@ export const WEAPON_MODELS = {
       glowArc(sc, 0, 10, 21.5, 499.5, 0.8);
       const g = pistolGrip(sc, { yTop: -28, yBot: -94, zfT: 95, zbT: 45, zfB: 68, zbB: 18, hw: 15 });
       triggerGuard(sc, -30, 100, 150, 22);
+      const trig = triggerBlade(sc, -30, 110);
       sc.prismZ(rrect(-40, 40, -30, 44, 12), 0, 300, CRIMSON);
       // Side conduit and vents on the right flank.
       sc.cylZ(40, 30, 6, 20, 290, GUNMETAL, { n: 10 });
@@ -397,8 +443,8 @@ export const WEAPON_MODELS = {
         sc.boxZ(-2.5, 2.5, 30, 54, 450, 460, GUNMETAL, { rim: 0.3 });
         sc.glowPoly(sc.disc([0, 54, 449.5], 1.3, "z", 8), { inner: false });
       }
-      firingHand(A, g, pose === "ads");
-      if (pose !== "ads") clampHand(A, hg);
+      gripFiringHand(A, g, pose === "ads", { frameHw: 40, frameY: -30, trigger: trig.pad, occluders: [boxOccluder(-40, 40, -30, 44, 0, 300), trig.occ] });
+      if (pose !== "ads") handguardSupport(A, hg, "handL", false, [handguard, boxOccluder(-40, 40, -30, 44, 0, 300)]);
       return { muzzle: [0, 10, 505], eject: [40, 20, 100], pivot: [0, -28, 70], sight: pose === "ads" ? [-58, 100, 20] : [0, 54, 20] };
     },
   },
@@ -406,11 +452,11 @@ export const WEAPON_MODELS = {
   // ── Phase Scattergun ────────────────────────────────────────────────────────
   // Wide plum body, three stacked barrels under a vented shroud, phase emitter core.
   4: {
-    cams: { hip: hipCam({ top: 34, oz: 225, rx: 84, ry: 62, kx: -0.28 }), ads: adsCam({ sightY: 89, oz: 280 }) },
+    cams: { hip: hipCam({ top: 34, oz: 270, rx: 80, ry: 16, kx: -0.28, meet: 3650, roll: HIP_ROLL }), ads: adsCam({ sightY: 89, oz: 280 }) },
     build(sc, A, pose) {
-      const hg = { y0: -22, y1: 6, hw: 26, zc: 330 };
-      clampThumb(A, hg);
-      if (pose === "ads") clampHand(A, hg, "body", true);
+      const hg = { y0: -22, y1: 6, hw: 26, zc: 355 };
+      const handguard = boxOccluder(-26, 26, -22, 6, 300, 420);
+      if (pose === "ads") handguardSupport(A, hg, "body", true, [handguard]);
       sc.boxZ(-26, 26, -22, 6, 300, 420, PLUM, { ch: 6 });
       grooves(sc, 26.05, -17, 1, range(310, 410, 11));
       for (const x of [-16, 0, 16]) sc.cylZ(x, 18, 9.5, 250, 515, GUNMETAL, { n: 14 });
@@ -423,6 +469,7 @@ export const WEAPON_MODELS = {
       sc.glowLine([[-24, 32.2, 512], [24, 32.2, 512]], 0.8);
       const g = pistolGrip(sc, { yTop: -12, yBot: -78, zfT: 92, zbT: 42, zfB: 66, zbB: 16, hw: 14 });
       triggerGuard(sc, -14, 98, 150, 22);
+      const trig = triggerBlade(sc, -14, 108);
       sc.boxZ(-30, 30, -14, 34, 0, 262, PLUM, { ch: 9 });
       // Phase emitter core set in the top plate.
       sc.poly(sc.disc([0, 34.05, 150], 19, "y", 20), "#0a0409", { stroke: "#b48ca2", sw: 0.35, sop: 0.6 });
@@ -439,8 +486,8 @@ export const WEAPON_MODELS = {
       sc.boxZ(-2.5, 2.5, 32, 40, 500, 512, GUNMETAL, { rim: 0.3 });
       sc.glowPoly(sc.disc([0, 40.5, 506], 1.3, "y", 8), { inner: false });
       if (pose === "ads") ghostRing(sc, 34, 32, 20, 500, 89);
-      firingHand(A, g, pose === "ads");
-      if (pose !== "ads") clampHand(A, hg);
+      gripFiringHand(A, g, pose === "ads", { frameHw: 30, frameY: -14, trigger: trig.pad, occluders: [boxOccluder(-30, 30, -14, 34, 0, 262), trig.occ] });
+      if (pose !== "ads") handguardSupport(A, hg, "handL", false, [handguard, boxOccluder(-30, 30, -14, 34, 0, 262)]);
       return { muzzle: [0, 18, 530], eject: [30, 20, 110], pivot: [0, -12, 65], sight: pose === "ads" ? [0, 89, 20] : [0, 38, 10] };
     },
   },
@@ -448,11 +495,11 @@ export const WEAPON_MODELS = {
   // ── Temporal Sniper ─────────────────────────────────────────────────────────
   // Long fluted barrel with coil rings, bolt action, big optic with a glowing eyepiece.
   5: {
-    cams: { hip: hipCam({ top: 28, oz: 350, rx: 84, ry: 66, kx: -0.28 }), ads: adsCam({ sightY: 88, oz: 300, above: 0 }) },
+    cams: { hip: hipCam({ top: 28, oz: 390, rx: 80, ry: 16, kx: -0.28, meet: 5500, roll: HIP_ROLL }), ads: adsCam({ sightY: 88, oz: 300, above: 0 }) },
     build(sc, A, pose) {
       const hg = { y0: -12, y1: 26, hw: 19, zc: 330 };
-      clampThumb(A, hg);
-      if (pose === "ads") clampHand(A, hg, "body", true);
+      const handguard = boxOccluder(-19, 19, -12, 26, 220, 520);
+      if (pose === "ads") handguardSupport(A, hg, "body", true, [handguard]);
       sc.cylZ(0, 12, 9, 380, 870, NAVY, { n: 14 });
       for (const z of range(640, 820, 60)) sc.line([[9.2, 12, z], [9.2, 12, z + 40]], INK, 0.3, 0.6);
       coil(sc, 0, 12, 9.4, 524, 616, 5);
@@ -462,6 +509,7 @@ export const WEAPON_MODELS = {
       sc.glowPoly(sideRect(10.05, -44, -22, 128, 162));
       const g = pistolGrip(sc, { yTop: -12, yBot: -78, zfT: 92, zbT: 45, zfB: 68, zbB: 22, hw: 14 });
       triggerGuard(sc, -14, 95, 140, 22);
+      const trig = triggerBlade(sc, -14, 105);
       sc.prismZ(rrect(-19, 19, -12, 26, 6), 220, 520, NAVY);
       for (const z of range(250, 490, 40)) sc.poly(sideRect(19.05, -4, 18, z, z + 24), "#050b13", { stroke: INK, sw: 0.25 });
       sc.boxZ(-19, 19, -14, 28, 0, 220, NAVY, { ch: 4 });
@@ -483,8 +531,8 @@ export const WEAPON_MODELS = {
       sc.glowLine(arc(0, ringY, 11, 239.5, -90, 270, 24), 0.4);
       ringSight(sc, [0, ringY, 110], 18, 1.8);
 
-      firingHand(A, g, pose === "ads");
-      if (pose !== "ads") clampHand(A, hg);
+      gripFiringHand(A, g, pose === "ads", { frameHw: 19, frameY: -14, trigger: trig.pad, occluders: [boxOccluder(-19, 19, -14, 28, 0, 220), boxOccluder(-10, 10, -52, -14, 120, 170), trig.occ] });
+      if (pose !== "ads") handguardSupport(A, hg, "handL", false, [handguard, boxOccluder(-19, 19, -14, 28, 0, 220)]);
       return { muzzle: [0, 12, 915], eject: [19, 20, 90], pivot: [0, -12, 65], sight: [0, ringY, 110] };
     },
   },
@@ -494,7 +542,7 @@ export const WEAPON_MODELS = {
   6: {
     // Sidearms keep more of the firing hand in frame than the long guns' hip drop.
     hipDrop: 3,
-    cams: { hip: hipCam({ top: 22, oz: 310, rx: 58, ry: 36, kx: -0.2 }), ads: adsCam({ sightY: 29.5, oz: 430 }) },
+    cams: { hip: hipCam({ top: 22, oz: 380, rx: 72, ry: 36, kx: 0.1, meet: 850 }), ads: adsCam({ sightY: 29.5, oz: 430 }) },
     build(sc, A, pose) {
       // Hex compensator, its crown ringed in a ricochet glow.
       brake(sc, 0, 11, 8.5, 180, 200, 2);
@@ -505,7 +553,7 @@ export const WEAPON_MODELS = {
       sc.boxZ(-16, 16, -97, -90, -42, 12, GUNMETAL, { ch: 2 });
       sc.boxZ(-13, 13, -14, 0.5, 5, 160, GUNMETAL, { ch: 2.5 });
       triggerGuard(sc, -14, 70, 122, 24);
-      supportThumb(A, g);
+      const trig = triggerBlade(sc, -14, 84);
       sc.prismZ([[-15, 0], [15, 0], [16, 12], [10, 22], [-10, 22], [-16, 12]], 0, 172, BRASS);
       sc.boxZ(-5, 5, 6, 14, -3, 0.5, GUNMETAL, { ch: 2 });
       grooves(sc, 15.6, 3, 11, range(8, 44, 7));
@@ -520,7 +568,7 @@ export const WEAPON_MODELS = {
       sc.prismZ([[-2.5, 22], [2.5, 22], [0, 28]], 160, 170, GUNMETAL);
       sc.glowPoly(sc.disc([0, 24.5, 159.5], 1.5, "z", 6), { inner: false });
 
-      sidearmGrip(A, g, pose === "ads");
+      pistolHands(A, g, pose === "ads", [boxOccluder(-13, 13, -14, 0.5, 5, 160), boxOccluder(-16, 16, 0, 22, 0, 172), trig.occ], trig.pad);
       return { muzzle: [0, 11, 202], eject: [15, 14, 90], pivot: [0, -12, 20], sight: [0, 29, 8] };
     },
   },
@@ -528,11 +576,11 @@ export const WEAPON_MODELS = {
   // ── EMP Launcher ────────────────────────────────────────────────────────────
   // Armoured teal launcher: wide finned tube with charging rings, capacitor bank, aperture sights.
   7: {
-    cams: { hip: hipCam({ top: 46, oz: 215, rx: 82, ry: 58, kx: -0.24 }), ads: adsCam({ sightY: 102, sightX: -56, oz: 340 }) },
+    cams: { hip: hipCam({ top: 46, oz: 380, rx: 90, ry: 8, kx: -0.24, meet: 2900, roll: HIP_ROLL }), ads: adsCam({ sightY: 102, sightX: -56, oz: 340 }) },
     build(sc, A, pose) {
       const hg = { y0: -14, y1: 46, hw: 30, zc: 340 };
-      clampThumb(A, hg);
-      if (pose === "ads") clampHand(A, hg, "body", true);
+      const handguard = boxOccluder(-30, 30, -14, 46, 280, 470);
+      if (pose === "ads") handguardSupport(A, hg, "body", true, [handguard]);
       sc.cylZ(0, 16, 30, 280, 470, TEAL, { n: 22 });
       for (const z of [300, 330, 360, 390, 420]) {
         sc.boxZ(28, 42, 8, 24, z, z + 12, GUNMETAL);
@@ -542,6 +590,7 @@ export const WEAPON_MODELS = {
       sc.glowLine(arc(0, 16, 20, 471, -20, 200, 14), 0.5);
       const g = pistolGrip(sc, { yTop: -24, yBot: -90, zfT: 95, zbT: 45, zfB: 68, zbB: 18, hw: 15 });
       triggerGuard(sc, -26, 100, 150, 22);
+      const trig = triggerBlade(sc, -26, 110);
       sc.boxZ(-38, 38, -26, 46, 0, 290, TEAL, { ch: 10 });
       // Capacitor bank on the right flank.
       sc.cylZ(44, 4, 8, 30, 262, GUNMETAL, { n: 12 });
@@ -566,8 +615,8 @@ export const WEAPON_MODELS = {
         sc.boxZ(-2.5, 2.5, 44, 56, 452, 462, GUNMETAL, { rim: 0.3 });
         sc.glowPoly(sc.disc([0, 56, 451.5], 1.3, "z", 8), { inner: false });
       }
-      firingHand(A, g, pose === "ads");
-      if (pose !== "ads") clampHand(A, hg);
+      gripFiringHand(A, g, pose === "ads", { frameHw: 38, frameY: -26, trigger: trig.pad, occluders: [boxOccluder(-38, 38, -26, 46, 0, 290), trig.occ] });
+      if (pose !== "ads") handguardSupport(A, hg, "handL", false, [handguard, boxOccluder(-38, 38, -26, 46, 0, 290)]);
       return { muzzle: [0, 16, 480], eject: [38, 30, 120], pivot: [0, -24, 70], sight: pose === "ads" ? [-56, 102, 20] : [0, 56, 20] };
     },
   },

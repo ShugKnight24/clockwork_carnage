@@ -3,6 +3,8 @@ import { viewmodelLayers, viewmodelLook } from "../../src/rendering/svg-art/view
 import { FP_GLOVES, STANDARD_GLOVE, fpGlove } from "../../src/rendering/svg-art/viewmodel/gloves.js";
 import { GLOVE_ART } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import { WEAPON_MODELS } from "../../src/rendering/svg-art/viewmodel/weapons.js";
+import { FP_SLEEVES, fpSleeve } from "../../src/rendering/svg-art/viewmodel/sleeves.js";
+import { themeTable } from "../../src/data/wardrobe-themes/index.js";
 
 const PAL = { primary: "#c03030", dark: "#401010", accent: "#36c6ff" };
 const LIGHT = "#d8a06f";
@@ -39,7 +41,8 @@ describe("first-person gloves", () => {
       for (const pose of ["hip", "ads"]) {
         for (const real of [false, true]) {
           const plain = viewmodelLayers(+id, PAL.accent, pose, "hi", real);
-          const std = viewmodelLayers(+id, PAL.accent, pose, "hi", real, look("standard", DEEP));
+          // The standard glove on the issued sleeve in the default palette: nothing else names the hands.
+          const std = viewmodelLayers(+id, PAL.accent, pose, "hi", real, { glove: "standard", skinTone: DEEP });
           expect(std.layers.map((L) => L.id)).toEqual(plain.layers.map((L) => L.id));
           expect(std.layers.map((L) => norm(L.markup))).toEqual(plain.layers.map((L) => norm(L.markup)));
         }
@@ -67,9 +70,11 @@ describe("first-person gloves", () => {
   });
 
   it("light the LED trace and the rune in Modern", () => {
-    const base = layer(viewmodelLayers(RIFLE, PAL.accent, "hip", "hi", false), "handGlow").markup.length;
+    // A sidearm at the hip turns the back of the firing hand (where the trace
+    // and the rune sit) toward the eye; on a long gun it faces away, as it would.
+    const base = layer(viewmodelLayers(PISTOL, PAL.accent, "hip", "hi", false), "handGlow")?.markup.length ?? 0;
     for (const id of ["fingerless", "wraps"]) {
-      expect(layer(viewmodelLayers(RIFLE, PAL.accent, "hip", "hi", false, look(id)), "handGlow").markup.length, id).toBeGreaterThan(base);
+      expect(layer(viewmodelLayers(0, PAL.accent, "hip", "hi", false, look(id)), "handGlow")?.markup.length ?? 0, id).toBeGreaterThan(base);
     }
   });
 
@@ -83,14 +88,16 @@ describe("first-person gloves", () => {
     }
   });
 
-  it("key a weapon's body by the glove where hand art is painted into it", () => {
-    // A sidearm's thumbs lie under the slide; an aimed long gun's support hand behind the receiver.
-    for (const [w, pose] of [[PISTOL, "hip"], [RIFLE, "ads"]]) {
-      const std = viewmodelLayers(w, PAL.accent, pose, "hi", false);
-      const vm = viewmodelLayers(w, PAL.accent, pose, "hi", false, look("leather"));
-      expect(layer(vm, "body").id).not.toBe(layer(std, "body").id);
-      expect(layer(vm, "glow").id).toBe(layer(std, "glow").id);
-    }
+  it("key a weapon's body by the glove only where hand art is painted into it", () => {
+    // An aimed long gun's support hand lies behind the receiver, in the body layer.
+    const std = viewmodelLayers(RIFLE, PAL.accent, "ads", "hi", false);
+    const vm = viewmodelLayers(RIFLE, PAL.accent, "ads", "hi", false, look("leather"));
+    expect(layer(vm, "body").id).not.toBe(layer(std, "body").id);
+    expect(layer(vm, "glow").id).toBe(layer(std, "glow").id);
+    // The articulated sidearm hands are all in the hand layers, hidden behind the frame by clipping.
+    const pStd = viewmodelLayers(PISTOL, PAL.accent, "hip", "hi", false);
+    const pVm = viewmodelLayers(PISTOL, PAL.accent, "hip", "hi", false, look("leather"));
+    expect(layer(pVm, "body").id).toBe(layer(pStd, "body").id);
   });
 
   it("key the skin only for gloves that show it, the palette only for gloves that take it", () => {
@@ -105,8 +112,29 @@ describe("first-person gloves", () => {
     }
   });
 
+  it("dress the arms in the suit's sleeve, re-baking only the hands", () => {
+    const std = viewmodelLayers(RIFLE, PAL.accent, "hip", "hi", false, look("standard"));
+    for (const frame of Object.keys(FP_SLEEVES)) {
+      const vm = viewmodelLayers(RIFLE, PAL.accent, "hip", "hi", false, { ...look("standard"), frame });
+      expect(layer(vm, "body").id, frame).toBe(layer(std, "body").id);
+      expect(layer(vm, "glow").id, frame).toBe(layer(std, "glow").id);
+      if (frame !== "standard") expect(layer(vm, "handR").id, frame).not.toBe(layer(std, "handR").id);
+    }
+    // The canvas suit's own cloth, and the rolled sleeves' bare skin.
+    expect(hands(viewmodelLayers(RIFLE, PAL.accent, "hip", "hi", false, { ...look("standard"), frame: "diving" }))).toContain("#4a4130");
+    expect(hands(viewmodelLayers(RIFLE, PAL.accent, "hip", "hi", false, { ...look("standard", DEEP), frame: "streetwear" }))).toContain(DEEP);
+  });
+
+  it("give every suit frame a first-person sleeve, keyed by the skin only where it shows", () => {
+    expect(Object.keys(FP_SLEEVES).sort()).toEqual(themeTable("frames").map((e) => e.id).sort());
+    for (const id of Object.keys(FP_SLEEVES)) {
+      expect(fpSleeve(id, LIGHT, PAL).key !== fpSleeve(id, DEEP, PAL).key, id).toBe(!!FP_SLEEVES[id].bare);
+    }
+    expect(fpSleeve("no-such-frame", LIGHT, PAL).id).toBe("standard");
+  });
+
   it("read the suit's glove, skin and palette off the character", () => {
-    expect(viewmodelLook({ frame: "streetwear", skinTone: "deep_brown" })).toMatchObject({ glove: "fingerless", skinTone: DEEP });
+    expect(viewmodelLook({ frame: "streetwear", skinTone: "deep_brown" })).toMatchObject({ glove: "fingerless", frame: "streetwear", skinTone: DEEP });
     expect(viewmodelLook({}).glove).toBe("standard");
     expect(viewmodelLook({}).palette.primary).toMatch(/^#/);
   });

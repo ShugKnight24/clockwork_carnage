@@ -33,9 +33,11 @@ import { pieceOf } from "../../../core/character-fields.js";
 /** The issued glove's tones per art style; `standard` wears exactly these. */
 export const TONES = {
   modern: {
-    base: "#333b46", hi: "#c3d0dc", hiOp: 0.16, sh: "#05070a", shOp: 0.5,
-    edge: INK, edgeOp: 1, edgeW: 0.36, crease: INK, creaseOp: 0.42,
-    pad: "#3f4854", seam: "#a9b7c5", seamOp: 0.34, plateHi: "#eef6ff", plateHiOp: 0.42,
+    // A bolder ink line than the weapon's, so a hand reads apart from the gun it grips.
+    // A shade lighter and cooler than the gunmetal it grips, with a firmer sheen.
+    base: "#3f4a58", hi: "#d2dde8", hiOp: 0.24, sh: "#05070a", shOp: 0.5,
+    edge: INK, edgeOp: 1, edgeW: 0.5, crease: INK, creaseOp: 0.42,
+    pad: "#4a5665", seam: "#a9b7c5", seamOp: 0.34, plateHi: "#eef6ff", plateHiOp: 0.42,
     sleeve: "url(#vmSleeve)", cuff: "url(#vmCuff)",
   },
   real: {

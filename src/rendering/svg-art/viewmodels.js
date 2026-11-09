@@ -15,6 +15,7 @@ import { getLayerImage, layerBaked, scaleBucket } from "./raster.js";
 import { createScene, mix, INK } from "./viewmodel/geom.js";
 import { createHandArt, HAND_DEFS } from "./viewmodel/hands.js";
 import { GLOVE_DEFS, STANDARD_GLOVE, fpGlove } from "./viewmodel/gloves.js";
+import { fpSleeve, STANDARD_FRAME } from "./viewmodel/sleeves.js";
 import { WEAPON_MODELS, MATERIALS } from "./viewmodel/weapons.js";
 import { activeFinish, finishKey } from "../../data/weapon-skins.js";
 import { frameGlove } from "../../data/wardrobe-themes/index.js";
@@ -111,11 +112,37 @@ function sceneSkin(finish) {
  * options, and passed to prefetchViewmodel, so warm-ups bake the same hands.
  */
 export function viewmodelLook(character) {
-  return { glove: frameGlove(pieceOf(character, "frame").id), skinTone: pieceOf(character, "skinTone").color, palette: pieceOf(character, "color") };
+  const frame = pieceOf(character, "frame").id;
+  return { glove: frameGlove(frame), frame, skinTone: pieceOf(character, "skinTone").color, palette: pieceOf(character, "color") };
 }
 
-/** The resolved glove (viewmodel/gloves.js) for a look's options; the stock glove without one. */
-const gloveOf = (look) => (look?.glove ? fpGlove(look.glove, look.skinTone, look.palette) : STANDARD_GLOVE);
+const STOCK_SLEEVE = fpSleeve(STANDARD_FRAME);
+const hands = new Map(); // glove key | sleeve key -> hands
+/**
+ * The suit's hands for a look's options: its glove (viewmodel/gloves.js) and
+ * its frame's sleeve (viewmodel/sleeves.js), as one record with the glove's
+ * tones, `sleeve` and a bake `key`. The stock glove on the issued sleeve in
+ * the default palette adds nothing to the key.
+ */
+function gloveOf(look) {
+  const glove = look?.glove ? fpGlove(look.glove, look.skinTone, look.palette) : STANDARD_GLOVE;
+  const sleeve = fpSleeve(look?.frame ?? STANDARD_FRAME, look?.skinTone, look?.palette);
+  if (sleeve === STOCK_SLEEVE || sleeve.key === STOCK_SLEEVE.key) {
+    return glove === STANDARD_GLOVE ? STANDARD_HANDS : hand(glove, STOCK_SLEEVE);
+  }
+  return hand(glove, sleeve);
+}
+function hand(glove, sleeve) {
+  const key = sleeve === STOCK_SLEEVE ? glove.key : `${glove.key}|${sleeve.key}`;
+  let h = hands.get(key);
+  if (!h) {
+    h = Object.freeze({ ...glove, key, sleeve });
+    hands.set(key, h);
+    capCache(hands, 16);
+  }
+  return h;
+}
+const STANDARD_HANDS = Object.freeze({ ...STANDARD_GLOVE, sleeve: STOCK_SLEEVE });
 
 /**
  * The viewmodel for weapon `id` in `pose`, wearing `finish` (by default the
@@ -129,7 +156,7 @@ const gloveOf = (look) => (look?.glove ? fpGlove(look.glove, look.skinTone, look
  * rest of the weapons' bitmaps as they are. The stock glove adds nothing to
  * any key, so its bitmaps are the ones it always had.
  */
-function build(id, accent, pose, tier = "hi", real = false, finish = activeFinish(id), glove = STANDARD_GLOVE) {
+function build(id, accent, pose, tier = "hi", real = false, finish = activeFinish(id), glove = STANDARD_HANDS) {
   const base = `${id}|${accent}|${pose}|${tier}|${real ? "r" : "m"}|${finishKey(finish)}`;
   const key = glove.key ? `${base}|${glove.key}` : base;
   let vm = built.get(key);
@@ -144,6 +171,7 @@ function build(id, accent, pose, tier = "hi", real = false, finish = activeFinis
   const sc = createScene(model.cams[pose], finish?.energy ?? accent, { real, skin: sceneSkin(finish) });
   sc.detailPx = tier === "lo" ? 2 : 4;
   sc.glove = glove;
+  sc.sleeve = glove.sleeve;
   const info = model.build(sc, createHandArt(sc), pose);
   const layers = [];
   for (const name of LAYERS) {
@@ -181,7 +209,7 @@ let warmGlove = "";
  * art. Queued, as any prefetch: on an art style change they used to decode
  * at once, a weapon a frame, each frame 50-80 ms.
  */
-function warmStep(accent, px, tier, real, owned = null, glove = STANDARD_GLOVE) {
+function warmStep(accent, px, tier, real, owned = null, glove = STANDARD_HANDS) {
   // A new suit's gloves are new hand bitmaps for every weapon: warm them all again.
   if (!warmQueue || warmReal !== real || warmGlove !== glove.key) {
     warmQueue = Object.keys(WEAPON_MODELS).flatMap((id) => [[+id, "hip"], [+id, "ads"]]);

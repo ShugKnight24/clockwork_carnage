@@ -26,12 +26,17 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
 - **Soft locks.** Fixed two: the Foundry's sentry staying silent after a retry (II-7), and a collapse walling you into a side room (IV-1) (#20).
 - **Hitches.** The station arrival and level starts no longer re-upload the wall art or build the lamp field mid-play (#20).
 - **Prologue.** Calibration no longer leaves you endless stamina when you step off the pad mid-reading; the Supervisor opens the range door instead of walking through it; skipping the locker room's lines no longer leaves most of the squad standing at their lockers.
-- **Wardrobe themes.** Eight themed sets join the Field Issue suit, each with its own frame, helmet, shoulders and glove: Exo-Frame, Frontier Marshal, Ronin, Horologist, Neon Runner, Abyssal Diver, Void Ranger and Chronomancer. Pieces mix freely across sets, and they unlock across the acts.
+- **Wardrobe themes.** Eight themed sets join the Field Issue suit, each with its own frame, helmet, shoulders and glove: Exo-Frame, Frontier Marshal, Ronin, Horologist, Neon Runner, Abyssal Diver, Void Ranger and Chronomancer. Pieces mix freely across sets, and they unlock across the acts (#26).
   - **Creator.** Pieces are grouped by theme with one-tap sets. Hair colour is picked apart from the cut. New Eyewear and Face slots (shades, an eyepatch, a monocle, war paint in a colour you pick, a cigar, piercings, a beard and more). A mouth expression shows on bare faces and on the LED Mask. The canvas creator draws its preview from the same rig as the showroom.
   - **Hands.** Every hand is drawn from one posed rig, in the glove its suit names, and the first-person hands wear that glove too: its material and cuff, with bare fingertips for fingerless gloves.
   - **Do-Rag.** Eyewear and face items now show under it. It takes a headset, but nothing that mounts on a helmet shell.
   - **Gunslinger** fires 10% faster instead of 10% slower.
   - **Saves** store every look by piece id, so new pieces never shuffle an old look. Saves from earlier builds keep their look.
+- **First-person hands, rebuilt** (#26).
+  - **A jointed hand rig.** Each finger has three joints and wraps round the grip it holds; the trigger finger curls round the front of the grip onto the trigger, and the thumb lies along the grip. On a pistol the web of the hand rides up the back strap, so the thumb rises out of the hand.
+  - **Guns at the hip** point down the room where you shoot, turned in only a little; long guns sit higher, so you see the hand wrapped round the grip and the support hand under the handguard.
+  - **Arms bend at the elbow,** with the upper arm running back to the shoulder, and stay put while the gun moves.
+  - **Sleeves for every suit,** and gloves are one piece with their cuff: snug at the wrist, opening over the sleeve. The Field glove reads apart from the gun it holds.
 - **Only gear you can see counts.** A piece your look keeps but does not draw gives no stats:
   - shoulders on a frame that wears none (the Operator frame no longer counts shoulder stats);
   - a visor on a helmet that has no visor (the Cockpit and the other visorless helmets ignore visor stats);
