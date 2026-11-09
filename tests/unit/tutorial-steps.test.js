@@ -266,3 +266,16 @@ describe("the Supervisor's routes", () => {
     expect(suitUp.indexOf('openDoors(g, "door2")')).toBeLessThan(suitUp.indexOf('supWalk(g, "ahead")'));
   });
 });
+
+// Timers are set on the step's clock, which starts again at every step.
+describe("the prologue's timers across a step change", () => {
+  it("still fire their delay after they were set, not on the old step's clock", async () => {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const t = new TutorialSystem({ player: { x: 0, y: 0 }, entities: [], keys: {}, audio: {} });
+    t.clock = 94;
+    t._timers.push({ at: t.clock + 0.6, fn: () => {} });
+    t._rebaseTimers();
+    t.clock = 0;
+    expect(t._timers[0].at).toBeCloseTo(0.6);
+  });
+});

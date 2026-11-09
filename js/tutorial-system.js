@@ -2507,12 +2507,22 @@ export class TutorialSystem {
     return { index: b, ...PROLOGUE_BEATS[b] };
   }
 
+  /**
+   * The step's clock starts again from 0; what is still to happen
+   * (setTimeoutGame) keeps its time from now. Set on the last step's clock, a
+   * squad told to move out as you skipped its lines walked a whole scene late.
+   */
+  _rebaseTimers() {
+    for (const q of this._timers) q.at -= this.clock;
+  }
+
   _enter(index) {
     const g = this.game;
     // The two steps before this one: their lines may still finish.
     this._recentSteps = [this.step, ...(this._recentSteps ?? [])].slice(0, 2);
     this.step = index;
     this.stepTime = performance.now();
+    this._rebaseTimers();
     this.clock = 0;
     this.c = { kills: 0, heads: 0, aimedKills: 0, shotgunKills: 0, chronoKills: 0, slides: 0, dashes: 0 };
     // What the last step called in and hasn't come yet stays away.
@@ -4242,6 +4252,7 @@ export class TutorialSystem {
     this.lockerLight(g, false);
     this.step = TUTORIAL_SANDBOX_STEP;
     this.stepTime = performance.now();
+    this._rebaseTimers();
     this.clock = 0;
     this._postCard(TUTORIAL_SANDBOX_STEP);
     g.objectiveWaypoint = null;
