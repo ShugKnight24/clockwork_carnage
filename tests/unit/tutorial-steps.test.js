@@ -203,3 +203,36 @@ describe("certification day", () => {
     expect(gradeTrial(combat, combat.par + RELOAD_CREDIT, 0.7, { reloads: 1 })).toBe("B");
   });
 });
+
+// The rig holds each bar at its part's reading only while that part runs.
+describe("the calibration's stamina bar", () => {
+  async function calibrating() {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const { RIG_AT } = await import("../../src/data/levels/rooms/rnd.js");
+    const player = { x: RIG_AT.x, y: RIG_AT.y, angle: 0, stamina: 0, maxStamina: 100, chronoEnergy: 0, maxChronoEnergy: 100 };
+    const game = { player, entities: [], keys: {}, deltaTime: 1 / 60, audio: { stopSpeech() {}, playSound() {} } };
+    const t = new TutorialSystem(game);
+    t.step = PROLOGUE_STEPS.findIndex((s) => s.id === "calibrate");
+    t.c = {};
+    for (const m of ["toStation", "place", "say", "flicker"]) t[m] = () => {};
+    t.logic.enter(t, game);
+    return { t, game, player, RIG_AT };
+  }
+
+  it("fills with the frame, and is the cadet's own once the frame is done", async () => {
+    const { t, game, player, RIG_AT } = await calibrating();
+    for (let i = 0; i < 60; i++) t.logic.update(t, game);
+    expect(player.stamina).toBeGreaterThan(30);
+    expect(player.stamina).toBeLessThan(70);
+    for (let i = 0; i < 90; i++) t.logic.update(t, game);
+    expect(t.c.part).toBe("eyes");
+    expect(player.stamina).toBe(100);
+
+    // Through the anchor, off the pad: what is spent stays spent.
+    t.c.part = "anchor";
+    player.x = RIG_AT.x + 3;
+    player.stamina = 12;
+    for (let i = 0; i < 30; i++) t.logic.update(t, game);
+    expect(player.stamina).toBe(12);
+  });
+});

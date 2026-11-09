@@ -1041,6 +1041,7 @@ const LOGIC = {
         if (on && still) c.read += dt;
         if (c.read >= CALIB_FRAME_TIME) {
           c.part = "eyes";
+          p.stamina = p.staminaCap ?? p.maxStamina;
           // What she hadn't got to about the last part is behind you now.
           t.script = t.script.filter((q) => q.step !== t.step);
           t.say(CALIB_LINES.eyes);
@@ -1086,9 +1087,11 @@ const LOGIC = {
         }
       }
       // The suit coming online: each bar is its part's reading, held there
-      // (no regen, no spending) until the part is done.
+      // (no regen, no spending) until the part is done. Then it is yours: a
+      // frame held full through the eyes and the anchor was stamina you could
+      // sprint on forever, off the pad, until the anchor took.
       const k = calibParts(c);
-      p.stamina = (p.staminaCap ?? p.maxStamina) * k.frame;
+      if (c.part === "frame") p.stamina = (p.staminaCap ?? p.maxStamina) * k.frame;
       p.chronoEnergy = p.maxChronoEnergy * k.anchor;
       p.chronoActive = false;
       if (c.rig) {
