@@ -2484,9 +2484,13 @@ export class Game {
     // Weapon kick recovery (framerate-invariant)
     this.player.weaponKick *= decay(0.85, dt);
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
-    // Camera punch recovery (faster than weapon kick — camera snaps back)
-    this.player.cameraPunch *= decay(0.78, dt);
+    // The frame's bump settles at the gun's own rate (src/data/weapons.js
+    // `kick.settle`), faster than the gun's shove: the camera snaps back.
+    const settle = decay(this.player.getWeaponDef?.()?.kick?.settle ?? 0.78, dt);
+    this.player.cameraPunch *= settle;
     if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
+    this.player.kickSide = (this.player.kickSide || 0) * settle;
+    if (Math.abs(this.player.kickSide) < 0.001) this.player.kickSide = 0;
   }
 
   /** Slow-mo (last kill) outranks Chrono Shift; both drain here. */

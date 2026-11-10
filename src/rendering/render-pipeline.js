@@ -8,7 +8,7 @@ import { renderPostFX as _renderPostFX } from "./postfx.js";
 import { drawBlackout } from "../ui/tutorial-ui.js";
 import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
-import { effectiveAimFov, updateSprintFov, sceneShiftPx, aimZoom, reticlePoint, currentBarH } from "../systems/aim.js";
+import { effectiveAimFov, updateSprintFov, sceneShiftPx, aimZoom, reticlePoint, currentBarH, getAimBlend } from "../systems/aim.js";
 import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
@@ -541,6 +541,68 @@ export function renderFrame(game) {
   if (profiling) game.profiler.currentPhases.overlays = performance.now() - _tOvr0;
 }
 
+/** frameOffset's and viewmodelOffset's results, reused every frame: read them in the frame they are made. */
+const _offset = { x: 0, y: 0, roll: 0 };
+const _gunOffset = { x: 0, y: 0, roll: 0 };
+
+/**
+ * How far this frame is moved and rolled (scene-canvas px, radians): screen
+ * shake, view bob and a shot's kick. The world is drawn moved by it and the
+ * reticle with it, so neither one moves under the other and the aim (which
+ * never reads it) stays on the same world point.
+ *
+ * Shake is a sampled sine at incommensurate frequencies rather than a fresh
+ * Math.random() per frame. Per-frame random reads as static buzz; a sampled
+ * waveform reads as a physical camera knock. Amplitude is quadratic in
+ * trauma, so light hits barely register and heavy ones punch. The kick's bump
+ * is not shake: it applies with the shake setting off.
+ */
+export function frameOffset(game, h) {
+  let x = 0,
+    y = 0,
+    roll = 0;
+  const p = game.player;
+  if (game.settings.screenShake && game.screenShake > 0.5) {
+    const trauma = Math.min(1, game.screenShake / 14);
+    const amp = trauma * trauma * 14;
+    const st = game.time * 0.001;
+    x = Math.sin(st * 47.3) * amp * 0.85;
+    // Recoil-biased: the vertical component keeps an upward push.
+    y = Math.sin(st * 61.7) * amp * 0.5 - trauma * amp * 0.45;
+    roll = Math.sin(st * 38.1) * trauma * trauma * 0.012;
+  }
+
+  // View bob when sprinting/dashing (whole screen sway)
+  if (game.settings.weaponBob && (p.isSprinting || p.isDashing)) {
+    const bobIntensity = p.isDashing ? 6 : 3;
+    const bobT = p.weaponBob * 1.1;
+    x += Math.sin(bobT) * bobIntensity;
+    y += Math.sin(bobT * 2) * bobIntensity * 0.4;
+  }
+
+  // The kick's bump: up (negative y) and a little aside (src/data/weapons.js).
+  x += (p.kickSide || 0) * h * 0.12;
+  y += (p.cameraPunch || 0) * -h * 0.12;
+  _offset.x = x;
+  _offset.y = y;
+  _offset.roll = roll;
+  return _offset;
+}
+
+/**
+ * How much of the frame's move the gun rides: none at the hip, where it has
+ * its own shove and sway, all of it aimed, so the iron sight stays on the
+ * sight dot the reticle draws (both moved alike). Same scratch rule as
+ * frameOffset.
+ */
+export function viewmodelOffset(off, blend) {
+  const b = Math.max(0, Math.min(1, blend));
+  _gunOffset.x = off.x * b;
+  _gunOffset.y = off.y * b;
+  _gunOffset.roll = off.roll * b;
+  return _gunOffset;
+}
+
 /**
  * The first-person view of the current level on the game canvas: the 3D
  * scene, motes and tracers, horizon band, vignette, Chronos screen effects,
@@ -549,39 +611,25 @@ export function renderFrame(game) {
  * leaves the weapon out (`weapon: false`) while a card covers the picture.
  */
 function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
-  // ── Screen shake ─────────────────────────────────────────────────────────
-  // Driven by sampled sine at incommensurate frequencies rather than a fresh
-  // Math.random() per frame. Per-frame random reads as static buzz; a sampled
-  // waveform reads as a physical camera knock. Amplitude is quadratic in
-  // trauma, so light hits barely register and heavy ones punch.
-  let shakeX = 0,
-    shakeY = 0;
-  if (game.settings.screenShake && game.screenShake > 0.5) {
-    const trauma = Math.min(1, game.screenShake / 14);
-    const amp = trauma * trauma * 14;
-    const st = game.time * 0.001;
-    shakeX = Math.sin(st * 47.3) * amp * 0.85;
-    // Recoil-biased: the vertical component keeps an upward push.
-    shakeY = Math.sin(st * 61.7) * amp * 0.5 - trauma * amp * 0.45;
-    game._shakeRoll = Math.sin(st * 38.1) * trauma * trauma * 0.012;
-  } else {
-    game._shakeRoll = 0;
+  // Shake, view bob and a shot's kick move the whole frame: the world here,
+  // the reticle on the HUD canvas by the same offset (src/ui/hud-shared.js
+  // moveWithFrame), so what sits under the reticle never changes.
+  const off = frameOffset(game, h);
+  game._frameOffset = off;
+  if (game.renderer) game.renderer.frameOffset = off;
+  // Moved, the picture leaves its edge uncovered; the canvas is not cleared
+  // between frames, so that strip would show the last frame. Paint it dark.
+  const moved = off.x || off.y || off.roll;
+  if (moved) {
+    ctx.fillStyle = "#020610";
+    ctx.fillRect(0, 0, w, h);
   }
-
-  // View bob when sprinting/dashing (whole screen sway)
-  if (game.settings.weaponBob && (game.player.isSprinting || game.player.isDashing)) {
-    const bobIntensity = game.player.isDashing ? 6 : 3;
-    const bobT = game.player.weaponBob * 1.1;
-    shakeX += Math.sin(bobT) * bobIntensity;
-    shakeY += Math.sin(bobT * 2) * bobIntensity * 0.4;
-  }
-
   ctx.save();
-  ctx.translate(shakeX, shakeY);
+  ctx.translate(off.x, off.y);
   // A touch of roll sells the knock as a camera, not a sliding image.
-  if (game._shakeRoll) {
+  if (off.roll) {
     ctx.translate(w / 2, h / 2);
-    ctx.rotate(game._shakeRoll);
+    ctx.rotate(off.roll);
     ctx.translate(-w / 2, -h / 2);
   }
 
@@ -602,9 +650,8 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   const profiling = !!game.profiling;
   const _tRay0 = profiling ? performance.now() : 0;
   const p = game.player;
-  // The look up or down, a slide and camera punch (negative = kick upward)
-  // shift the view; the fire path aims with the same shift (sceneShiftPx in
-  // aim.js).
+  // The look up or down and a slide shift the view; the fire path aims with
+  // the same shift (sceneShiftPx in aim.js).
   // The menu showcase lifts its horizon above the settings bottom sheet.
   const yShift = sceneShiftPx(p, h) + Math.round((game.showcasePitch || 0) * h);
   updateSprintFov(p, game.deltaTime);
@@ -735,7 +782,20 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   // Draw weapon (hidden in third person)
   const _tWpn0 = profiling ? performance.now() : 0;
   if (weapon && game.settings.viewMode === 0) {
+    // Aimed, the gun rides the frame's move with the reticle (viewmodelOffset).
+    const gun = viewmodelOffset(off, getAimBlend());
+    const ride = gun.x || gun.y || gun.roll;
+    if (ride) {
+      ctx.save();
+      ctx.translate(gun.x, gun.y);
+      if (gun.roll) {
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(gun.roll);
+        ctx.translate(-w / 2, -h / 2);
+      }
+    }
     game.drawWeapon(ctx, w, h);
+    if (ride) ctx.restore();
   }
 
   // Draw player silhouette in third-person mode
@@ -843,7 +903,8 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
 function magnifyRows(game, ctx, w, h) {
   const zoom = aimZoom();
   if (!(zoom > 1.001)) return;
-  const ry = reticlePoint(w, h, currentBarH(game), game.player).y;
+  // The reticle's row as drawn this frame: moved with the frame (frameOffset).
+  const ry = reticlePoint(w, h, currentBarH(game), game.player).y + (game._frameOffset?.y || 0);
   const sy = ry - ry / zoom;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);

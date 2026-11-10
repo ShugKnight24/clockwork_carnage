@@ -360,10 +360,11 @@ export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, 
   const R = Math.min(w, h) * 0.44;
   ctx.save();
   ctx.globalAlpha *= alpha;
-  // The tube: black outside the lens.
+  // The tube: black outside the lens, past the edges, so a frame moved by a
+  // shot's kick (src/ui/hud-shared.js moveWithFrame) shows no gap.
   ctx.fillStyle = ink;
   ctx.beginPath();
-  ctx.rect(0, 0, w, h);
+  ctx.rect(-w, -h, w * 3, h * 3);
   ctx.arc(cx, cy, R, 0, Math.PI * 2, true);
   ctx.fill("evenodd");
   // The glass: a faint tint, and the rim darkening into the tube.

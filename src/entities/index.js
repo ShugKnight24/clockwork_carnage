@@ -81,7 +81,10 @@ export class Player {
     this.weaponSwayY = 0;
     this.weaponSwayTargetX = 0;
     this.weaponSwayTargetY = 0;
-    this.cameraPunch = 0; // Vertical camera recoil (radians); decays each frame
+    // A shot's kick: the frame's bump up and aside (radians); decays each
+    // frame. Visual only: it moves the drawn frame, never the aim.
+    this.cameraPunch = 0;
+    this.kickSide = 0;
     this.hurtTime = 0;
     this.alive = true;
     // Sprint & Dash

@@ -83,7 +83,10 @@ describe("the hit ray lands on the sight", () => {
             const p = playerWith(wep, { isAiming: aimed, crouchBlend: crouch, aimOffsetX: aimed ? 0 : 0.1, aimOffsetY: -0.12 });
             settle(p);
             expect(getAimBlend()).toBe(aimed ? 1 : 0);
-            p.cameraPunch = 0.03; // mid-recoil: the view and the shot kick together
+            // Mid-kick: the kick moves the whole frame, never the scene's shift or the aim.
+            const still = sceneShiftPx(p, H);
+            p.cameraPunch = 0.03;
+            expect(sceneShiftPx(p, H)).toBe(still);
             const { yaw, pitch } = aimAngles(p, effectiveAimFov(p, settings), { h: H, barH, yShift: sceneShiftPx(p, H) });
             const hit = project(p, yaw, pitch, barH);
             const sight = reticlePoint(W, H, barH, p);

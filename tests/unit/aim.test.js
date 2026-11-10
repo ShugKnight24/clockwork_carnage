@@ -6,6 +6,8 @@
  *      reticle offset the projection allows
  *   2. fire-from-player-origin matches hit-test origin (no offset drift)
  *   3. aiming in from cover waits for the pop-out
+ *   4. a shot's kick never moves where the next round goes (the bump moves
+ *      the drawn frame, reticle and all: frame-kick.test.js)
  * Centred look itself (the only grid aim) is in centred-aim.test.js.
  */
 import { describe, it, expect } from "vitest";
@@ -16,6 +18,7 @@ import {
   updateAdsFov,
   resetAdsFov,
   getAimBlend,
+  aimAnglesForGame,
 } from "../../src/systems/aim.js";
 import { rayEnemyHit } from "../../src/systems/combat.js";
 
@@ -174,4 +177,26 @@ describe("aim — from cover, the sights wait for the pop-out", () => {
     expect(getAimBlend()).toBeGreaterThan(0);
     resetAdsFov();
   });
+});
+
+describe("aim — kick moves the frame, never the aim", () => {
+  const aimWith = (over) => {
+    const player = makePlayer({ angle: 0.4, aimOffsetY: -0.05, ...over });
+    return aimAnglesForGame({ player, settings: { fov: 70 }, canvas: { height: 720 }, hudH: 720 });
+  };
+
+  for (const [label, over] of [
+    ["from the hip", {}],
+    ["aimed", { isAiming: true }],
+    ["peeking from cover", { cover: { peek: 1 } }],
+    ["aimed from cover", { isAiming: true, cover: { peek: 1 } }],
+  ]) {
+    it(`cameraPunch does not change where the round goes (${label})`, () => {
+      resetAdsFov();
+      const still = aimWith({ ...over, cameraPunch: 0, kickSide: 0 });
+      const kicked = aimWith({ ...over, cameraPunch: 0.05, kickSide: 0.012 });
+      expect(Math.abs(kicked.yaw - still.yaw)).toBeLessThan(1e-9);
+      expect(Math.abs(kicked.pitch - still.pitch)).toBeLessThan(1e-9);
+    });
+  }
 });

@@ -397,16 +397,56 @@ function drawAimReticle(ctx, game, cx, cy, barH = 0) {
   }
 }
 
+/** frameShift's result, reused every frame: read it where it is made. */
+const _shift = { x: 0, y: 0 };
+
+/** This frame's move (moveWithFrame) without the roll, in a w×h HUD's pixels. */
+export function frameShift(game, w, h) {
+  const off = game._frameOffset;
+  _shift.x = off ? (off.x * w) / (game.canvas?.width || w) : 0;
+  _shift.y = off ? (off.y * h) / (game.canvas?.height || h) : 0;
+  return _shift;
+}
+
+/**
+ * Move a w×h HUD the way the world was moved this frame (game._frameOffset,
+ * set by src/rendering/render-pipeline.js renderWorld in the scene canvas's
+ * pixels): shake, view bob and a shot's kick. The HUD canvas is CSS-sized and
+ * the scene canvas render-sized, so the offset is scaled across; the roll
+ * turns about the same point of the screen, the middle.
+ */
+export function moveWithFrame(ctx, game, w, h) {
+  const off = game._frameOffset;
+  if (!off || (!off.x && !off.y && !off.roll)) return;
+  const shift = frameShift(game, w, h);
+  ctx.translate(shift.x, shift.y);
+  if (off.roll) {
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(off.roll);
+    ctx.translate(-w / 2, -h / 2);
+  }
+}
+
 /**
  * The centre of the view: crosshair (or sights/scope), the reload bar under
- * it, the power-cell chip and the hit marker, in that order.
+ * it, the power-cell chip and the hit marker, in that order. All but the chip
+ * (a corner plate) move with the frame, so the reticle stays on the world
+ * point the round goes to while the frame shakes or kicks.
  */
 export function drawReticleStack(ctx, game, s, w, h, barH) {
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
+  ctx.save();
+  // Kept to the view: the scope's tube overshoots the edges so a moved frame
+  // shows no gap, and must not black out the HUD bar below.
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h - barH);
+  ctx.clip();
+  moveWithFrame(ctx, game, w, h);
   drawAimReticle(ctx, game, chx, chy, barH);
   drawReloadHud(ctx, game, chx, chy);
-  drawPowerCellChip(ctx, s);
   drawHitMarker(ctx, s, chx, chy);
+  ctx.restore();
+  drawPowerCellChip(ctx, s);
 }
 
 /**

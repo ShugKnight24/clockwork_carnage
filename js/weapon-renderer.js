@@ -228,7 +228,8 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const bobMulY = isAiming ? 1.5 : isDashing ? 12 : isSprinting ? 10 : 5;
   const bobX = Math.sin(weaponBob) * bobMulX;
   const bobY = Math.abs(Math.cos(weaponBob)) * bobMulY;
-  const kickY = weaponKick * 40;
+  // The gun's shove back into the hand (src/data/weapons.js `kick.shove`).
+  const kickY = weaponKick * 40 * (wep.kick?.shove ?? 1);
   // Crouching rides the weapon lower and cants it in; it fades out on ADS so
   // the sights still reach the reticle.
   const crouch = (opts.crouchBlend || 0) * (isAiming ? 0 : 1);

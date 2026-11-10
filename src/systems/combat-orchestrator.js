@@ -58,8 +58,8 @@ export function falloffMult(wep, dist) {
   return 1 + (f[2] - 1) * t;
 }
 
-/** Vertical recoil in radians. */
-const CAMERA_PUNCH = [0.015, 0.03, 0.015, 0.04, 0.025, 0.035, 0.02, 0.025];
+/** A gun without its own `kick` (src/data/weapons.js): a light one. */
+const LIGHT_KICK = { view: 0.015, side: 0, settle: 0.78, shove: 1, shake: 2 };
 const TRACER_COLORS = { 0: "255,210,80", 1: "255,180,80", 4: "255,160,40", 5: "120,220,255", 6: "100,255,120" };
 
 export function fireWeapon(game) {
@@ -175,16 +175,15 @@ export function fireWeapon(game) {
   // The next shot's hip cone opens a little (src/systems/aim.js bloom).
   noteShotBloom(wep);
 
-  game.screenShake = Math.max(
-    game.screenShake,
-    wep.id === 3 ? 6 : wep.id === 1 ? 4 : 2,
-  );
-  // Camera punch — heavier weapons kick harder. ADS halves it.
+  // The kick, per gun: a shake, and a bump of the whole frame up and a
+  // little aside (frameOffset in src/rendering/render-pipeline.js). The
+  // reticle moves with the world, so the next round still goes where it sits.
+  // ADS halves the bump.
+  const kick = wep.kick || LIGHT_KICK;
+  game.screenShake = Math.max(game.screenShake, kick.shake);
   const punchMul = game.player.isAiming ? 0.5 : 1;
-  game.player.cameraPunch = Math.max(
-    game.player.cameraPunch,
-    (CAMERA_PUNCH[wep.id] || 0.015) * punchMul,
-  );
+  game.player.cameraPunch = Math.max(game.player.cameraPunch, kick.view * punchMul);
+  game.player.kickSide = (Math.random() * 2 - 1) * kick.side * punchMul;
   // Gamepad haptics — weapon fire
   game.gamepad?.vibrateLight?.();
 }

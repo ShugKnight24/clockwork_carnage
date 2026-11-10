@@ -29,6 +29,12 @@
 // (src/systems/aim.js): holding the trigger fires inside the delay and
 // sprays, tapping slower than it lets the cone close between shots. Aimed
 // shots add none, and the bloom fades out as the sights come up.
+// Kick: `kick: { view, side, settle, shove, shake }` is felt, never aimed. A
+// shot bumps the whole frame, world and reticle together, `view` radians up
+// and up to `side` either way (halved aimed), settling at `settle` (the share
+// left each 1/60 s: higher is slower, heavier); the gun shoves back into the
+// hand by `shove` and the screen shakes by `shake` (src/rendering/
+// render-pipeline.js frameOffset). Nothing under the reticle moves.
 // `adsZoom` is the sight's magnification and `adsSens` the look speed while
 // aimed. A `scope` swaps the sights for the sniper scope (src/ui/crosshair.js
 // drawScope); `headshotMult` multiplies a head zone's damage on top of the
@@ -54,6 +60,7 @@ export const WEAPONS = [
     spread: 0.012,
     adsSpread: 0,
     bloom: { perShot: 0.008, max: 0.03, recover: 0.12, delay: 0.35 },
+    kick: { view: 0.02, side: 0.004, settle: 0.6, shove: 1.0, shake: 1.5 },
     adsZoom: 1.25,
     range: 50,
     type: "hitscan",
@@ -78,6 +85,7 @@ export const WEAPONS = [
     spread: 0.035,
     adsSpread: 0.02,
     bloom: { perShot: 0.004, max: 0.012, recover: 0.05, delay: 0.7 },
+    kick: { view: 0.05, side: 0.012, settle: 0.8, shove: 1.8, shake: 5 },
     adsZoom: 1.15,
     range: 22,
     falloff: [10, 20, 0.5],
@@ -100,6 +108,7 @@ export const WEAPONS = [
     spread: 0.014,
     adsSpread: 0,
     bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
+    kick: { view: 0.015, side: 0, settle: 0.78, shove: 1, shake: 2 },
     adsZoom: 1.5,
     range: 100,
     type: "hitscan",
@@ -121,6 +130,7 @@ export const WEAPONS = [
     spread: 0.006,
     adsSpread: 0,
     bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
+    kick: { view: 0.04, side: 0, settle: 0.78, shove: 1, shake: 6 },
     adsZoom: 1.3,
     range: 100,
     type: "projectile",
@@ -146,6 +156,7 @@ export const WEAPONS = [
     spread: 0.15,
     adsSpread: 0.11,
     bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
+    kick: { view: 0.025, side: 0, settle: 0.78, shove: 1, shake: 2 },
     adsZoom: 1.1,
     range: 10,
     falloff: [3, 7, 0.15],
@@ -176,6 +187,7 @@ export const WEAPONS = [
     spread: 0.06,
     adsSpread: 0,
     bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
+    kick: { view: 0.035, side: 0, settle: 0.78, shove: 1, shake: 2 },
     adsZoom: 4,
     adsSens: 0.75,
     scope: true,
@@ -204,6 +216,7 @@ export const WEAPONS = [
     spread: 0.02,
     adsSpread: 0,
     bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
+    kick: { view: 0.02, side: 0, settle: 0.78, shove: 1, shake: 2 },
     adsZoom: 1.25,
     range: 60,
     type: "projectile",
@@ -228,6 +241,7 @@ export const WEAPONS = [
     spread: 0.01,
     adsSpread: 0,
     bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
+    kick: { view: 0.025, side: 0, settle: 0.78, shove: 1, shake: 2 },
     adsZoom: 1.3,
     range: 40,
     type: "projectile",

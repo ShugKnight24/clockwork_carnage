@@ -181,6 +181,10 @@ export class Renderer {
     this.useWebGL = false;
     this._renderMode = renderMode;
     this._initGL(renderMode);
+    // How far the frame is moved this frame (src/rendering/render-pipeline.js
+    // frameOffset). The CPU floor and ceiling go down with putImageData,
+    // which ignores the context's transform, so they are placed by it here.
+    this.frameOffset = null;
   }
 
   /**
@@ -902,7 +906,19 @@ export class Renderer {
       for (; halfH - p >= 0; p += 2) this._deckRowModern(R, ceilK / p, -1, halfH - 1 - p);
     }
 
-    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+    this._putDeck();
+  }
+
+  /**
+   * Put the CPU floor/ceiling buffer down moved with the frame, as the walls
+   * and sprites drawn through the context's transform are. The shake's roll
+   * (up to ~0.012 rad in heavy shake, a few pixels at the screen edges) is not
+   * applied: putImageData cannot rotate, and the slide tilt never reached the
+   * deck either.
+   */
+  _putDeck() {
+    const off = this.frameOffset;
+    this.ctx.putImageData(this._floorCeilBuffer, Math.round(off?.x || 0), Math.round(off?.y || 0));
   }
 
   /**
@@ -1160,7 +1176,7 @@ export class Renderer {
       for (let x = 0; x < w; x++) buf32[hi + x] = fogPacked;
     }
 
-    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+    this._putDeck();
   }
 
   /**

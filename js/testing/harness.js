@@ -331,10 +331,11 @@ function aimAtZone(game, e, zone) {
   const h = game.canvas?.height || 1;
   const barH = currentBarH(game);
   const tanPitch = y / d;
-  // Through the recoil's kick too (sceneShiftPx, less the look it is
-  // setting): the view a player aims at is the kicked one.
-  const kick = game.world ? 0 : sceneShiftPx(p, h) / h + (p.lookShiftY || 0);
-  p.lookShiftY = barH / (2 * h) + kick - tanPitch;
+  // Through the scene's own shift too (sceneShiftPx: a slide's lean, less
+  // the look it is setting). A shot's kick is not in it: it moves the whole
+  // frame, reticle and all, so the aim never sees it.
+  const shift = game.world ? 0 : sceneShiftPx(p, h) / h + (p.lookShiftY || 0);
+  p.lookShiftY = barH / (2 * h) + shift - tanPitch;
 }
 
 /**

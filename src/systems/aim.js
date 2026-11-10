@@ -219,19 +219,20 @@ export function effectiveAimFov(player, settings = {}) {
 const SLIDE_PITCH = 0.035;
 
 /**
- * Vertical shift (canvas px) the raycaster draws the world with: the recoil
- * punch, and the slight forward pitch of a slide. render-pipeline.js draws
+ * Vertical shift (canvas px) the raycaster draws the world with: the slight
+ * forward pitch of a slide and the look up and down. render-pipeline.js draws
  * with it and the fire path aims with it, so a shot lands where the reticle
  * sits on the shifted view. The stance itself is not a shift: the renderer
- * draws a crouch or a slide from a lower eye (playerEyeZ in physics.js).
+ * draws a crouch or a slide from a lower eye (playerEyeZ in physics.js). A
+ * shot's kick (cameraPunch) is not one either: it bumps the whole frame,
+ * reticle and all (frameOffset in render-pipeline.js), so it never moves the aim.
  */
 export function sceneShiftPx(player, h) {
-  const punch = (player?.cameraPunch || 0) * -h * 0.12;
   // Pitching forward into a slide lifts the horizon a little.
   const lean = (player?.slideBlend || 0) * -h * SLIDE_PITCH;
   // The look up and down (centredLook): the world moves, not the reticle.
   const look = (player?.lookShiftY || 0) * -h;
-  return punch + lean + look;
+  return lean + look;
 }
 
 /** Centred aim's look speed: radians per input unit (a mouse pixel), before the sensitivity settings. */
