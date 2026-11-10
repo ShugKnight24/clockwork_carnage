@@ -599,11 +599,18 @@ function calibParts(c) {
  * north end, the one up close for blind fire, and how often the targets
  * put a round into your cover while you are down behind it.
  */
-const DRILL_TARGETS = [[41.5, 4.5], [46.5, 4.5]];
-const DRILL_BLIND_AT = [43.5, 6.5];
+const DRILL_TARGETS = [[41.5, 4.5], [46.5, 4.5], [38.5, 3.5], [43.5, 3.5], [48.5, 3.5], [50.5, 5.5], [39.5, 5.5]];
+const DRILL_BLIND_AT = [[43.5, 6.5], [41.5, 6.5], [46.5, 7.5]];
+/** The peek part's pairs, taken in turn from DRILL_TARGETS: a new pair each time both go down. */
+const DRILL_PAIRS = [[0, 1], [2, 4], [3, 5], [6, 1], [0, 4], [2, 5]];
 const DRILL_VOLLEY = 1.1;
 /** Blind shots that earn the blind-fire part without a kill: it's about keeping heads down. */
 const DRILL_BLIND_SHOTS = 4;
+
+/** The cover drill's `round`th pair of peek targets. */
+function drillPair(round) {
+  return DRILL_PAIRS[round % DRILL_PAIRS.length].map((i) => DRILL_TARGETS[i]);
+}
 
 /** The range's reload drill: active reloads it wants, and the Supervisor's word on a jam. */
 const RELOAD_GOAL = 2;
@@ -1516,10 +1523,10 @@ const LOGIC = {
         c.retry = 1;
         t.raiseCover(g, "drill");
       }
-      // Rounds fired from cover without the sights up: blind fire.
+      // Rounds fired from cover without the sights up, once the drill asks for them: blind fire.
       const fired = (g.shotsFired || 0) - c.shots;
       c.shots = g.shotsFired || 0;
-      if (fired > 0 && p.cover && !p.isAiming) c.blindShots += fired;
+      if (fired > 0 && c.stage === "blind" && p.cover && !p.isAiming) c.blindShots += fired;
       if (got("shotsBlocked") > 0 && !c.feltIt) {
         c.feltIt = true;
         t.say([["ARIA", "Hear that? That one had your name on it.", "happy"]]);
@@ -1528,15 +1535,17 @@ const LOGIC = {
         g.objectiveWaypoint = DRILL_COVER.first;
         if (got("tookCover") + got("coverDashes") < 1) return false;
         c.stage = "peek";
-        t.spawnTargets(g, "coverDrill", DRILL_TARGETS, 20, "henchman");
+        c.round = 0;
+        t.spawnTargets(g, "coverDrill", drillPair(0), 20, "henchman");
         t.say([["LIN", "They shoot back now. Stay down and it hits the block. Aim to pop up, fire, drop.", "calm"]]);
       } else if (c.stage === "peek") {
         if (got("peekKills") < 2) {
-          if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", DRILL_TARGETS, 20, "henchman");
+          if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", drillPair(++c.round), 20, "henchman");
         } else {
           c.stage = "blind";
+          c.round = 0;
           t.clearTargets(g, "coverDrill");
-          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
+          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT[0]], 10, "henchman");
           c.blindShots = 0;
           c.coverHipKills = 0;
           t.say([["LIN", "Now stay down and don't aim. Just fire. It's wild, but it keeps their heads down.", "excited"]]);
@@ -1545,7 +1554,9 @@ const LOGIC = {
         if (got("blindFireKills") >= 1 || c.coverHipKills >= 1 || c.blindShots >= DRILL_BLIND_SHOTS) {
           c.stage = "dash";
           t.say([["LIN", "Next block, on your left. Look at it and go. Stay low.", "calm"]]);
-        } else if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
+        } else if (t.alive(g, "coverDrill") === 0) {
+          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT[++c.round % DRILL_BLIND_AT.length]], 10, "henchman");
+        }
       } else if (c.stage === "dash") {
         g.objectiveWaypoint = DRILL_COVER.second;
         if (got("coverDashes") >= 1) return true;

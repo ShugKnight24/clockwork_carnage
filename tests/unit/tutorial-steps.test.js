@@ -267,6 +267,71 @@ describe("the Supervisor's routes", () => {
   });
 });
 
+describe("the cover drill", () => {
+  async function drilling() {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const player = { x: 43, y: 10.4, angle: 0, cover: null, isAiming: false };
+    const game = { player, entities: [], keys: {}, deltaTime: 1 / 60, time: 0, shotsFired: 0, coverStats: { tookCover: 0, peekKills: 0, blindFireKills: 0, coverDashes: 0, shotsBlocked: 0 }, audio: {} };
+    const t = new TutorialSystem(game);
+    t.step = PROLOGUE_STEPS.findIndex((s) => s.id === "coverDrill");
+    t.c = {};
+    for (const m of ["raiseCover", "say", "drillVolley"]) t[m] = () => {};
+    t._cover = [[0, 0], [0, 0], [0, 0], [0, 0]];
+    t.logic.enter(t, game);
+    const targets = () => game.entities.filter((e) => e._tutTag === "coverDrill" && e.health > 0).map((e) => `${e.x},${e.y}`);
+    const downAll = () => game.entities.forEach((e) => { if (e._tutTag === "coverDrill") e.health = 0; });
+    return { t, game, player, targets, downAll };
+  }
+
+  it("counts blind fire only once the blind part starts", async () => {
+    const { t, game, player } = await drilling();
+    game.coverStats.tookCover = 1;
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("peek");
+    // Hip shots from cover while the drill still wants peek kills.
+    player.cover = {};
+    game.shotsFired = 3;
+    t.logic.update(t, game);
+    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 0/4");
+    game.coverStats.peekKills = 2;
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("blind");
+    game.shotsFired = 5;
+    t.logic.update(t, game);
+    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 2/4");
+  });
+
+  it("stands its targets up somewhere new each time they go down", async () => {
+    const { t, game, targets, downAll } = await drilling();
+    game.coverStats.tookCover = 1;
+    t.logic.update(t, game);
+    const seen = [targets().join(" ")];
+    for (let i = 0; i < 3; i++) {
+      downAll();
+      t.logic.update(t, game);
+      seen.push(targets().join(" "));
+    }
+    for (let i = 1; i < seen.length; i++) expect(seen[i], `respawn ${i}`).not.toBe(seen[i - 1]);
+  });
+
+  it("stands them on open floor in sight of the first block", async () => {
+    const { TUTORIAL_MAP } = await import("../../src/data/levels/tutorial.js");
+    const { DRILL_COVER } = await import("../../src/data/levels/rooms/arena.js");
+    const block = systemSource.slice(systemSource.indexOf("const DRILL_TARGETS"), systemSource.indexOf("const DRILL_VOLLEY"));
+    const spots = [...block.matchAll(/\[(\d+\.5), (\d+\.5)\]/g)].map((m) => [+m[1], +m[2]]);
+    expect(spots.length).toBeGreaterThanOrEqual(6);
+    const from = DRILL_COVER.first;
+    for (const [x, y] of spots) {
+      expect(TUTORIAL_MAP.grid[Math.floor(y)][Math.floor(x)], `(${x}, ${y})`).toBe(0);
+      for (let s = 0; s <= 200; s++) {
+        const cx = Math.floor(from.x + ((x - from.x) * s) / 200);
+        const cy = Math.floor(from.y + ((y - from.y) * s) / 200);
+        expect(TUTORIAL_MAP.grid[cy][cx], `(${x}, ${y}) seen through (${cx}, ${cy})`).toBe(0);
+      }
+    }
+  });
+});
+
 // Timers are set on the step's clock, which starts again at every step.
 describe("the prologue's timers across a step change", () => {
   it("still fire their delay after they were set, not on the old step's clock", async () => {
