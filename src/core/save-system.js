@@ -9,7 +9,6 @@ import {
   ACHIEVEMENTS,
   WEAPONS,
 } from "../data/index.js";
-import { PLAYER_AIM_LIMIT_X, PLAYER_AIM_LIMIT_Y } from "../constants.js";
 import { SETTINGS_REGISTRY } from "../settings/registry.js";
 import { normalizeBadge, normalizeAccessories, normalizeAccessoryTints, normalizeLook, migrateLegacyBadge } from "./character-normalize.js";
 import { LEGACY_LOOK_INDICES, LEGACY_FIELD_NAMES } from "./legacy-look-indices.js";
@@ -365,13 +364,13 @@ export function sanitizeCampaignSave(data, level) {
     delete out.playerY;
     delete out.playerAngle;
   }
-  const clampAim = (v, lim) => (fin(v) ? Math.max(-lim, Math.min(lim, v)) : 0);
-  out.aimOffsetX = clampAim(data.aimOffsetX, PLAYER_AIM_LIMIT_X);
-  out.aimOffsetY = clampAim(data.aimOffsetY, PLAYER_AIM_LIMIT_Y);
+  // Saves from before centred aim carry where the free-aim reticle sat. The
+  // reticle is always centred now, so the continue starts with it there.
+  delete out.aimOffsetX;
+  delete out.aimOffsetY;
 
   // Player stats: a non-number means "keep the fresh player's value".
   for (const [k, v] of Object.entries(out)) {
-    if (k === "aimOffsetX" || k === "aimOffsetY") continue;
     if (typeof v === "number" && !fin(v)) delete out[k];
     if (v === null && k !== "mapGrid") delete out[k];
   }
@@ -483,8 +482,6 @@ export function saveCampaign(level, act, ngPlusCycle, player, difficulty, mapGri
       playerX: player.x,
       playerY: player.y,
       playerAngle: player.angle,
-      aimOffsetX: player.aimOffsetX || 0,
-      aimOffsetY: player.aimOffsetY || 0,
       ...player.serialize(),
       gearApplied: player._gearApplied ?? {},
       difficulty,

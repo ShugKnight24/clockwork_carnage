@@ -27,8 +27,8 @@ import { lerp } from "../src/utils/math.js";
  * @param {number} opts.lastFireTime   - timestamp of last weapon fire (ms), for barrel shimmer
  * @param {boolean} opts.isTouchDevice
  * @param {Function} opts.drawGlow    - renderer.drawGlow(ctx, x, y, r, color, alpha)
- * @param {number} [opts.aimOffsetX]   - free-aim reticle offset (fraction of width); the modern rig follows it
- * @param {number} [opts.aimOffsetY]   - free-aim reticle offset (fraction of view height)
+ * @param {number} [opts.aimOffsetX]   - reticle offset (fraction of width; 0 under centred aim); the modern rig follows it
+ * @param {number} [opts.aimOffsetY]   - reticle offset (fraction of view height; 0 under centred aim)
  * @param {string} [opts.state]        - game state; the viewmodel only shows during live first-person play (and a reel's level shots)
  * @param {string} [opts.pausedFromState]
  * @param {string} [opts.mode]         - game mode; "showcase" (the menu's settings backdrop) counts as live
@@ -257,8 +257,8 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
 
   // If we have a big HUD bar at the bottom, push the weapon up so it isn't hidden
   const hudOffset = opts.hudStyle === 1 ? (160 * viewportFactor) : 0;
-  // Aimed, the sights sit on the free-aim reticle (where shots go), not the
-  // screen centre: with the crosshair faded out at ADS they are the reticle.
+  // Aimed, the sights sit on the reticle (where shots go), not a fixed screen
+  // point: with the crosshair faded out at ADS they are the reticle.
   const followX = (opts.aimOffsetX || 0) * w * ads;
   const followY = (opts.aimOffsetY || 0) * (h - hudOffset) * ads;
 

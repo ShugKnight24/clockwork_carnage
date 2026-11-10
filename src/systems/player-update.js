@@ -3,19 +3,18 @@
 // Owns _prevCrouchKey state for edge detection.
 //
 // Two worlds, one set of speeds: on the raycaster's grid the player slides
-// along walls with a per-axis `isPassable` test and the mouse drives the
-// free-aim reticle; in a voxel level (`ctx.world`) the same horizontal intent
+// along walls with a per-axis `isPassable` test and the mouse turns the view
+// under a centred reticle; in a voxel level (`ctx.world`) the same horizontal intent
 // goes through the swept AABB, gravity and the jump key make the third axis
 // real, and the mouse drives yaw and pitch directly.
 // ─────────────────────────────────────────────────────────────────────────────
 import { isPassable } from "./physics.js";
 import { holdOffFrozen } from "./stillness.js";
 import { clamp, decay } from "../utils/math.js";
-import { applyAimDelta, recenterAim, aimSensitivityScale, aimZoom, centredAim, centredLook } from "./aim.js";
+import { centredLook } from "./aim.js";
 import { PLAYER, moveAABB, aabbOverlapsSolid } from "../world/voxel-physics.js";
 import {
   PLAYER_ADS_MOVE_MULT,
-  PLAYER_MOUSE_TURN_RATE,
   PLAYER_PITCH_LIMIT,
   PLAYER_VOXEL_LOOK_SENSITIVITY,
   PLAYER_FALL_DAMAGE_PER_BLOCK,
@@ -25,29 +24,12 @@ import {
 const SLIDE_ROLL = 0.05;
 
 /**
- * Halo-style hybrid aim: mouse moves the reticle freely; on clamp, the
- * leftover input pushes the camera. One sensitivity value drives both the
- * reticle and the camera so the visual crosshair is always the source of
- * truth for shooting.
+ * Grid look: the reticle stays centred and the look delta (mouse, pad and
+ * touch all feed it) turns the view and shifts it up or down (centredLook).
  */
 function applyMouseAim(p, mouse, settings) {
   if (mouse.dx === 0 && mouse.dy === 0) return false;
-  if (centredAim()) {
-    centredLook(p, mouse.dx, mouse.dy, settings);
-    mouse.dx = 0;
-    mouse.dy = 0;
-    return true;
-  }
-  const sens = settings.sensitivity || 1;
-  const invX = settings.invertX ? -1 : 1;
-
-  const { overflowX } = applyAimDelta(p, mouse.dx, mouse.dy, settings);
-  if (overflowX !== 0) {
-    // The turn slows with the sights like the reticle does (whose angle per
-    // pixel already shrinks with the zoom): a flick that reaches the edge
-    // through a 4x scope must not sweep the magnified view at hip speed.
-    p.angle += overflowX * PLAYER_MOUSE_TURN_RATE * p.rotSpeed * sens * invX * (aimSensitivityScale() / aimZoom());
-  }
+  centredLook(p, mouse.dx, mouse.dy, settings);
   mouse.dx = 0;
   mouse.dy = 0;
   return true;
@@ -55,12 +37,12 @@ function applyMouseAim(p, mouse, settings) {
 
 /**
  * Voxel look: the mouse aims the camera itself — yaw around, pitch up and
- * down — the way the Forge flies. There is no reticle to push first, so the
- * caller never recenters one.
+ * down — the way the Forge flies.
  *
- * The free-aim offsets are cleared rather than left alone: the crosshair is
- * drawn at the centre of a voxel view, and a stale offset from a 2D level
- * would send the shot somewhere the player is not looking.
+ * The reticle offsets and the grid's look shift are cleared rather than left
+ * alone: the crosshair is drawn at the centre of a voxel view, and a stale
+ * value from a 2D level would send the shot somewhere the player is not
+ * looking.
  */
 function applyVoxelLook(p, mouse, settings) {
   const sens = (settings.sensitivity || 1) * PLAYER_VOXEL_LOOK_SENSITIVITY;
@@ -127,7 +109,7 @@ export class PlayerUpdateSystem {
         // Collision detection (dash)
         flags = this._applyMove(ctx, moveX, moveY, dt, flags);
 
-        // Mouse free-aim during dash; edge overflow still turns camera.
+        // Look keeps working through a dash.
         applyLook(p, mouse, settings, world);
         if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;
         if (keys["ArrowRight"]) p.angle += p.rotSpeed * dt;
@@ -310,11 +292,7 @@ export class PlayerUpdateSystem {
     p.weaponSwayX += (p.weaponSwayTargetX * swayScale - p.weaponSwayX) * swaySpring;
     p.weaponSwayY += (p.weaponSwayTargetY * swayScale - p.weaponSwayY) * swaySpring;
 
-    const aimed = applyLook(p, mouse, settings, world);
-    // Recenter only while the player is moving (walking/strafing) and not
-    // touching the mouse. Holding still + aiming keeps the reticle parked
-    // exactly where the player put it — bullets fly there.
-    if (!aimed && len > 0 && !p.isFiring) recenterAim(p, dt);
+    applyLook(p, mouse, settings, world);
 
     // Keyboard rotation
     if (keys["ArrowLeft"]) p.angle -= p.rotSpeed * dt;

@@ -33,7 +33,7 @@ import { lerpPoint as lerp } from "../../../utils/math.js";
 
 const pt = ([x, y]) => `${f(x)},${f(y)}`;
 // How far past the screen edge sleeves run (viewmodel units from centre): covers
-// bob/kick plus the rig following the free-aim reticle to its limits.
+// the rig's bob, kick and sway.
 const EDGE_Y = 168;
 const EDGE_X = 236;
 // Clip ids stay unique across builds so layers from several weapons can share a document (tooling).

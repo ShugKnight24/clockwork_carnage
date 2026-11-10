@@ -10,10 +10,9 @@
  * player it nudges; js/touch.js calls it.
  */
 
-import { aimAnglesForGame, currentBarH, centredAim, CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN } from "./aim.js";
+import { aimAnglesForGame, CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN } from "./aim.js";
 import { zoneAimHeight, enemyHitRadius } from "./combat.js";
 import { hasLineOfSight, eyeOffsetZ } from "./physics.js";
-import { PLAYER_AIM_LIMIT_Y } from "../constants.js";
 
 /** aimAssist setting values. */
 export const ASSIST_OFF = 0;
@@ -86,17 +85,8 @@ export function applyAssistPull(game, target, level, dt, input) {
   const strength = (level === ASSIST_LOW ? 0.45 : 1) * (p.isAiming ? 1.25 : 1) * Math.min(1, input);
   const k = 1 - Math.exp(-PULL_RATE * strength * Math.min(dt, 0.05));
   p.angle += target.dYaw * k;
-  // Under centred aim, pitch is the world's shift (aim.js sceneShiftPx):
-  // tan(pitch) falls one for one as lookShiftY rises.
-  if (centredAim()) {
-    const y = (p.lookShiftY || 0) - target.dTan * k;
-    p.lookShiftY = Math.max(-CENTRED_LOOK_LIMIT, Math.min(CENTRED_LOOK_DOWN, y));
-    return;
-  }
-  // Pitch lives in the reticle's vertical offset (aimAngles: tan(pitch)
-  // falls as offY rises, scaled by the view's share of the canvas).
-  const h = game.canvas?.height || 1;
-  const viewFrac = (h - currentBarH(game)) / h || 1;
-  const offY = (p.aimOffsetY || 0) - (target.dTan * k) / viewFrac;
-  p.aimOffsetY = Math.max(-PLAYER_AIM_LIMIT_Y, Math.min(PLAYER_AIM_LIMIT_Y, offY));
+  // Pitch is the world's shift under the centred reticle (aim.js
+  // sceneShiftPx): tan(pitch) falls one for one as lookShiftY rises.
+  const y = (p.lookShiftY || 0) - target.dTan * k;
+  p.lookShiftY = Math.max(-CENTRED_LOOK_LIMIT, Math.min(CENTRED_LOOK_DOWN, y));
 }

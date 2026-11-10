@@ -21,14 +21,13 @@ import {
   campaignPromptLayout,
 } from "../src/ui/layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
-import { setCentredAim } from "../src/systems/aim.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
 import { creatorTouchControls, drawCreatorTouchHints } from "../src/ui/character-creator.js";
 import { isReloading } from "../src/systems/reload.js";
 import { gyroLookDelta, gyroActive, webkitRotationOrder } from "../src/systems/gyro-aim.js";
 import { findAssistTarget, assistFriction, applyAssistPull } from "../src/systems/aim-assist.js";
-import { PLAYER_MOUSE_TURN_RATE } from "../src/constants.js";
+import { CENTRED_LOOK_RATE } from "../src/systems/aim.js";
 
 /** A press shorter than this latches AIM or SLOW on; a longer one holds it. */
 const TAP_LATCH_MS = 250;
@@ -64,8 +63,6 @@ export class TouchControls {
 
     const tc = new TouchControls(game);
     tc.setup();
-    // The reticle stays centred and a drag turns the view (src/systems/aim.js).
-    setCentredAim(true);
     return tc;
   }
 
@@ -751,11 +748,11 @@ export class TouchControls {
     const angle = screen.orientation?.angle ?? window.orientation ?? 0;
     this.gyroWebkit ??= webkitRotationOrder();
     const { yaw, pitch } = gyroLookDelta(e.rotationRate, angle, dt, this.gyroWebkit);
-    // Pixels whose camera turn (player-update applyMouseAim) is that many
-    // radians, times the gyro's own gain; the sights' zoom then scales it
-    // down like any other look input.
+    // Pixels whose view turn (centredLook in src/systems/aim.js) is that
+    // many radians, times the gyro's own gain; the sights' zoom then scales
+    // it down like any other look input.
     const gain = Number(g.settings.gyroSensitivity) || 2;
-    const pxPerRad = gain / (PLAYER_MOUSE_TURN_RATE * (p.rotSpeed || 3) * (g.settings.sensitivity || 1));
+    const pxPerRad = gain / (CENTRED_LOOK_RATE * (g.settings.sensitivity || 1));
     g.mouse.dx += yaw * pxPerRad;
     g.mouse.dy -= pitch * pxPerRad;
   }

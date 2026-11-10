@@ -1505,6 +1505,7 @@ export class Game {
     this.player.x = mMap.playerStart.x;
     this.player.y = mMap.playerStart.y;
     this.player.angle = mMap.playerStart.dir;
+    this.player.lookShiftY = 0;
     this.player.alive = true;
     resetAdsFov();
 
@@ -1539,6 +1540,8 @@ export class Game {
     this.player.x = this.map.playerStart.x;
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
+    // Each round starts looking level, not where the last one ended.
+    this.player.lookShiftY = 0;
     this.player.alive = true;
     resetAdsFov();
     // Each round restocks the guns you hold, more as the rounds get longer.

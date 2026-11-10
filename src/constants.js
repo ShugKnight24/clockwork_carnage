@@ -25,15 +25,6 @@ export const PLAYER_SPAWN_Y = 2;
 /** Player default spawn angle */
 export const PLAYER_SPAWN_ANGLE = 0;
 
-/** Reticle free-aim limits in screen fraction from center */
-export const PLAYER_AIM_LIMIT_X = 0.18;
-export const PLAYER_AIM_LIMIT_Y = 0.30;
-
-/** Mouse-look: every pixel of mouse motion drives the reticle; overflow
- *  past the deadzone edge then turns the camera. One scalar drives both. */
-export const PLAYER_AIM_SENSITIVITY = 0.0017;
-export const PLAYER_MOUSE_TURN_RATE = 0.002;
-
 /** How far the camera may look up or down in a voxel level, in radians.
  *  Straight up reads as broken, so it stops just short of it. */
 export const PLAYER_PITCH_LIMIT = (85 * Math.PI) / 180;
@@ -45,11 +36,6 @@ export const PLAYER_VOXEL_LOOK_SENSITIVITY = 0.002;
 
 /** Damage per block fallen beyond `PLAYER.fallDamageFrom`. */
 export const PLAYER_FALL_DAMAGE_PER_BLOCK = 5;
-
-/** Reticle decay rate when player is walking (per second). Gentle: bullets
- *  always land exactly where the crosshair was painted; recenter just
- *  smooths the reticle back as the player runs forward. */
-export const PLAYER_AIM_RECENTER = 0.6;
 
 // ============================================================================
 // COMBAT & DAMAGE

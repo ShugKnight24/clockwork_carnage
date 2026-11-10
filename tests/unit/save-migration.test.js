@@ -190,6 +190,25 @@ describe("CampaignManager on a migrated save", async () => {
     expect(again.aria).not.toContain("storyRestructured");
   });
 
+  it("a save with free-aim offsets loads centred", async () => {
+    const { Player } = await import("../../src/entities/index.js");
+    const { aimAnglesForGame } = await import("../../src/systems/aim.js");
+    store.cc_campaign_save = JSON.stringify(
+      v1(1, 2, { mapGrid: undefined, entityStates: undefined, aimOffsetX: 0.15, aimOffsetY: -0.2 }),
+    );
+    const { g, cm } = makeGame();
+    g.player = new Player();
+    g.canvas = { width: 800, height: 400 };
+    expect(cm.load()).toBe(true);
+    expect(g.player.aimOffsetX).toBe(0);
+    expect(g.player.aimOffsetY).toBe(0);
+    expect(aimAnglesForGame(g).yaw).toBe(g.player.angle);
+    // Nor does the save it writes back carry them.
+    const saved = JSON.parse(store.cc_campaign_save);
+    expect(saved).not.toHaveProperty("aimOffsetX");
+    expect(saved).not.toHaveProperty("aimOffsetY");
+  });
+
   it("says nothing when an Act I save carried over whole", () => {
     store.cc_campaign_save = JSON.stringify(v1(1, 2, { mapGrid: undefined, entityStates: undefined }));
     const { aria, cm } = makeGame();

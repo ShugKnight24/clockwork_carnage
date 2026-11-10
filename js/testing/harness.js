@@ -311,9 +311,10 @@ function findClosest(game, type) {
 const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" && e.health > 0 && !e._oddity;
 
 /**
- * Put the reticle on an enemy's head, as a good player does: the vertical
- * aim offset whose pitch (aimAngles in src/systems/aim.js) lands the shot
- * in the head zone at this distance. Zones without a head get the centre.
+ * Put the reticle on an enemy's head, as a good player does: the look up or
+ * down (lookShiftY, whose pitch aimAngles in src/systems/aim.js works out)
+ * that lands the shot in the head zone at this distance. Zones without a
+ * head get the centre.
  */
 function aimForHead(game, e) {
   aimAtZone(game, e, "head");
@@ -330,11 +331,10 @@ function aimAtZone(game, e, zone) {
   const h = game.canvas?.height || 1;
   const barH = currentBarH(game);
   const tanPitch = y / d;
-  // Through the recoil's kick too (sceneShiftPx): the view a player aims at
-  // is the kicked one.
-  const shift = game.world ? 0 : sceneShiftPx(p, h);
-  p.aimOffsetX = 0;
-  p.aimOffsetY = (barH / (2 * h) + shift / h - tanPitch) / ((h - barH) / h);
+  // Through the recoil's kick too (sceneShiftPx, less the look it is
+  // setting): the view a player aims at is the kicked one.
+  const kick = game.world ? 0 : sceneShiftPx(p, h) / h + (p.lookShiftY || 0);
+  p.lookShiftY = barH / (2 * h) + kick - tanPitch;
 }
 
 /**
@@ -575,7 +575,7 @@ function killAllEnemies(game, maxTicks = 5000, { weapon = null } = {}) {
     if (game.state !== GameState.PLAYING) break;
   }
   clearInput(game);
-  p.aimOffsetY = 0;
+  p.lookShiftY = 0;
   return totalTicks;
 }
 
@@ -2007,7 +2007,6 @@ function botCadet(game) {
       const b = game.entities.find((e) => e.propType === "calib_beacon" && e.state === "on");
       if (b) {
         p.angle = Math.atan2(b.y - p.y, b.x - p.x);
-        p.aimOffsetX = 0;
       }
       return stepGame(game, 1);
     },
@@ -2208,7 +2207,7 @@ function botCadet(game) {
       pacing.shots = game.shotsFired;
     }
     clearInput(game);
-    p.aimOffsetY = 0;
+    p.lookShiftY = 0;
     p.isAiming = false;
     if (t.step === at) {
       stuck.push(id);

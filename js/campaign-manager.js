@@ -346,6 +346,8 @@ export class CampaignManager {
     g.player.x = level.playerStart.x;
     g.player.y = level.playerStart.y;
     g.player.angle = level.playerStart.dir;
+    // A level starts looking level, not where the last one ended.
+    g.player.lookShiftY = 0;
     g.player.alive = true;
     g.entities = [];
     // Nothing half-way through a tear carries over from the last level.

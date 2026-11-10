@@ -14,7 +14,6 @@ const level = {
 const good = {
   level: 0,
   playerX: 1.5, playerY: 1.5, playerAngle: 0,
-  aimOffsetX: 0, aimOffsetY: 0,
   weapons: [0, 2], currentWeapon: 1,
   health: 80,
   contentHash: levelContentHash(level),
@@ -44,10 +43,10 @@ describe("sanitizeCampaignSave", () => {
     expect(out.entityStates).toBeUndefined();
   });
 
-  it("clamps aim offsets into range", () => {
-    const out = sanitizeCampaignSave({ ...good, aimOffsetX: -25, aimOffsetY: 40 }, level);
-    expect(Math.abs(out.aimOffsetX)).toBeLessThanOrEqual(0.18);
-    expect(Math.abs(out.aimOffsetY)).toBeLessThanOrEqual(0.3);
+  it("drops the free-aim reticle offsets an older save carried", () => {
+    const out = sanitizeCampaignSave({ ...good, aimOffsetX: 0.15, aimOffsetY: -25 }, level);
+    expect(out).not.toHaveProperty("aimOffsetX");
+    expect(out).not.toHaveProperty("aimOffsetY");
   });
 
   it("keeps the selected gun when unknown weapons are dropped", () => {

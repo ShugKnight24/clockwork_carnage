@@ -601,10 +601,10 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   // Render 3D scene — timed: raycast phase
   const profiling = !!game.profiling;
   const _tRay0 = profiling ? performance.now() : 0;
-  // Scene yShift is body movement only. Free-aim reticle must not move textures.
   const p = game.player;
-  // Stance and camera punch (negative = kick upward) shift the view; the fire
-  // path aims with the same shift (sceneShiftPx in aim.js).
+  // The look up or down, a slide and camera punch (negative = kick upward)
+  // shift the view; the fire path aims with the same shift (sceneShiftPx in
+  // aim.js).
   // The menu showcase lifts its horizon above the settings bottom sheet.
   const yShift = sceneShiftPx(p, h) + Math.round((game.showcasePitch || 0) * h);
   updateSprintFov(p, game.deltaTime);

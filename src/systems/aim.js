@@ -17,14 +17,11 @@
  *   tan(Δyaw)   = 2·offsetX · planeMul
  *   tan(pitch)  = barH/(2h) − offsetY·(h − barH)/h
  *
- * Free-aim feel (Halo-hybrid): mouse moves reticle inside a deadzone; once
- * clamped at the edge, leftover input turns the camera (caller handles).
+ * On grid levels the reticle stays centred (offsets 0) and every look input
+ * turns the view instead (centredLook); the offsets stay in the math so the
+ * projection keeps one form for the renderer and the fire path.
  */
 import {
-  PLAYER_AIM_LIMIT_X,
-  PLAYER_AIM_LIMIT_Y,
-  PLAYER_AIM_RECENTER,
-  PLAYER_AIM_SENSITIVITY,
   PLAYER_ADS_ZOOM,
   PLAYER_ADS_SENS,
   COMPACT_PHONE_HEIGHT,
@@ -53,10 +50,10 @@ const COVER_ADS_AFTER = 0.75;
 let _adsZoom = PLAYER_ADS_ZOOM;
 let _adsZoomVel = 0;
 let _adsSens = PLAYER_ADS_SENS;
-/** Scope breath: seconds held still, its clock, and the offset it last added. */
+/** Scope breath: seconds held still, its clock, and the turn and shift it last added. */
 let _steady = 0;
 let _breathT = 0;
-let _breathX = 0;
+let _breathYaw = 0;
 let _breathY = 0;
 let _lastPos = null;
 /**
@@ -117,36 +114,6 @@ export function setAdsSteadiness(mult) {
 }
 
 /**
- * Apply mouse delta to player's reticle offset. Returns overflow in raw
- * input units (mouse pixels) for the caller to feed into camera turn.
- *
- * @returns {{ overflowX: number, overflowY: number }}
- */
-export function applyAimDelta(player, dx, dy, settings = {}) {
-  const sens = PLAYER_AIM_SENSITIVITY * (settings.sensitivity || 1) * aimSensitivityScale();
-  const invX = settings.invertX ? -1 : 1;
-  const invY = settings.invertY ? -1 : 1;
-
-  const rawX = (player.aimOffsetX || 0) + dx * sens * invX;
-  const rawY = (player.aimOffsetY || 0) + dy * sens * invY;
-
-  player.aimOffsetX = clamp(rawX, -PLAYER_AIM_LIMIT_X, PLAYER_AIM_LIMIT_X);
-  player.aimOffsetY = clamp(rawY, -PLAYER_AIM_LIMIT_Y, PLAYER_AIM_LIMIT_Y);
-
-  return {
-    overflowX: (rawX - player.aimOffsetX) / (sens * invX || 1e-9),
-    overflowY: (rawY - player.aimOffsetY) / (sens * invY || 1e-9),
-  };
-}
-
-/** Pull reticle toward center. Call only when player is moving. */
-export function recenterAim(player, dt, rate = PLAYER_AIM_RECENTER) {
-  const t = Math.min(1, rate * dt);
-  player.aimOffsetX = (player.aimOffsetX || 0) * (1 - t);
-  player.aimOffsetY = (player.aimOffsetY || 0) * (1 - t);
-}
-
-/**
  * World yaw/pitch where the reticle currently points.
  *
  * Inverse of the renderer projection. Pitch depends on viewport vs canvas
@@ -204,27 +171,13 @@ export function sceneShiftPx(player, h) {
   const punch = (player?.cameraPunch || 0) * -h * 0.12;
   // Pitching forward into a slide lifts the horizon a little.
   const lean = (player?.slideBlend || 0) * -h * SLIDE_PITCH;
-  // Centred aim's look up and down (centredLook): the world moves, not the reticle.
+  // The look up and down (centredLook): the world moves, not the reticle.
   const look = (player?.lookShiftY || 0) * -h;
   return punch + lean + look;
 }
 
-/**
- * Centred aim, for touch: the reticle stays in the middle of the view and a
- * drag turns the view instead, sideways by turning and up or down by
- * shifting the world under the reticle (player.lookShiftY, a share of the
- * canvas height, which sceneShiftPx draws and aims with). A thumb on glass
- * loses track of a free-aim reticle that wanders inside a box, stops at its
- * edge and then turns the view at another speed.
- */
-let _centredAim = false;
-export function setCentredAim(on) {
-  _centredAim = !!on;
-}
-export const centredAim = () => _centredAim;
-
-/** Centred aim's look speed: radians per input unit, before the sensitivity settings. */
-const CENTRED_LOOK_RATE = 0.0033;
+/** Centred aim's look speed: radians per input unit (a mouse pixel), before the sensitivity settings. */
+export const CENTRED_LOOK_RATE = 0.0033;
 /** How far centred aim looks up: tan of the angle, ~23°. */
 export const CENTRED_LOOK_LIMIT = 0.42;
 /**
@@ -234,7 +187,17 @@ export const CENTRED_LOOK_LIMIT = 0.42;
  */
 export const CENTRED_LOOK_DOWN = 0.8;
 
-/** Turn and tilt the view by a look delta under centred aim (input units, as applyAimDelta). */
+/**
+ * Centred aim, for mouse, pad and touch alike: the reticle stays in the
+ * middle of the view and look input turns the view instead, sideways by
+ * turning and up or down by shifting the world under the reticle
+ * (player.lookShiftY, a share of the canvas height, which sceneShiftPx draws
+ * and aims with). A reticle that wandered inside a box, stopped at its edge
+ * and then turned the view at another speed was hard to track on any input.
+ *
+ * Takes a look delta in input units: mouse pixels, or the pad's and touch's
+ * equivalent.
+ */
 export function centredLook(player, dx, dy, settings = {}) {
   const rate = CENTRED_LOOK_RATE * (settings.sensitivity || 1) * aimSensitivityScale();
   player.angle += (dx * rate * (settings.invertX ? -1 : 1)) / aimZoom();
@@ -244,32 +207,20 @@ export function centredLook(player, dx, dy, settings = {}) {
   player.aimOffsetY = 0;
 }
 
-// How fast aiming in pulls a free-aim reticle back to centre (per second).
-const ADS_CENTER_RATE = 9;
-
-/** Yaw under the reticle for a horizontal FOV (degrees): the inverse projection in aimAngles. */
-const reticleYaw = (player, fovDeg) =>
-  player.angle + Math.atan(2 * (player.aimOffsetX || 0) * Math.tan((fovDeg * Math.PI) / 360));
-
 /**
  * Drive the ADS blend (FOV, sensitivity, viewmodel). Call once per frame.
  *
- * With `settings`, whatever is under the reticle stays under it through the
- * zoom. The zoom narrows the view about the screen centre, so a free-aim
- * reticle off to the side used to drift off its target as you aimed in — and
- * the view magnified the middle of the screen, not what you were aiming at.
- * Aiming in now also eases the reticle back to centre, turning the view by
- * the same angle, so the sights and the magnified view land on the target.
- * Vertical aim needs neither: the view's rows are magnified about the
- * reticle's own row (magnifyRows in src/rendering/render-pipeline.js).
+ * The zoom narrows the view about the screen centre, where the reticle is,
+ * so whatever is under it stays under it without turning the view; the
+ * view's rows are magnified about the reticle's own row (magnifyRows in
+ * src/rendering/render-pipeline.js). `settings` gives the scope's breath the
+ * FOV it turns the view by.
  */
 export function updateAdsFov(player, dt, settings = null) {
-  const hold = settings && player && Number.isFinite(player.angle);
-  const yaw0 = hold ? reticleYaw(player, effectiveAimFov(player, settings)) : 0;
   const step = Math.min(dt, 0.1) / ADS_TRANSITION;
   // From cover, the sights wait for the pop-out (src/systems/cover-play.js
   // peek): stand up or lean out first, then settle into them. Both at once
-  // stacked a rise, a zoom and the zoom's turn into one lurch.
+  // stacked a rise and a zoom into one lurch.
   const peek = player?.cover?.peek;
   const aiming = !!player?.isAiming && !(peek != null && peek < COVER_ADS_AFTER);
   _adsProgress = clamp(_adsProgress + (aiming ? step : -step), 0, 1);
@@ -280,28 +231,26 @@ export function updateAdsFov(player, dt, settings = null) {
   if (_adsBlend === 0) [_adsZoom, _adsZoomVel] = [zoom, 0];
   else [_adsZoom, _adsZoomVel] = smoothDamp(_adsZoom, zoom, _adsZoomVel, 0.12, Math.min(dt, 0.1));
   _adsSens = wep?.adsSens ?? PLAYER_ADS_SENS;
-  if (player) scopeBreath(player, wep, dt);
-  if (!hold) return;
-  if (aiming && player.aimOffsetX) {
-    player.aimOffsetX *= 1 - Math.min(1, ADS_CENTER_RATE * Math.min(dt, 0.1));
-    if (Math.abs(player.aimOffsetX) < 1e-4) player.aimOffsetX = 0;
-  }
-  player.angle += yaw0 - reticleYaw(player, effectiveAimFov(player, settings));
+  if (player) scopeBreath(player, wep, dt, settings);
 }
 
-/** Reticle drift (fraction of the view) through a scope: moving, and held still for long. */
+/** Aim drift (fraction of the view) through a scope: moving, and held still for long. */
 const BREATH_MOVING = 0.01;
 const BREATH_STILL = 0.0015;
 /** Seconds held still before the breath is fully settled. */
 const BREATH_SETTLE = 1.2;
 
 /**
- * A scope breathes: the reticle wanders on a slow figure-eight, wide while
- * you move and settling to a tremor once you have held still for a moment.
- * It moves the aim itself (the round goes where the drifting reticle is), and
- * is added as a change each frame so it never fights the mouse.
+ * A scope breathes: the view wanders on a slow figure-eight under the
+ * centred reticle, wide while you move and settling to a tremor once you
+ * have held still for a moment. It moves the aim itself (the round goes
+ * where the reticle sits on the drifting view), and is added as a change
+ * each frame so it never fights the mouse. The drift is measured as a share
+ * of the view, so sideways it turns by the angle that share spans at the
+ * current FOV (the yaw term of aimAngles), and up or down it shifts the
+ * world one for one (lookShiftY).
  */
-function scopeBreath(player, wep, dt) {
+function scopeBreath(player, wep, dt, settings) {
   const d = Math.min(dt, 0.1);
   const moved = _lastPos && Math.hypot(player.x - _lastPos.x, player.y - _lastPos.y) > 0.4 * d;
   _lastPos = { x: player.x, y: player.y };
@@ -311,9 +260,10 @@ function scopeBreath(player, wep, dt) {
   const amp = wep?.scope ? _adsBlend * _steadyMult * (BREATH_MOVING + (BREATH_STILL - BREATH_MOVING) * settle) : 0;
   const bx = amp * Math.sin(_breathT * 0.9);
   const by = amp * 0.7 * Math.sin(_breathT * 1.8 + 0.6);
-  if (Number.isFinite(player.aimOffsetX)) player.aimOffsetX += bx - _breathX;
-  if (Number.isFinite(player.aimOffsetY)) player.aimOffsetY += by - _breathY;
-  _breathX = bx;
+  const yaw = Math.atan(2 * bx * Math.tan((effectiveAimFov(player, settings ?? {}) * Math.PI) / 360));
+  if (Number.isFinite(player.angle)) player.angle += yaw - _breathYaw;
+  if (Number.isFinite(player.lookShiftY)) player.lookShiftY += by - _breathY;
+  _breathYaw = yaw;
   _breathY = by;
 }
 
@@ -338,7 +288,11 @@ export function updateSprintFov(player, dt) {
 export function resetAdsFov() {
   _adsProgress = 0;
   _adsBlend = 0;
-  _breathX = _breathY = 0;
+  _breathYaw = _breathY = 0;
+  // The breath starts over too, so it runs the same however many frames
+  // came before.
+  _breathT = _steady = 0;
+  _lastPos = null;
 }
 
 /**

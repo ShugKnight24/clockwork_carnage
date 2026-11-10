@@ -137,9 +137,8 @@ test("a frozen person is drawn drained toward blue-grey in every art style", asy
     n.freeze({ face: { x: p.x + Math.cos(p.angle + 1.2) * 4, y: p.y + Math.sin(p.angle + 1.2) * 4 } });
     g.entities.push(n);
     window.__frozen = n;
-    // Hold the view still: no weapon in the way of the middle of the screen.
-    g.player.aimOffsetX = 0;
-    g.player.aimOffsetY = 0;
+    // Hold the view level: no weapon in the way of the middle of the screen.
+    g.player.lookShiftY = 0;
   });
   // How warm the person's pixels are: mean red minus blue over a box round
   // where they stand on screen. Her cardigan and skin are warm; drained,

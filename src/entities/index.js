@@ -294,8 +294,6 @@ export class Player {
     "sprintDrainMult",
     "chronoEnergy",
     "maxChronoEnergy",
-    "aimOffsetX",
-    "aimOffsetY",
     // Levels, loadouts and gear write it; saved so a continued run's stats
     // all stand on the same gear (gearApplied in the saves).
     "maxStamina",
