@@ -139,11 +139,13 @@ export class Player {
   /**
    * Once a frame: note a weapon switch, whatever made it (keys, wheel, pad,
    * touch, a pickup), so lastWeapon is always the one held before.
+   * @returns {boolean} whether the weapon changed since the last call
    */
   trackWeapon() {
-    if (this.currentWeapon === this._weaponSeen) return;
+    if (this.currentWeapon === this._weaponSeen) return false;
     if (this._weaponSeen >= 0) this.lastWeapon = this._weaponSeen;
     this._weaponSeen = this.currentWeapon;
+    return true;
   }
 
   /**

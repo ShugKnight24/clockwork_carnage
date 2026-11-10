@@ -6,13 +6,15 @@
  *      the frame the renderer draws (zoomed FOV, magnified rows, eye height and
  *      recoil shift, HUD bar), hip and aimed, standing and crouched
  *   2. rounds scatter inside the cone the spread brackets draw, which closes
- *      to the weapon's adsSpread aimed (none for the sniper)
+ *      to the weapon's adsSpread aimed (none for the precision guns); hip
+ *      fire blooms per shot up to a cap and recovers in time, whatever the
+ *      frame rate
  *   3. each sight magnifies by its adsZoom, the scope by 3x or more
  *   4. the reticle on a drawn head, hip or aimed, standing or crouched, near
  *      or far, is a headshot (and on the chest a body hit); the gun model is
  *      not part of the aim: it is placed for looks and only kept off the reticle
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { WEAPONS } from "../../src/data/weapons.js";
 import {
   aimAngles,
@@ -24,8 +26,15 @@ import {
   aimZoom,
   getAimBlend,
   currentSpread,
+  noteShotBloom,
+  updateBloom,
+  currentBloom,
+  resetBloom,
 } from "../../src/systems/aim.js";
-import { scatter } from "../../src/systems/combat-orchestrator.js";
+import { scatter, fireWeapon } from "../../src/systems/combat-orchestrator.js";
+import { aimAnglesForGame } from "../../src/systems/aim.js";
+import { Player } from "../../src/entities/index.js";
+import { Game } from "../../js/game.js";
 import { rayEnemyHit } from "../../src/systems/combat.js";
 import { drawWeapon } from "../../js/weapon-renderer.js";
 import { ENEMY_TYPES } from "../../src/data/enemies.js";
@@ -122,6 +131,7 @@ describe("rounds scatter inside the drawn cone", () => {
   for (const wep of WEAPONS) {
     it(`${wep.name}: hip spread at the hip, adsSpread aimed`, () => {
       resetAdsFov();
+      resetBloom();
       const p = playerWith(wep);
       settle(p);
       expect(currentSpread(wep)).toBeCloseTo(wep.spread, 9);
@@ -137,6 +147,143 @@ describe("rounds scatter inside the drawn cone", () => {
     expect(sniper.adsSpread).toBe(0);
     expect(sniper.spread).toBeGreaterThanOrEqual(0.05);
     expect(sniper.headshotMult).toBeGreaterThan(1);
+  });
+});
+
+describe("Halo pacing: dead-on aimed, blooming at the hip", () => {
+  const pistol = WEAPONS[0];
+  /** Run the bloom's clock for `secs` in frames of `dt`. */
+  const run = (secs, dt) => {
+    for (let t = 0; t < secs - 1e-9; t += dt) updateBloom(Math.min(dt, secs - t));
+  };
+  // At the hip, with the cone closed (resetAdsFov closes the bloom too).
+  beforeEach(() => resetAdsFov());
+
+  it("an aimed precision shot has zero spread", () => {
+    for (const id of [0, 2, 3, 5, 6, 7]) {
+      const wep = WEAPONS[id];
+      resetAdsFov();
+      resetBloom();
+      const p = playerWith(wep, { isAiming: true });
+      settle(p);
+      expect(getAimBlend()).toBe(1);
+      expect(currentSpread(wep), wep.name).toBe(0);
+    }
+  });
+
+  it("each hip shot adds perShot up to max", () => {
+    resetBloom();
+    noteShotBloom(pistol);
+    expect(currentBloom()).toBeCloseTo(pistol.bloom.perShot, 12);
+    for (let i = 0; i < 9; i++) noteShotBloom(pistol);
+    expect(currentBloom()).toBe(0.03);
+    expect(currentBloom()).toBe(pistol.bloom.max);
+  });
+
+  it("bloom holds for its delay, then recovers at recover rad/s, frame-rate independent", () => {
+    for (const wep of [pistol, WEAPONS[1]]) {
+      const { max, recover, delay } = wep.bloom;
+      // 0.1 s frames straddle the end of the delay; one 0.45 s step jumps it.
+      for (const dt of [1 / 144, 0.1, delay + 0.1]) {
+        resetBloom();
+        for (let i = 0; i < 10; i++) noteShotBloom(wep);
+        run(delay, dt);
+        expect(currentBloom(), `${wep.name} held, dt ${dt}`).toBe(max);
+        resetBloom();
+        for (let i = 0; i < 10; i++) noteShotBloom(wep);
+        run(delay + 0.1, dt);
+        expect(Math.abs(currentBloom() - (max - recover * 0.1)), `${wep.name} dt ${dt}`).toBeLessThanOrEqual(0.0005);
+      }
+    }
+    expect(pistol.bloom.max - pistol.bloom.recover * 0.1).toBeCloseTo(0.018, 9);
+  });
+
+  it("rapid fire at 144 Hz and through a hitch never passes the cap", () => {
+    for (const dt of [1 / 144, 0.1]) {
+      resetBloom();
+      // Firing every frame, faster than any gun can.
+      for (let i = 0; i < 300; i++) {
+        noteShotBloom(pistol);
+        updateBloom(dt);
+        expect(currentBloom()).toBeLessThanOrEqual(pistol.bloom.max);
+        expect(currentBloom()).toBeGreaterThanOrEqual(0);
+      }
+    }
+    resetBloom();
+    noteShotBloom(pistol);
+    updateBloom(5);
+    expect(currentBloom()).toBe(0);
+  });
+
+  for (const wep of [WEAPONS[0], WEAPONS[1]]) {
+    const gap = wep.fireRate / 1000;
+    it(`${wep.name}: holding fire at fireRate for 3 s reaches at least 0.5 × max`, () => {
+      resetBloom();
+      for (let t = 0; t < 3; t += gap) {
+        noteShotBloom(wep);
+        run(gap, 1 / 60);
+      }
+      expect(currentBloom()).toBeGreaterThanOrEqual(0.5 * wep.bloom.max);
+    });
+
+    it(`${wep.name}: tapping at 2 × fireRate stays at or below perShot`, () => {
+      resetBloom();
+      for (let t = 0; t < 5; t += 2 * gap) {
+        noteShotBloom(wep);
+        expect(currentBloom()).toBeLessThanOrEqual(wep.bloom.perShot + 1e-12);
+        run(2 * gap, 1 / 60);
+      }
+    });
+  }
+
+  it("only hip shots bloom: a fully aimed volley adds none", () => {
+    resetAdsFov();
+    resetBloom();
+    const p = playerWith(pistol, { isAiming: true });
+    settle(p);
+    expect(getAimBlend()).toBe(1);
+    for (let i = 0; i < 10; i++) noteShotBloom(pistol);
+    expect(currentBloom()).toBe(0);
+    resetAdsFov();
+    noteShotBloom(pistol);
+    expect(currentBloom()).toBeCloseTo(pistol.bloom.perShot, 12);
+    resetBloom();
+  });
+
+  it("bloom fades with the sights", () => {
+    resetAdsFov();
+    resetBloom();
+    const p = playerWith(pistol);
+    settle(p);
+    for (let i = 0; i < 10; i++) noteShotBloom(pistol);
+    expect(currentSpread(pistol)).toBeCloseTo(pistol.spread + 0.03, 12);
+    p.isAiming = true;
+    settle(p);
+    for (let i = 0; i < 10; i++) noteShotBloom(pistol);
+    expect(currentBloom()).toBe(0.03);
+    expect(currentSpread(pistol)).toBe(0);
+    resetBloom();
+  });
+
+  it("a swap starts the new gun from its base cone", () => {
+    resetAdsFov();
+    resetBloom();
+    const rifle = WEAPONS[2];
+    settle(playerWith(rifle));
+    for (let i = 0; i < 10; i++) noteShotBloom(pistol);
+    expect(currentSpread(rifle)).toBeCloseTo(rifle.spread, 12);
+    resetBloom();
+    expect(currentBloom()).toBe(0);
+  });
+
+  it("every gun has bloom data", () => {
+    for (const wep of WEAPONS) {
+      const b = wep.bloom;
+      expect(b, wep.name).toBeTruthy();
+      expect(b.perShot).toBeGreaterThanOrEqual(0);
+      expect(b.max).toBeGreaterThanOrEqual(b.perShot);
+      expect(b.recover).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -239,4 +386,74 @@ describe("the reticle on a head is a headshot", () => {
       }
     }
   }
+});
+
+describe("bloom wiring", () => {
+  /** A game around a real Player holding `ids`, with projectiles going nowhere. */
+  function makeGame(ids) {
+    const player = new Player(2.5, 2.5, 0.3);
+    player.weapons = ids;
+    player.currentWeapon = 0;
+    return {
+      time: 10000, mode: "campaign", player, settings: { fov: 70 }, canvas: { height: 720 },
+      audio: new Proxy({}, { get: () => () => {} }),
+      achievementStats: { totalShotsFired: 0 }, shotsFired: 0,
+      projectiles: [], entities: [], screenShake: 0, map: { width: 1, height: 1, grid: [[1]] },
+      _spawnMuzzleFlash: () => {}, getCharacterColor: () => ({}),
+    };
+  }
+
+  it("a hip shot through fireWeapon opens the cone by perShot", () => {
+    resetAdsFov();
+    resetBloom();
+    const g = makeGame([0]);
+    fireWeapon(g);
+    expect(g.shotsFired).toBe(1);
+    expect(currentBloom()).toBe(WEAPONS[0].bloom.perShot);
+    resetBloom();
+  });
+
+  it("trackWeapon reports a switch, and only a switch", () => {
+    const p = new Player(2.5, 2.5, 0);
+    p.weapons = [0, 1];
+    expect(p.trackWeapon()).toBe(false);
+    p.currentWeapon = 1;
+    expect(p.trackWeapon()).toBe(true);
+    expect(p.trackWeapon()).toBe(false);
+  });
+
+  it("the game loop's switch check closes the bloom on a switch, and keeps it otherwise", () => {
+    resetAdsFov();
+    resetBloom();
+    const player = new Player(2.5, 2.5, 0);
+    player.weapons = [0, 1];
+    const game = { player };
+    noteShotBloom(WEAPONS[0]);
+    Game.prototype._trackWeaponSwitch.call(game);
+    expect(currentBloom()).toBe(WEAPONS[0].bloom.perShot);
+    player.currentWeapon = 1;
+    Game.prototype._trackWeaponSwitch.call(game);
+    expect(currentBloom()).toBe(0);
+  });
+
+  it("an aimed multishot fan puts a bolt through the reticle", () => {
+    const cannon = WEAPONS[3];
+    for (const shots of [2, 3, 4]) {
+      resetAdsFov();
+      resetBloom();
+      const g = makeGame([cannon.id]);
+      g.player.multiShot = shots;
+      g.player.isAiming = true;
+      for (let i = 0; i < 90; i++) updateAdsFov(g.player, 1 / 60, g.settings);
+      expect(getAimBlend()).toBe(1);
+      const aim = aimAnglesForGame(g).yaw;
+      fireWeapon(g);
+      expect(g.projectiles).toHaveLength(shots);
+      const yaws = g.projectiles.map((b) => Math.atan2(b.dirY, b.dirX));
+      expect(Math.min(...yaws.map((y) => Math.abs(y - aim))), `${shots} bolts`).toBeLessThan(1e-9);
+      // The rest still fan out either side.
+      expect(new Set(yaws.map((y) => Math.sign(Math.round((y - aim) * 1e6)))).size).toBe(shots > 2 ? 3 : 2);
+    }
+    resetAdsFov();
+  });
 });

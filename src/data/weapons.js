@@ -22,10 +22,17 @@
 // tight on the sniper, whose reload is the one a fight turns on.
 // Aim: `spread` is the hip-fire cone (radians, half-angle) every round is
 // scattered across, drawn as the crosshair's spread brackets; `adsSpread` is
-// the cone with the sights up. `adsZoom` is the sight's magnification and
-// `adsSens` the look speed while aimed. A `scope` swaps the sights for the
-// sniper scope (src/ui/crosshair.js drawScope); `headshotMult` multiplies a
-// head zone's damage on top of the enemy's own.
+// the cone with the sights up (none on the precision guns: an aimed round goes
+// through the reticle). `bloom: { perShot, max, recover, delay }` widens the
+// hip cone by `perShot` radians a hip shot, up to `max`, holds it for `delay`
+// seconds after the last shot, then closes it at `recover` radians a second
+// (src/systems/aim.js): holding the trigger fires inside the delay and
+// sprays, tapping slower than it lets the cone close between shots. Aimed
+// shots add none, and the bloom fades out as the sights come up.
+// `adsZoom` is the sight's magnification and `adsSens` the look speed while
+// aimed. A `scope` swaps the sights for the sniper scope (src/ui/crosshair.js
+// drawScope); `headshotMult` multiplies a head zone's damage on top of the
+// enemy's own.
 // Sustained damage (every round landing, inside falloff), for balance:
 // pistol 50, ricochet 56 (84 / 126 after one / two banks), shotgun 83 out to
 // 10 m, cannon 80 + splash, rifle 110, scattergun 120 within 3 m (44 at 6 m),
@@ -45,7 +52,8 @@ export const WEAPONS = [
     startAmmo: 999,
     infiniteAmmo: true,
     spread: 0.012,
-    adsSpread: 0.003,
+    adsSpread: 0,
+    bloom: { perShot: 0.008, max: 0.03, recover: 0.12, delay: 0.35 },
     adsZoom: 1.25,
     range: 50,
     type: "hitscan",
@@ -69,6 +77,7 @@ export const WEAPONS = [
     // across a room, slug-like at mid range.
     spread: 0.035,
     adsSpread: 0.02,
+    bloom: { perShot: 0.004, max: 0.012, recover: 0.05, delay: 0.7 },
     adsZoom: 1.15,
     range: 22,
     falloff: [10, 20, 0.5],
@@ -89,7 +98,8 @@ export const WEAPONS = [
     startAmmo: 60,
     pickupAmmo: 30,
     spread: 0.014,
-    adsSpread: 0.003,
+    adsSpread: 0,
+    bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
     adsZoom: 1.5,
     range: 100,
     type: "hitscan",
@@ -110,6 +120,7 @@ export const WEAPONS = [
     pickupAmmo: 10,
     spread: 0.006,
     adsSpread: 0,
+    bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
     adsZoom: 1.3,
     range: 100,
     type: "projectile",
@@ -134,6 +145,7 @@ export const WEAPONS = [
     // about six metres.
     spread: 0.15,
     adsSpread: 0.11,
+    bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
     adsZoom: 1.1,
     range: 10,
     falloff: [3, 7, 0.15],
@@ -163,6 +175,7 @@ export const WEAPONS = [
     pickupAmmo: 1,
     spread: 0.06,
     adsSpread: 0,
+    bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
     adsZoom: 4,
     adsSens: 0.75,
     scope: true,
@@ -189,7 +202,8 @@ export const WEAPONS = [
     startAmmo: 90,
     pickupAmmo: 40,
     spread: 0.02,
-    adsSpread: 0.005,
+    adsSpread: 0,
+    bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
     adsZoom: 1.25,
     range: 60,
     type: "projectile",
@@ -213,6 +227,7 @@ export const WEAPONS = [
     pickupAmmo: 4,
     spread: 0.01,
     adsSpread: 0,
+    bloom: { perShot: 0, max: 0, recover: 1, delay: 0 },
     adsZoom: 1.3,
     range: 40,
     type: "projectile",

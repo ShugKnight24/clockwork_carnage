@@ -21,7 +21,7 @@ import { LOCKABLE, gameUnlockContext, droppableItems, itemOf } from "./unlocks.j
 import { FINISHES } from "../data/weapon-skins.js";
 import { WEAPONS } from "../data/weapons.js";
 import { Projectile, Enemy, Pickup } from "../entities/index.js";
-import { aimAnglesForGame, currentSpread } from "./aim.js";
+import { aimAnglesForGame, currentSpread, noteShotBloom } from "./aim.js";
 import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
 import { readyToFire, spendShot } from "./reload.js";
@@ -110,8 +110,8 @@ export function fireWeapon(game) {
 
   const damage = wep.damage * game.player.damageMultiplier * boost;
   const camera = aimAnglesForGame(game);
-  // Every round scatters inside the weapon's cone: the hip `spread`, easing
-  // to its `adsSpread` as the sights come up. Single rounds used to ignore
+  // Every round scatters inside the weapon's cone: the hip `spread` and its
+  // bloom, easing to its `adsSpread` as the sights come up. Single rounds used to ignore
   // the cone and pellets spread only sideways, so the sights and the
   // crosshair said nothing about where a weapon's rounds actually went.
   // Blind fire from cover sprays wider (src/systems/cover-play.js); a hip
@@ -138,7 +138,11 @@ export function fireWeapon(game) {
     const shots = game.player.multiShot || 1;
     for (let ms = 0; ms < shots; ms++) {
       const [dy, dp] = scatter(cone);
-      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 * fanMul : 0;
+      // Aimed, the first bolt goes through the reticle and the rest fan out
+      // either side of it; centred on the aim, an even fan put none there.
+      const spreadAngle = shots < 2 ? 0 : game.player.isAiming
+        ? (ms === 0 ? 0 : (ms % 2 ? 1 : -1) * Math.ceil(ms / 2) * 0.12 * fanMul)
+        : (ms - (shots - 1) / 2) * 0.12 * fanMul;
       const shotAngle = aimAngle + spreadAngle + dy;
       const dirX = Math.cos(shotAngle);
       const dirY = Math.sin(shotAngle);
@@ -168,6 +172,8 @@ export function fireWeapon(game) {
     }
   }
   endCoverShot(game, coverShot);
+  // The next shot's hip cone opens a little (src/systems/aim.js bloom).
+  noteShotBloom(wep);
 
   game.screenShake = Math.max(
     game.screenShake,

@@ -57,10 +57,21 @@ let _breathYaw = 0;
 let _breathY = 0;
 let _lastPos = null;
 /**
- * Conditioning's Steadiness (src/systems/conditioning.js): scales the aimed
- * end of every cone and the scope's breath. 1 is untrained.
+ * Conditioning's Steadiness (src/systems/conditioning.js): divides the time
+ * hip bloom takes to close and scales the scope's breath. 1 is untrained.
  */
 let _steadyMult = 1;
+/**
+ * Hip bloom (src/data/weapons.js `bloom`): radians the hip cone has opened
+ * from the shots just fired, the id of the gun that fired them (so a gun
+ * swapped to mid-spray starts from its own base cone), its `recover` (radians
+ * a second) and `delay`, and the seconds since its last shot.
+ */
+let _bloom = 0;
+let _bloomId = -1;
+let _bloomRecover = 0;
+let _bloomDelay = 0;
+let _sinceShot = 0;
 
 /** Smooth sprint/dash/slide FOV boost (degrees to add). */
 let _sprintFovLerp = 0;
@@ -101,16 +112,63 @@ export const adsZoomOf = (wep) => wep?.adsZoom ?? PLAYER_ADS_ZOOM;
 /** Magnification at the current blend: 1 at the hip, the weapon's adsZoom fully aimed. */
 export const aimZoom = () => 1 + (_adsZoom - 1) * _adsBlend;
 
-/** The held weapon's cone (radians, half-angle) at the current blend: hip `spread` to `adsSpread`. */
+/**
+ * The held weapon's cone (radians, half-angle) at the current blend: hip
+ * `spread` plus its bloom, easing to `adsSpread` as the sights come up, so
+ * an aimed precision round goes through the reticle however hard the gun
+ * was just fired.
+ */
 export function currentSpread(wep) {
   if (!wep) return 0;
-  const hip = wep.spread || 0;
-  return hip + ((wep.adsSpread ?? hip) * _steadyMult - hip) * _adsBlend;
+  const hip = (wep.spread || 0) + (wep.id === _bloomId ? _bloom : 0);
+  return hip * (1 - _adsBlend) + (wep.adsSpread ?? wep.spread ?? 0) * _adsBlend;
 }
 
-/** Set Steadiness's multiplier on aimed spread and scope sway (1 = none). */
+/** Set Steadiness's multiplier (1 = none): bloom closes 1/mult as fast once its delay is up, the scope breathes × mult. */
 export function setAdsSteadiness(mult) {
   _steadyMult = Number.isFinite(mult) ? Math.max(0, Math.min(1, mult)) : 1;
+}
+
+/**
+ * A shot fired: open the hip cone by the gun's `bloom.perShot`, up to its
+ * `bloom.max`, and hold it for `bloom.delay`. Only a hip shot opens it: the
+ * share added falls with the sights, so a fully aimed volley adds none, but
+ * any shot holds what is already open.
+ */
+export function noteShotBloom(wep) {
+  const b = wep?.bloom;
+  if (!b) return;
+  if (wep.id !== _bloomId) [_bloom, _bloomId] = [0, wep.id];
+  _bloom = Math.min(b.max, _bloom + b.perShot * (1 - _adsBlend));
+  _bloomRecover = b.recover;
+  _bloomDelay = b.delay || 0;
+  _sinceShot = 0;
+}
+
+/**
+ * Hold the bloom for the firing gun's `delay` after its last shot, then
+ * close it at its `recover` rate (faster with Steadiness). Call once per
+ * frame. Only the part of dt past the delay closes it, and a linear close is
+ * the same in one step or many, so it runs alike at 144 Hz and through a
+ * hitch.
+ */
+export function updateBloom(dt) {
+  if (!(dt > 0)) return;
+  const held = Math.max(0, _bloomDelay - _sinceShot);
+  _sinceShot += dt;
+  if (_bloom <= 0 || dt <= held) return;
+  const rate = _bloomRecover / Math.max(0.05, _steadyMult);
+  _bloom = Math.max(0, _bloom - rate * (dt - held));
+}
+
+/** Radians the hip cone has opened by (0 once recovered). */
+export const currentBloom = () => _bloom;
+
+/** Close the bloom at once (a weapon switch, a level load). */
+export function resetBloom() {
+  _bloom = 0;
+  _bloomId = -1;
+  _sinceShot = 0;
 }
 
 /**
@@ -293,6 +351,7 @@ export function resetAdsFov() {
   // came before.
   _breathT = _steady = 0;
   _lastPos = null;
+  resetBloom();
 }
 
 /**

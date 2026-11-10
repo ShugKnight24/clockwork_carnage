@@ -63,7 +63,7 @@ import {
   isPassable as _isPassable,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
-import { updateAdsFov, resetAdsFov, currentBarH } from "../src/systems/aim.js";
+import { updateAdsFov, resetAdsFov, currentBarH, updateBloom, resetBloom } from "../src/systems/aim.js";
 import { padAim } from "../src/systems/pad-look.js";
 import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
@@ -2255,7 +2255,7 @@ export class Game {
     }
 
     // Before the pad reads it: switches made by key events since last frame count.
-    this.player?.trackWeapon();
+    this._trackWeaponSwitch();
     this._updateGamepadInput(this.deltaTime);
 
     this._updateTimeScale();
@@ -3079,6 +3079,11 @@ export class Game {
     if (!drop) this.entities.push(new Pickup(x, y, "health"), new Pickup(x + 0.3, y, "ammo"));
   }
 
+  /** Note a weapon switch (Player.trackWeapon): a gun drawn starts from its base cone, not the last one's bloom. */
+  _trackWeaponSwitch() {
+    if (this.player?.trackWeapon()) resetBloom();
+  }
+
   updatePlayer(dt) {
     this.player._drawDistance = this.quality?.drawDistance;
     const flags = this.playerUpdateSystem.update(
@@ -3111,6 +3116,9 @@ export class Game {
     _updateCover(this, dt);
     // Smooth ADS FOV transition — must run every frame
     updateAdsFov(this.player, dt, this.settings);
+    // On the clock the fire rate runs on (game.time), so a slow-mo neither
+    // stacks a steady tap's bloom nor closes it early.
+    updateBloom(this.deltaTime);
   }
 
   /**

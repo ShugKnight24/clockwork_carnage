@@ -32,6 +32,7 @@ import { setPieceFor } from "../src/data/campaign/set-pieces.js";
 import { Pickup } from "../src/entities/index.js";
 import { playLoreThen } from "../src/cinematic/films.js";
 import { clearArrivals } from "../src/systems/arrival.js";
+import { resetBloom } from "../src/systems/aim.js";
 import { hasIdleCallback } from "../src/utils/schedule.js";
 
 /** ARIA's line for each parting gift (src/systems/chrono-powers.js GIFTS). */
@@ -346,8 +347,10 @@ export class CampaignManager {
     g.player.x = level.playerStart.x;
     g.player.y = level.playerStart.y;
     g.player.angle = level.playerStart.dir;
-    // A level starts looking level, not where the last one ended.
+    // A level starts looking level, not where the last one ended, and with
+    // the hip cone closed.
     g.player.lookShiftY = 0;
+    resetBloom();
     g.player.alive = true;
     g.entities = [];
     // Nothing half-way through a tear carries over from the last level.
