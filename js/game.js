@@ -63,7 +63,7 @@ import {
   isPassable as _isPassable,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
-import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
+import { updateAdsFov, resetAdsFov, currentBarH } from "../src/systems/aim.js";
 import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
 import { teachHint } from "../src/ui/chrono-hud.js";
@@ -3506,6 +3506,8 @@ export class Game {
       hudStyle: this.settings.hudStyle,
       hudScale: this.settings.hudScale,
       hudH: this.hudH,
+      // The HUD bar on the scene canvas, as the reticle measures it (reticlePoint).
+      barH: currentBarH(this),
       aimOffsetX: this.player.aimOffsetX || 0,
       aimOffsetY: this.player.aimOffsetY || 0,
       state: this.state,

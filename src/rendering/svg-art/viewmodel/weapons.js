@@ -39,32 +39,38 @@ export const MATERIALS = {
 
 /** The long guns' cant at the hip (see hipCam). */
 const HIP_ROLL = -0.06;
-/** How far off (mm) the hip barrel is aimed, level all but this much. */
-const HIP_REACH = 3000;
+/**
+ * Where (mm along the reticle's ray) every hip barrel crosses it: aimed there,
+ * the gun points where its shots go at fighting range, and drifts only a few
+ * pixels off the reticle out past it. Crossing close up toed the gun in and
+ * tipped it up, so past the crossing it pointed over and left of the target.
+ */
+const HIP_REACH = 10000;
+/**
+ * How far (units) the hip gun sits below its authored framing, to clear the
+ * reticle. It moves the gun in the camera, not on screen, so the barrel still
+ * lines up on the reticle; sidearms sit higher, keeping the firing hand clear
+ * of the Classic HUD's bar.
+ */
+const HIP_DROP = 4;
 
 // Viewmodel focal length in units (4 px at 720p): a slightly wide lens exaggerates depth.
 const F = 230;
 
 /**
- * Hip camera: the rear top edge of the receiver lands at (rx, ry) units from
- * the reticle, `oz` mm ahead of the eye; the muzzle then falls on the line to
+ * Hip camera: the rear top edge of the receiver lands at (rx, ry + drop) units
+ * from the reticle, `oz` mm ahead of the eye; the muzzle then falls on the line to
  * the reticle, shrunk by (oz + len) / oz. `top` = receiver top height (mm).
  */
-function hipCam({ top, oz, rx, ry, kx = -0.24, meet = 0, roll = 0 }) {
-  const yTop = -(ry * oz) / F;
+function hipCam({ top, oz, rx, ry, kx = -0.24, roll = 0, drop = HIP_DROP }) {
+  const yTop = -((ry + drop) * oz) / F;
   const cam = { F, ox: (rx * oz) / F - kx * top, oy: yTop - top, oz, kx, roll };
-  // `meet`: the gun toed in about its rear so the barrel would cross the
-  // reticle's ray `meet` mm along it: some of the left flank and the hands
-  // on it turned toward the eye. The shorter, the more of the flank shows.
-  // Its pitch is only what aims it at HIP_REACH: a barrel raised to meet the
-  // ray close up points over the target, at the ceiling.
+  // Turned about its rear so the barrel crosses the reticle's ray HIP_REACH out.
   // `roll` (radians, − turns the left flank toward the eye) cants a long gun
   // about its barrel, as shooters' hip views do, so the grip and the fingers
   // wrapped round it face the eye; the arms stay put (geom's `steady`).
-  if (meet) {
-    cam.yaw = Math.atan2(cam.ox, meet);
-    cam.pitch = Math.atan2(-cam.oy, HIP_REACH);
-  }
+  cam.yaw = Math.atan2(cam.ox, HIP_REACH);
+  cam.pitch = Math.atan2(-cam.oy, HIP_REACH);
   return cam;
 }
 /**
@@ -263,8 +269,7 @@ export const WEAPON_MODELS = {
   // Compact steel slide over a polymer frame, chrono channel inlaid along the top.
   0: {
     // Sidearms keep more of the firing hand in frame than the long guns' hip drop.
-    hipDrop: 3,
-    cams: { hip: hipCam({ top: 22, oz: 380, rx: 72, ry: 36, kx: 0.1, meet: 850 }), ads: adsCam({ sightY: 28.5, oz: 440 }) },
+    cams: { hip: hipCam({ top: 22, oz: 380, rx: 72, ry: 36, kx: 0.1, roll: 0.08, drop: -5 }), ads: adsCam({ sightY: 28.5, oz: 440 }) },
     build(sc, A, pose) {
       // Ported compensator ahead of the slide, the chrono crown glowing at its lip.
       brake(sc, 0, 11, 10, 192, 214, 2);
@@ -312,7 +317,7 @@ export const WEAPON_MODELS = {
   // ── Temporal Shotgun ────────────────────────────────────────────────────────
   // Bronze receiver, twin steel barrels with a ribbed pump; temporal coils on the top edges.
   1: {
-    cams: { hip: hipCam({ top: 30, oz: 290, rx: 80, ry: 16, kx: -0.28, meet: 3850, roll: HIP_ROLL }), ads: adsCam({ sightY: 85, oz: 280 }) },
+    cams: { hip: hipCam({ top: 30, oz: 290, rx: 80, ry: 16, kx: -0.28, roll: HIP_ROLL }), ads: adsCam({ sightY: 85, oz: 280 }) },
     build(sc, A, pose) {
       const hg = { y0: -18, y1: 6, hw: 21, zc: 345 };
       const handguard = boxOccluder(-23, 23, -18, 27, 290, 420);
@@ -355,7 +360,7 @@ export const WEAPON_MODELS = {
   // ── Phase Rifle ─────────────────────────────────────────────────────────────
   // Indigo handguard banded with phase emitter rings, optic up top, power cell below.
   2: {
-    cams: { hip: hipCam({ top: 30, oz: 300, rx: 80, ry: 16, kx: -0.28, meet: 4300, roll: HIP_ROLL }), ads: adsCam({ sightY: 86, oz: 280, above: 0 }) },
+    cams: { hip: hipCam({ top: 30, oz: 300, rx: 80, ry: 16, kx: -0.28, roll: HIP_ROLL }), ads: adsCam({ sightY: 86, oz: 280, above: 0 }) },
     build(sc, A, pose) {
       const hg = { y0: -14, y1: 32, hw: 22, zc: 290 };
       const handguard = boxOccluder(-22, 22, -14, 32, 240, 452);
@@ -397,7 +402,7 @@ export const WEAPON_MODELS = {
   // ── Quantum Cannon ──────────────────────────────────────────────────────────
   // Heavy crimson chassis, tapering coil housing, exposed quantum core, aperture sights.
   3: {
-    cams: { hip: hipCam({ top: 44, oz: 380, rx: 90, ry: 8, kx: -0.24, meet: 3000, roll: HIP_ROLL }), ads: adsCam({ sightY: 100, sightX: -58, oz: 340 }) },
+    cams: { hip: hipCam({ top: 44, oz: 380, rx: 90, ry: 8, kx: -0.24, roll: HIP_ROLL }), ads: adsCam({ sightY: 100, sightX: -58, oz: 340 }) },
     build(sc, A, pose) {
       const hg = { y0: -24, y1: 36, hw: 30, zc: 355 };
       const handguard = boxOccluder(-30, 30, -24, 40, 300, 470);
@@ -452,7 +457,7 @@ export const WEAPON_MODELS = {
   // ── Phase Scattergun ────────────────────────────────────────────────────────
   // Wide plum body, three stacked barrels under a vented shroud, phase emitter core.
   4: {
-    cams: { hip: hipCam({ top: 34, oz: 270, rx: 80, ry: 16, kx: -0.28, meet: 3650, roll: HIP_ROLL }), ads: adsCam({ sightY: 89, oz: 280 }) },
+    cams: { hip: hipCam({ top: 34, oz: 270, rx: 80, ry: 16, kx: -0.28, roll: HIP_ROLL }), ads: adsCam({ sightY: 89, oz: 280 }) },
     build(sc, A, pose) {
       const hg = { y0: -22, y1: 6, hw: 26, zc: 355 };
       const handguard = boxOccluder(-26, 26, -22, 6, 300, 420);
@@ -495,7 +500,7 @@ export const WEAPON_MODELS = {
   // ── Temporal Sniper ─────────────────────────────────────────────────────────
   // Long fluted barrel with coil rings, bolt action, big optic with a glowing eyepiece.
   5: {
-    cams: { hip: hipCam({ top: 28, oz: 390, rx: 80, ry: 16, kx: -0.28, meet: 5500, roll: HIP_ROLL }), ads: adsCam({ sightY: 88, oz: 300, above: 0 }) },
+    cams: { hip: hipCam({ top: 28, oz: 390, rx: 80, ry: 16, kx: -0.28, roll: HIP_ROLL }), ads: adsCam({ sightY: 88, oz: 300, above: 0 }) },
     build(sc, A, pose) {
       const hg = { y0: -12, y1: 26, hw: 19, zc: 330 };
       const handguard = boxOccluder(-19, 19, -12, 26, 220, 520);
@@ -541,8 +546,7 @@ export const WEAPON_MODELS = {
   // Angular brass slide with deflector fins and a zig-zag ricochet channel.
   6: {
     // Sidearms keep more of the firing hand in frame than the long guns' hip drop.
-    hipDrop: 3,
-    cams: { hip: hipCam({ top: 22, oz: 380, rx: 72, ry: 36, kx: 0.1, meet: 850 }), ads: adsCam({ sightY: 29.5, oz: 430 }) },
+    cams: { hip: hipCam({ top: 22, oz: 380, rx: 72, ry: 36, kx: 0.1, roll: 0.08, drop: -5 }), ads: adsCam({ sightY: 29.5, oz: 430 }) },
     build(sc, A, pose) {
       // Hex compensator, its crown ringed in a ricochet glow.
       brake(sc, 0, 11, 8.5, 180, 200, 2);
@@ -576,7 +580,7 @@ export const WEAPON_MODELS = {
   // ── EMP Launcher ────────────────────────────────────────────────────────────
   // Armoured teal launcher: wide finned tube with charging rings, capacitor bank, aperture sights.
   7: {
-    cams: { hip: hipCam({ top: 46, oz: 380, rx: 90, ry: 8, kx: -0.24, meet: 2900, roll: HIP_ROLL }), ads: adsCam({ sightY: 102, sightX: -56, oz: 340 }) },
+    cams: { hip: hipCam({ top: 46, oz: 380, rx: 90, ry: 8, kx: -0.24, roll: HIP_ROLL }), ads: adsCam({ sightY: 102, sightX: -56, oz: 340 }) },
     build(sc, A, pose) {
       const hg = { y0: -14, y1: 46, hw: 30, zc: 340 };
       const handguard = boxOccluder(-30, 30, -14, 46, 280, 470);

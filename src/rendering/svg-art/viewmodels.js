@@ -280,8 +280,6 @@ function contactShadow(ctx) {
 
 // Screen-space rig smoothing shared across frames: sway and reticle follow.
 const rig = { t: 0, sx: 0, sy: 0, ox: 0, oy: 0, vsx: 0, vsy: 0, vox: 0, voy: 0 };
-// The hip pose sits this many units below its authored framing to clear the reticle.
-const HIP_DROP = 12;
 // Blend at which the hip rig has swung onto the ADS anchors; the rest cross-fades art.
 const MORPH_END = 0.55;
 /**
@@ -600,8 +598,12 @@ export function drawViewmodel(ctx, w, h, o, alpha = 1, blend = o.isAiming ? 1 : 
   const bobMulY = lerp(isDashing ? 12 : isSprinting ? 10 : 5, 1.5, b);
   const swayK = lerp(1, 0.22, b);
   const classic = o.hudStyle === 1;
-  const viewH = h - (classic ? 160 * ((o.hudScale || 100) / 100) * vf : 0);
-  const hipCy = h / 2 - (classic ? 160 * vf : 0) + (WEAPON_MODELS[wep.id].hipDrop ?? HIP_DROP) * UNIT * vf;
+  // The view above the HUD bar, measured as the reticle is (currentBarH).
+  const viewH = h - (o.barH ?? (classic ? 160 * ((o.hudScale || 100) / 100) * vf : 0));
+  // The hip art's origin is where its barrel lines converge: on the reticle
+  // (reticlePoint, src/systems/aim.js), so the gun points where shots go.
+  // Its drop below the reticle is in the camera (hipCam's `drop`).
+  const hipCy = viewH / 2;
   const follow = lerp(0.85, 1, b);
   const breath = (time || 0) * 0.001;
   const calm = 1 - 0.85 * b;
