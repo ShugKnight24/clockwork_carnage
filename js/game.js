@@ -64,6 +64,7 @@ import {
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
 import { updateAdsFov, resetAdsFov, currentBarH } from "../src/systems/aim.js";
+import { padAim } from "../src/systems/pad-look.js";
 import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
 import { teachHint } from "../src/ui/chrono-hud.js";
@@ -1030,9 +1031,14 @@ export class Game {
       was.fire = held.fire;
       was.aim = held.aim;
       if (gp.lookX || gp.lookY) {
-        const aimScale = 420 * dt;
-        this.mouse.dx += gp.lookX * aimScale;
-        this.mouse.dy += gp.lookY * aimScale;
+        if (this.world) {
+          // The voxel Forge keeps its own pad look.
+          const aimScale = 420 * dt;
+          this.mouse.dx += gp.lookX * aimScale;
+          this.mouse.dy += gp.lookY * aimScale;
+        } else {
+          padAim(this, gp.lookX, gp.lookY, dt);
+        }
       }
       if (jp.dash) {
         const cos = Math.cos(p.angle);

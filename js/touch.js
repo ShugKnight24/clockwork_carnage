@@ -815,9 +815,10 @@ export class TouchControls {
     this.assistLast = now;
     const level = Number(g.settings.aimAssist) || 0;
     this.assistTarget = level ? findAssistTarget(g) : null;
-    const p = g.player;
     // The pull follows the aim you give it: a drag, or the trigger. Walking alone leans nothing.
-    const input = this.lookedThisFrame ? 1 : p?.isFiring ? 0.4 : 0;
+    // Only a touch trigger (the fire button or auto-fire): a pad's isFiring
+    // would add this pull on top of the pad's own (src/systems/pad-look.js).
+    const input = this.lookedThisFrame ? 1 : this.activeButtons.has("fire") ? 0.4 : 0;
     applyAssistPull(g, this.assistTarget, level, dt, input);
     this.lookedThisFrame = false;
   }

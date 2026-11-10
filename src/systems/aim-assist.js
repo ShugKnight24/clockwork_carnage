@@ -1,13 +1,13 @@
 /**
- * Touch aim assist: a thumb on glass cannot hold a reticle on a far target the
- * way a mouse can, so on a touch device the aim slows as it crosses an enemy
+ * Touch and pad aim assist: a thumb on glass or a stick cannot hold a reticle
+ * on a far target the way a mouse can, so the aim slows as it crosses an enemy
  * (friction) and leans toward it while the player is aiming or moving
  * (pull). Nothing happens without input: it is help steering, not an aimbot.
  * With the sights up it leans toward the head, so a steady ADS shot is how
  * headshots are made on a phone.
  *
  * Grid levels only (the voxel Forge aims its own way). Pure apart from the
- * player it nudges; js/touch.js calls it.
+ * player it nudges; js/touch.js and src/systems/pad-look.js call it.
  */
 
 import { aimAnglesForGame, CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN } from "./aim.js";
