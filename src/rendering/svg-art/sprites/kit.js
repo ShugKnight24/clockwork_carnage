@@ -119,6 +119,8 @@ export function paletteMaterials(prefix, c1, c2) {
 export const BASE_MATERIALS =
   material("steel", "#a9bfd2", "#6f8aa3", "#3a4d61", "#161f29") +
   material("gun", "#6b7684", "#39424e", "#1c222b", "#0a0d11") +
+  // A long gun's metal, a step lighter than the gear, so it reads against dark plate.
+  material("gunmetal", "#a4afbc", "#5f6a78", "#333b46", "#12161c") +
   material("cloth", "#454b55", "#2a2f37", "#171a20", "#0a0b0e") +
   material("brass", "#f6dc98", "#bf9244", "#6e4f1e", "#241808") +
   material("glass", "#cfe9ff", "#4a6d8a", "#1b2c3c", "#0a121a");
@@ -224,6 +226,7 @@ function sheen(id, base, spec, low, deep, at = 0.12) {
 export const REAL_BASE_MATERIALS =
   sheen("steel", "#7a848e", "#c9cfd4", "#3c444c", "#15191d") +
   sheen("gun", "#40444a", "#80868c", "#212428", "#0b0c0e", 0.14) +
+  sheen("gunmetal", "#5a6068", "#a6acb2", "#2e3238", "#121417", 0.18) +
   material("cloth", "#3e4146", "#303338", "#1e2024", "#111214") +
   sheen("brass", "#8c7447", "#d8c79a", "#4f3f22", "#1c150b") +
   `<linearGradient id="glass" x1="0" y1="0" x2="1" y2=".7"><stop offset="0" stop-color="#8a9aa6"/><stop offset=".18" stop-color="#3a4854"/>` +

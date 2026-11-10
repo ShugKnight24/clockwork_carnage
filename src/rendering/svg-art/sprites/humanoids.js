@@ -135,22 +135,194 @@ function armOf(R, s, o = {}) {
 
 /* ── Weapons ────────────────────────────────────────────────────────────── */
 
-const GUN_SHAPES = {
-  rifle: (len) => [[-10, -3], [len * 0.55, -3], [len * 0.55, -1.8], [len, -1.8], [len, 1.8], [len * 0.55, 1.8], [len * 0.5, 4], [len * 0.22, 4], [len * 0.14, 11], [len * 0.04, 11], [0, 4], [-17, 6.5], [-17, -3]],
-  shotgun: (len) => [[-8, -3.5], [len, -3.5], [len, 1.5], [len * 0.7, 1.5], [len * 0.7, 4.5], [len * 0.38, 4.5], [len * 0.38, 1.5], [0, 3.5], [-15, 7], [-15, -2]],
-  smg: (len) => [[-6, -3.5], [len * 0.8, -3.5], [len * 0.8, -1.5], [len, -1.5], [len, 1.5], [len * 0.55, 3], [len * 0.2, 3], [len * 0.2, 9], [len * 0.02, 9], [0, 3], [-6, 3]],
-};
+/*
+ * Long guns side-on, each in its own frame: the firing hand's grip at 0,0,
+ * the muzzle along +x, the pistol grip and magazine below (+y). `L` runs from
+ * the grip to the muzzle. Black polymer furniture on blued steel, so the
+ * outline reads at a few tiles: stock, receiver, magazine, grip, optic,
+ * handguard, muzzle. `trim` (a paint) picks out the receiver and the muzzle,
+ * a dress finish. Each returns its markup, its sling swivels (rear, front)
+ * and `fore`, where a support hand holds it.
+ */
+const FURNITURE = "url(#cloth)";
+const BORE = "#07090c";
+const METAL = "url(#gunmetal)";
+
+/** The squad's PD carbine: collapsible stock, curved magazine, a compact optic. */
+function carbine(L, trim) {
+  let m = sh(poly([[-4, -2.4], [-17, -3.2], [-20.4, -3.8], [-20.8, 6.6], [-17.6, 6.8], [-9, 2.6], [-4, 2.2]]), FURNITURE, 1.1);
+  m += sh(poly([[-20.4, -3.8], [-22.4, -3.6], [-22.8, 6.4], [-20.8, 6.6]]), "#0c0e12", 0.9);
+  m += ln("M-15 1.8L-9.5 0.8", BORE, 1.1, 0.8);
+  m += sh(poly([[0.2, 2], [4.8, 2], [3.4, 11.4], [-1.4, 11], [-0.6, 6.6]]), FURNITURE, 1);
+  m += sh(`M${P(L * 0.25, 3)}H${f(L * 0.37)}Q${P(L * 0.38 + 1.6, 9)} ${P(L * 0.42 + 2.2, 14.4)}L${P(L * 0.31 + 2.2, 15.6)}Q${P(L * 0.28 + 0.6, 9.4)} ${P(L * 0.25, 3)}Z`, METAL, 1);
+  m += ln(`M${P(L * 0.27 + 0.8, 7.4)}l${f(L * 0.1)} -0.4M${P(L * 0.29 + 1.4, 11)}l${f(L * 0.1)} -0.6`, BORE, 0.7, 0.7);
+  m += ln(`M4.6 3.2Q5.6 7.6 ${P(L * 0.25, 4.4)}`, INK, 1, 0.9);
+  m += sh(poly([[-4.6, -3.6], [L * 0.42, -3.6], [L * 0.42, 2.6], [L * 0.31, 2.6], [L * 0.31, 3.4], [1.2, 3.4], [-1.2, 2.4], [-4.6, 2.4]]), METAL, 1.1);
+  m += sh(`M${P(L * 0.13, -2)}h${f(L * 0.11)}v1.8h${f(-L * 0.11)}Z`, BORE, 0);
+  m += sh(`M${P(L * 0.42, -3.4)}H${f(L * 0.8)}L${P(L * 0.81, -2.4)}V2L${P(L * 0.8, 2.8)}H${f(L * 0.42)}Z`, FURNITURE, 1.1);
+  for (let k = 0; k < 4; k++) m += ln(`M${P(L * (0.46 + k * 0.08), -0.6)}h${f(L * 0.045)}`, BORE, 1.1, 0.85);
+  m += sh(`M${P(L * 0.81, -1)}H${f(L - 2.6)}V1H${f(L * 0.81)}Z`, "url(#steel)", 0.8);
+  m += sh(poly([[L * 0.74, -3.4], [L * 0.79, -3.4], [L * 0.785, -6.8], [L * 0.755, -6.8]]), METAL, 0.8);
+  m += sh(`M${P(L - 3, -1.9)}h3.6v3.8h-3.6Z`, trim || METAL, 0.8);
+  m += sh(`M${P(L * 0.17, -3.6)}h${f(L * 0.14)}l-1 -1.6h${f(-L * 0.12)}Z`, METAL, 0.6);
+  m += sh(`M${P(L * 0.11, -9.6)}h${f(L * 0.27)}a2.3 2.3 0 0 1 0 4.6h${f(-L * 0.27)}a2.3 2.3 0 0 1 0 -4.6Z`, METAL, 1);
+  m += ell(L * 0.38 + 2.1, -7.3, 0.9, 2, "url(#glass)", 0.6);
+  if (trim) m += ln(`M-3 0.7H${f(L * 0.4)}`, trim, 1, 0.95);
+  m += spec(`M-2 -2.8H${f(L * 0.4)}M${P(L * 0.13, -8.8)}h${f(L * 0.22)}`, 0.4, 0.8);
+  return { m, swivels: [[-13, 4.8], [L * 0.74, 2.8]], fore: [L * 0.7, 0.4] };
+}
+
+/** The pump gun: full stock, a tube under the barrel, the ribbed forend, shells on the side. */
+function pumpGun(L, trim) {
+  let m = sh(poly([[-3, -2.8], [-17, -1.4], [-20.6, -1.8], [-21, 7.8], [-17.4, 7.6], [-6, 3.4], [-3, 3.2]]), FURNITURE, 1.1);
+  m += sh(poly([[-20.6, -1.8], [-23, -1.6], [-23.4, 7.6], [-21, 7.8]]), "#0c0e12", 0.9);
+  m += sh(poly([[0.2, 2.4], [4.6, 2.4], [3.2, 10.4], [-1.4, 10], [-0.8, 6.4]]), FURNITURE, 1);
+  m += ln("M4.4 3.6Q5.6 7.4 9.6 3.8", INK, 1, 0.9);
+  m += sh(`M${P(L * 0.3, -0.4)}H${f(L * 0.88)}V2.8H${f(L * 0.3)}Z`, METAL, 0.9);
+  m += circ(L * 0.88, 1.2, 1.7, "url(#steel)", 0.6);
+  m += sh(`M${P(L * 0.3, -3.6)}H${f(L)}V-0.4H${f(L * 0.3)}Z`, "url(#steel)", 1);
+  m += ln(`M${P(L * 0.32, -4.2)}H${f(L - 1)}`, "#1a1f26", 1.3, 0.95);
+  m += circ(L - 1, -4.9, 0.9, "url(#brass)", 0.4);
+  m += sh(poly([[-3.6, -4.2], [L * 0.3, -4.2], [L * 0.3, 3.2], [1.2, 3.2], [-1.2, 2.6], [-3.6, 2.6]]), METAL, 1.1);
+  // Four buckshot shells in the side saddle: red hulls, brass heads.
+  for (let i = 0; i < 4; i++) {
+    const x = 0.6 + i * 2.7;
+    m += sh(`M${P(x, -3)}h2.1v5.6h-2.1Z`, "#a8282c", 0.5) + sh(`M${P(x, 1.2)}h2.1v1.4h-2.1Z`, "url(#brass)", 0);
+  }
+  m += sh(`M${P(L * 0.42, -1)}H${f(L * 0.7)}V5.4H${f(L * 0.42)}Z`, FURNITURE, 1.1);
+  for (let k = 1; k < 5; k++) m += ln(`M${P(L * (0.42 + k * 0.056), -0.2)}V4.6`, BORE, 0.8, 0.8);
+  if (trim) m += ln(`M-2.4 -0.6H${f(L * 0.28)}`, trim, 1, 0.95);
+  m += spec(`M-2 -3.4H${f(L * 0.28)}M${P(L * 0.32, -3)}H${f(L - 1.5)}`, 0.4, 0.8);
+  return { m, swivels: [[-14, 5.4], [L * 0.86, 3]], fore: [L * 0.56, 2.2] };
+}
+
+/** The short carbine: a skeleton stock folded open, a straight magazine, a foregrip and a red dot. */
+function compactGun(L, trim) {
+  let m = sh("M-4 -2.6H-15.4V6.2H-12.2L-4 2ZM-12.6 -0.4V3.6L-7 1.3V-0.4Z", METAL, 1, ` fill-rule="evenodd"`);
+  m += sh("M-15.4 -2.6h-1.8v8.8h1.8Z", "#0c0e12", 0.8);
+  m += sh(poly([[0.2, 2], [4.8, 2], [3.4, 11], [-1.4, 10.6], [-0.6, 6.4]]), FURNITURE, 1);
+  m += sh(poly([[L * 0.3, 2.6], [L * 0.43, 2.6], [L * 0.45 + 1.2, 15.4], [L * 0.33 + 1.2, 15.8]]), METAL, 1);
+  m += sh(poly([[L * 0.6, 2.2], [L * 0.69, 2.2], [L * 0.68, 8.6], [L * 0.61, 8.6]]), FURNITURE, 0.9);
+  m += ln(`M4.6 3.2Q5.6 7 ${P(L * 0.3, 4)}`, INK, 1, 0.9);
+  m += sh(poly([[-4.4, -3.8], [L * 0.64, -3.8], [L * 0.66, -2.6], [L * 0.66, 2.6], [1.2, 2.8], [-1.2, 2.4], [-4.4, 2.4]]), METAL, 1.1);
+  m += sh(`M${P(L * 0.12, -2.2)}h${f(L * 0.13)}v1.8h${f(-L * 0.13)}Z`, BORE, 0);
+  m += sh(`M${P(L * 0.66, -2.6)}H${f(L)}V1.8H${f(L * 0.66)}Z`, METAL, 1);
+  for (let k = 0; k < 3; k++) m += circ(L * (0.73 + k * 0.08), -0.4, 0.8, BORE, 0);
+  if (trim) m += sh(`M${P(L - 1.6, -2.6)}h1.6v4.4h-1.6Z`, trim, 0.6);
+  m += sh(`M${P(L * 0.16, -8.4)}h${f(L * 0.17)}l1.4 1.4v3.2h${f(-L * 0.17 - 1.4)}Z`, METAL, 0.9);
+  m += sh(`M${P(L * 0.33 + 0.4, -7)}h1v3h-1Z`, "url(#glass)", 0.4);
+  m += spec(`M-2 -3H${f(L * 0.62)}`, 0.4, 0.8);
+  return { m, swivels: [[-13, 5], [L * 0.58, 2.4]], fore: [L * 0.645, 6] };
+}
+
+/** Guns are drawn a little deeper than true, so they keep their shape at a few tiles. */
+const THICK = 1.18;
+
+const LONG_GUNS = { rifle: carbine, shotgun: pumpGun, smg: compactGun };
+
+/**
+ * Where a side-held gun sits: its grip at g, the muzzle along heading `deg`
+ * (polar's convention). Pointed left, it is mirrored top to bottom so the
+ * grip and magazine still hang below the barrel; `flip` overrides that, to
+ * turn the magazine to the other side of a gun held muzzle-down.
+ * `at(pt)` takes a point in the gun's frame to the figure's.
+ */
+function gunFrame(g, deg, flip = null) {
+  const a = 90 - deg;
+  const r = (a * Math.PI) / 180;
+  const c = Math.cos(r);
+  const s = Math.sin(r);
+  const k = (flip ?? c < -1e-6) ? -1 : 1;
+  return {
+    tf: `translate(${P(g[0], g[1])}) rotate(${f(a)}) scale(1 ${f(k * THICK)})`,
+    at: ([x, y]) => [g[0] + x * c - k * THICK * y * s, g[1] + x * s + k * THICK * y * c],
+  };
+}
+
+/**
+ * Fingers closed round a gun, in its frame, drawn over it so the gun passes
+ * through the hand: round the pistol grip, or up round the handguard at `fore`.
+ */
+const gripFist = (mat) => sh("M-2.6 2.2h8.4a3.2 3.2 0 0 1 0 6.4h-8.4a3.2 3.2 0 0 1 0 -6.4Z", mat, 1) + ln("M0.6 2.6v5.6M3.2 2.6v5.6", INK, 0.6, 0.6);
+const foreFist = ([x, y], mat) => sh(`M${P(x - 4.4, y - 2.2)}h8.8v4.6a3.2 3.2 0 0 1 -3.2 3.2h-2.4a3.2 3.2 0 0 1 -3.2 -3.2Z`, mat, 1) + ln(`M${P(x - 1.5, y - 1.8)}v5.6M${P(x + 1.5, y - 1.8)}v5.6`, INK, 0.6, 0.6);
 
 /** Side-held weapon along heading `deg` (polar convention) from grip point g. */
-function gunSide(g, deg, kind = "rifle", len = 46) {
-  const a = 90 - deg;
-  const T = (pts) => poly(rot(pts, a, [0, 0], g));
-  let m = sh(T(GUN_SHAPES[kind](len)), "url(#gun)", 1.2);
-  if (kind === "rifle") m += sh(T([[len * 0.15, -3], [len * 0.42, -3], [len * 0.42, -7.5], [len * 0.15, -7.5]]), "url(#armorDk)", 1);
-  if (kind === "shotgun") m += sh(T([[len * 0.4, 1.5], [len * 0.68, 1.5], [len * 0.68, 4.5], [len * 0.4, 4.5]]), "url(#brass)", 0.8);
-  if (kind === "smg") m += sh(`M${P(...rot([[len * 0.35, 5]], a, [0, 0], g)[0])}m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0`, "url(#armorDk)", 1);
-  const hi = rot([[-8, -2], [len * 0.5, -2]], a, [0, 0], g);
-  return m + spec(`M${P(...hi[0])}L${P(...hi[1])}`, 0.35, 0.8);
+function gunSide(g, deg, kind = "rifle", len = 46, { trim = "", flip = null } = {}) {
+  return `<g transform="${gunFrame(g, deg, flip).tf}">${LONG_GUNS[kind](len, trim).m}</g>`;
+}
+
+/** A sling strap: webbing with an inked edge. */
+const strap = (a, b, color = "#1b2028", w = 2.6) => ln(`M${P(...a)}L${P(...b)}`, INK, w + 1.4) + ln(`M${P(...a)}L${P(...b)}`, color, w);
+
+/**
+ * Arm angles (biped's sh/el/kf) that put arm `s`'s hand on `T`, the elbow
+ * bending out from the body; past the arm's reach the forearm stretches.
+ */
+function armTo(d, s, T) {
+  const S = [s * d.shW, d.shY];
+  const D = Math.hypot(T[0] - S[0], T[1] - S[1]);
+  const phi = heading(S, T);
+  if (D >= d.ua + d.fa) return { sh: s * phi, el: 0, kf: (D - d.ua) / d.fa };
+  const alpha = (Math.acos((d.ua * d.ua + D * D - d.fa * d.fa) / (2 * d.ua * D)) * 180) / Math.PI;
+  const up = phi + s * alpha;
+  const E = polar(S, up, d.ua);
+  const fore = heading(E, T);
+  return { sh: s * up, el: s * fore - s * up };
+}
+
+/** The PD sidearm's grip, raked back, standing out of a holster whose mouth is at (x, y). */
+const pistolGrip = (x, y, s) => sh(poly([[x - s * 1.6, y + 1], [x + s * 3.4, y + 1], [x + s * 4.6, y - 6.4], [x + s * 0.2, y - 7.2]]), METAL, 0.9) + spec(`M${P(x + s * 0.6, y - 6)}L${P(x - s * 0.6, y)}`, 0.35, 0.7);
+
+/**
+ * A duty holster on the belt at hip `s` (+1 the body's right as it faces
+ * you, -1 seen from behind): black leather off a belt loop, the grip and its
+ * retention hood standing above the belt where the arm doesn't cover it.
+ * `flap` closes it under a flap with a brass stud, an officer's holster.
+ */
+function dutyHolster(R, s, { x = 19, flap = false } = {}) {
+  const { hipY } = R;
+  const X = s * x;
+  const top = hipY - 6;
+  let m = flap ? "" : pistolGrip(X, top, s);
+  m += sh(poly([[X - s * 3.4, top], [X + s * 4.8, top], [X + s * 4.6, hipY + 15], [X + s * 1.8, hipY + 17.5], [X - s * 2.6, hipY + 14.5]]), "#16181d", 1.1);
+  m += spec(`M${P(X + s * 4, top + 2)}L${P(X + s * 3.8, hipY + 14)}`, 0.3, 0.8);
+  m += ln(`M${P(X + s * 0.8, top + 2)}L${P(X + s * 0.6, hipY + 15.5)}`, "#4a505a", 0.6, 0.8);
+  m += sh(`M${P(X - s * 3.6, hipY - 7)}h${f(s * 8.4)}v8h${f(-s * 8.4)}Z`, "#16191e", 0.8);
+  if (flap) {
+    m += sh(`M${P(X - s * 3.6, top - 6)}h${f(s * 8.6)}l${f(-s * 0.4)} 9q${f(-s * 4)} 3 ${f(-s * 8)} 0Z`, "#111317", 0.9);
+    m += circ(X + s * 0.8, top + 1.6, 1, "url(#brass)", 0.4);
+  } else {
+    m += sh(`M${P(X - s * 2.6, top - 3.6)}h${f(s * 6.6)}v2.6h${f(-s * 6.6)}Z`, "#111317", 0.7) + circ(X + s * 2.4, top - 2.3, 0.7, "url(#steel)", 0);
+  }
+  return m;
+}
+
+/** Magazine pouches on the belt, the other hip from the holster. */
+function magPouch(R, s, x = 12) {
+  const { hipY } = R;
+  let m = "";
+  for (const k of [0, 1]) {
+    const X = s * (x + k * 4.4);
+    m += sh(`M${P(X - 2, hipY - 9)}h4v9.5h-4Z`, "#111317", 0.7) + ln(`M${P(X - 2, hipY - 5.6)}h4`, "#3a3f47", 0.6, 0.8);
+  }
+  return m;
+}
+
+/** A drop-leg holster strapped round the outside of thigh `s`: a panel, two straps, the grip at the top. */
+function thighHolster(R, s) {
+  const { H, K } = R.legs[s];
+  const o = s * 8;
+  const a = lerp(H, K, 0.16);
+  const b = lerp(H, K, 0.62);
+  let m = "";
+  for (const t of [0.3, 0.52]) {
+    const p = lerp(H, K, t);
+    m += strap([p[0] - s * 7, p[1] + 1], [p[0] + o, p[1]], "#1b2028", 2);
+  }
+  m += pistolGrip(a[0] + o, a[1] + 1, s);
+  m += sh(poly([[a[0] + o - 3.6, a[1]], [a[0] + o + 3.6, a[1]], [b[0] + o + 3, b[1]], [b[0] + o - 3, b[1] + 1.5]]), "#111317", 1);
+  m += ln(`M${P(a[0] + o, a[1] + 2)}L${P(b[0] + o, b[1] - 1)}`, "#3a3f47", 0.6, 0.8);
+  return m;
 }
 
 /** Weapon aimed at the viewer: stock at the shoulder, bore facing out. */
@@ -593,6 +765,8 @@ function officer({ rank = null } = {}) {
       upper += arm(R, -1) + arm(R, 1);
       upper += torsoBack(R, { w: 21, waist: 15, mat: "url(#armor)" });
       upper += backLettering(shY + 14, "CHRONOS PD", "#6f86ab", 3.6, { opacity: 0.7 });
+      // The duty belt from behind: the holster on the right hip, the pouches on the left.
+      upper += dutyHolster(R, -1) + magPouch(R, 1);
       upper += headBack(R, { gear: "cap", band }).body;
     } else {
       upper += torsoOf(R, { mat: "url(#armor)", under: "url(#armor)", w: 21, waist: 15, plates: false });
@@ -602,8 +776,8 @@ function officer({ rank = null } = {}) {
       for (const s of [-1, 1]) upper += sh(`M${P(s * 5, shY + 5)}h${f(s * 10)}v9h${f(-s * 10)}Z`, "url(#armorDk)", 0.6);
       upper += sh(`M${P(-12, shY + 1)}l3 -3 3 3 -1 4h-4Z`, "url(#brass)", 0.7);
       upper += sh(`M${P(5, shY + 1.5)}h9v2.4h-9Z`, "#d8dee8", 0.5);
-      // The sidearm, holstered on the right hip.
-      upper += sh(`M${P(15, hipY - 8)}h6v13h-6Z`, "#0b0d12", 0.8);
+      // The duty belt: the sidearm holstered on the right hip, magazine pouches on the left.
+      upper += dutyHolster(R, 1) + magPouch(R, -1);
       const head = officerHead(R, { band });
       upper += arm(R, -1) + head.body + arm(R, 1);
     }
@@ -719,6 +893,7 @@ function kaelKit() {
     bulk: 1.24,
     gun: "smg",
     gunLen: 36,
+    carry: "shield",
     deco: {
       chest: (R) => {
         const { shY } = R;
@@ -777,6 +952,7 @@ function supervisorKit() {
   return heavyKit({
     trim: gold,
     padTrim: gold,
+    gunTrim: "url(#brass)",
     visorDown: false,
     older: true,
     gorget: "url(#brass)",
@@ -814,32 +990,70 @@ function supervisorKit() {
  * under the arms, `frontOver` over everything; `backBehind`, `backOver`
  * (before the head) and `backTop` from behind; and their emissive layers.
  */
-function heavyKit({ trim = "#5fd8ff", visorDown = true, older = false, rig = HUMAN, bulk = 1, gun = "rifle", gunLen = 44, padTrim = "", gorget = "url(#armorDk)", deco = {} } = {}) {
-  const slung = { sh: 14, el: -64, kf: 0.85 };
+/**
+ * How a long gun is carried, as the grip's place on the body (rig units at
+ * rest) and the muzzle's heading; the arms are solved onto it. `twoHands`
+ * puts the left hand on the handguard. `busy` is where it goes while the
+ * right arm salutes or points: hung on its sling across the front, the left
+ * hand still on it.
+ *  low:    low ready, the stock tucked under the right arm, the muzzle down
+ *          past the left hip.
+ *  port:   port arms, the butt on the right hip, the muzzle up past the left
+ *          shoulder.
+ *  shield: one-handed across the chest, the muzzle laid on the shield's edge
+ *          (Kael, whose left arm is the shield's).
+ */
+const CARRIES = {
+  low: { grip: [8, -10], aim: -60, twoHands: true, busy: { grip: [14, 0], aim: -38, twoHands: true } },
+  port: { grip: [9, -2], aim: -145, twoHands: true, busy: { grip: [14, 0], aim: -38, twoHands: true } },
+  shield: { grip: [16, -8], aim: -96, twoHands: false, busy: { grip: [12, 2], aim: -14, twoHands: false } },
+};
+
+function heavyKit({ trim = "#5fd8ff", visorDown = true, older = false, rig = HUMAN, bulk = 1, gun = "rifle", gunLen = 52, gunTrim = "", carry = "low", padTrim = "", gorget = "url(#armorDk)", deco = {} } = {}) {
+  const C = CARRIES[carry];
+  const G = LONG_GUNS[gun](gunLen, gunTrim);
+  // The arms on the gun, at rest and busy. The upper body moves as one (a
+  // walk's crouch and tilt), so the same angles keep both hands on it.
+  const grip = armTo(rig, 1, C.grip);
+  const support = C.twoHands ? armTo(rig, -1, gunFrame(C.grip, C.aim).at(G.fore)) : { sh: 10, el: 6 };
+  const busySupport = C.busy.twoHands ? armTo(rig, -1, gunFrame(C.busy.grip, C.busy.aim).at(G.fore)) : { sh: 8, el: 6 };
+  const pinL = C.twoHands ? support : null;
   const table = npcTable(
-    { armL: { sh: 10, el: 6 }, armR: slung },
-    npcWalk({ fwd: { sh: 5, el: 28, kf: 0.84 }, back: { sh: 20, el: 4 }, mid: { sh: 12, el: 12 }, armR: slung }),
-    pose({ armL: { sh: 4, el: 2 } }, SALUTE),
-    pose({ armL: { sh: 8, el: 6 } }, POINT),
-    { frozen: { ...CIV_POSES.frozen, armR: slung } },
+    { armL: support, armR: grip },
+    npcWalk({ fwd: { sh: 5, el: 28, kf: 0.84 }, back: { sh: 20, el: 4 }, mid: { sh: 12, el: 12 }, armL: pinL, armR: grip }),
+    pose({ armL: busySupport }, SALUTE),
+    pose({ armL: busySupport }, POINT),
+    { frozen: { ...CIV_POSES.frozen, armR: grip, ...(pinL ? { armL: pinL } : {}) } },
   );
   const b = bulk;
   const call = (k, R, name) => (deco[k] ? deco[k](R, name) : "");
   const poses = build(rig, table, (R, name) => {
     const { shY, hipY } = R;
     const back = name.startsWith("back");
+    const busy = name.startsWith("salute") || name.startsWith("point");
     const under = back ? "" : call("under", R, name);
     let body = under ? up(R, under) : "";
     body += legsOf(R, { under: "url(#cloth)", pad: "url(#armorDk)", plate: "url(#armor)", thighW: 17 * b, kneeW: 14 * b, ankleW: 10 * b, bootW: 16 * b, trim });
+    // The sidearm in a drop-leg holster on the right thigh (the left of the
+    // picture from behind).
+    body += thighHolster(R, back ? -1 : 1);
     const pad = { mat: "url(#armorDk)", guard: "url(#armor)", hand: "url(#gun)", pad: "url(#armor)", padR: 15 * b, upW: 13 * b, foreW: 12.5 * b, trim: padTrim };
+    // In the right hand, or (busy) hung across the front on its sling.
+    const F = busy ? gunFrame([C.busy.grip[0], C.busy.grip[1] + shY - rig.shY], C.busy.aim) : gunFrame(R.arms[1].W, C.aim);
+    const inFrame = (m) => `<g transform="${F.tf}">${m}</g>`;
+    const gunM = inFrame(G.m);
+    const [rear, front] = G.swivels.map(F.at);
+    const leftOn = busy ? C.busy.twoHands : C.twoHands;
     let upper = "";
     let glowUp = "";
     if (back) {
+      // From behind, the gun carried in front shows only where it clears the body.
+      upper += `<g transform="scale(-1 1)">${gunM}</g>`;
       upper += call("backBehind", R, name);
       upper += armOf(R, -1, pad) + armOf(R, 1, pad);
       upper += torsoBack(R, { w: 26 * b, waist: 18 * b, mat: "url(#armor)" });
-      // The rifle's stock and sling across the back, under the pack and placard.
-      upper += ln(`M${P(-20 * b, shY - 2)}L${P(17 * b, hipY - 4)}`, "#141a24", 2.6, 0.9);
+      // The sling across the back, the left shoulder to the right hip.
+      upper += strap([20 * b, shY - 2], [-17 * b, hipY - 4]);
       // Power pack between the shoulder blades, and the unit's lettering.
       upper += plate([[-13 * b, shY - 2], [13 * b, shY - 2], [12 * b, shY + 19], [-12 * b, shY + 19]], "url(#armorDk)", 1.3, 0.4);
       for (const s of [-1, 1]) upper += sh(`M${P(s * 8 - 1.5, shY + 2)}h3v13h-3Z`, "url(#gun)", 0.6);
@@ -864,15 +1078,17 @@ function heavyKit({ trim = "#5fd8ff", visorDown = true, older = false, rig = HUM
       glowUp += bar(-16 * b, shY + 11, 4, 1.4, trim) + bar(16 * b, shY + 11, 4, 1.4, trim);
       const head = kitHead(R, { down: visorDown, older, trim });
       glowUp += head.glow;
-      upper += armOf(R, -1, pad);
-      // Right arm up (a salute, a point): the weapon goes to the left hand,
-      // or it swings out with the arm, past the sprite's box.
-      if (name.startsWith("salute") || name.startsWith("point")) {
-        upper += head.body + armOf(R, 1, pad) + gunSide([R.arms[-1].W[0] + 4, R.arms[-1].W[1]], 160, gun, gunLen - 2);
-      } else {
-        // Weapon slung across the chest, the right hand on its grip.
-        upper += head.body + gunSide(R.arms[1].W, 210, gun, gunLen) + armOf(R, 1, pad);
-      }
+      // The sling: from the front swivel up over the left shoulder, under its
+      // pauldron; from the stock round under the right arm.
+      upper += strap(front, [-17 * b, shY - 6]);
+      if (!busy) upper += strap(rear, [16 * b, shY + 10]);
+      upper += armOf(R, -1, pad) + head.body;
+      // The gun lies over the left arm and under the right, so the stock
+      // tucks under the right forearm; then the fingers close over it.
+      upper += gunM;
+      if (!busy) upper += armOf(R, 1, pad) + inFrame(gripFist(pad.hand));
+      if (leftOn) upper += inFrame(foreFist(G.fore, pad.hand));
+      if (busy) upper += armOf(R, 1, pad);
       upper += call("frontOver", R, name);
       glowUp += call("frontGlow", R, name);
     }
@@ -880,6 +1096,19 @@ function heavyKit({ trim = "#5fd8ff", visorDown = true, older = false, rig = HUM
     return { body, glow: glowUp ? up(R, glow(glowUp)) : "", at: {} };
   });
   return { poses, fx: [] };
+}
+
+/**
+ * The Supervisor's Sam Browne over the coat: a cross strap from the right
+ * shoulder to the left hip, a brass buckle where it meets the belt, and the
+ * flap holster on the right hip. `s` is the right side: +1 from the front, -1
+ * from behind.
+ */
+function samBrowne(R, s) {
+  const { shY, hipY } = R;
+  let m = strap([s * 15, shY - 7], [-s * 17, hipY - 5], "#17130f", 2.8);
+  m += sh(`M${P(-s * 18.6, hipY - 7.4)}h${f(s * 3.6)}v5h${f(-s * 3.6)}Z`, "url(#brass)", 0.5);
+  return m + dutyHolster(R, s, { x: 22, flap: true });
 }
 
 /** The Supervisor: older, a long coat with gold boards, a gold-banded cap. */
@@ -907,6 +1136,7 @@ function supervisor() {
       upper += ln(`M0 ${f(hipY - 2)}V${f(kneeY + 4)}`, INK, 1.1, 0.7);
       upper += sh(`M${P(-22, hipY - 6)}H22V${f(hipY - 2)}H-22Z`, "url(#gun)", 0.9);
       upper += sh(`M${P(-7, shY - 9)}H7V${f(shY - 3)}H-7Z`, "url(#armorDk)", 0.8);
+      upper += samBrowne(R, -1);
       upper += headBack(R, { gear: "cap", band: "#c9a03a", older: true }).body;
     } else {
       // Long coat to the knee, over the legs.
@@ -921,6 +1151,7 @@ function supervisor() {
       upper += sh(`M${P(-22, hipY - 6)}H22V${f(hipY - 2)}H-22Z`, "url(#gun)", 0.9);
       // Ribbons.
       upper += sh(`M${P(-15, shY + 6)}h8v2.2h-8Z`, "#c23a3a", 0.4) + sh(`M${P(-15, shY + 8.6)}h8v2.2h-8Z`, "#2a6ac2", 0.4);
+      upper += samBrowne(R, 1);
       const head = officerHead(R, { band: "#c9a03a", older: true });
       upper += arm(-1) + arm(1);
       upper = name.startsWith("salute") ? head.body + upper : upper + head.body;
