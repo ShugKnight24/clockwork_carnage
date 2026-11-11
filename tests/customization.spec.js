@@ -1042,7 +1042,8 @@ test("legacy EXPRESSION tab picks by key and by row, and notes a helmet over the
       return previewFigure().wanted;
     });
   expect(await wanted()).toMatch(/^bust:idle:1:/);
-  // A click on a row picks it.
+  // A click on a row picks it. A row near the top: how many rows the window
+  // holds depends on the font (CI's Linux one fits a row fewer than macOS's).
   const rowAt = (id) =>
     page.evaluate(async (k) => {
       const { getCreatorLayout, listWindow, CREATOR_CATEGORIES } = await import("/src/ui/character-creator.js");
@@ -1053,12 +1054,14 @@ test("legacy EXPRESSION tab picks by key and by row, and notes a helmet over the
       const rect = g.canvas.getBoundingClientRect();
       const L = getCreatorLayout(g.canvas.width, g.canvas.height, g.isTouchDevice && g.canvas.width < 700, g.isTouchDevice);
       const row = listWindow(L, cat, g.character, getIndex(g.character, "expression")).find((r) => r.type === "item" && r.i === EXPRESSIONS.findIndex((e) => e.id === k));
+      if (!row) return null;
       const sx = rect.width / g.canvas.width;
       return { x: rect.left + (L.contentX + L.listW / 2) * sx, y: rect.top + (row.y + L.itemH / 2) * sx };
     }, id);
-  const p = await rowAt("shocked");
+  const p = await rowAt("smirk");
+  expect(p, "the Smirk row is in the list window").not.toBeNull();
   await page.mouse.click(p.x, p.y);
-  expect(await expression()).toBe("shocked");
+  expect(await expression()).toBe("smirk");
   // The LED mask lights it: no peek, no note. The brim's bandana covers it.
   const foot = (helmet) =>
     page.evaluate(async (h) => {
