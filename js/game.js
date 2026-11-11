@@ -105,7 +105,6 @@ import {
   damagePlayer as _damagePlayer,
   maybeDropGear as _maybeDropGear,
 } from "../src/systems/combat-orchestrator.js";
-import { drawCrosshair } from "../src/ui/crosshair.js";
 import { drawScanlines } from "../src/ui/scanlines.js";
 import { drawPortrait as _drawPortrait } from "../src/ui/portrait.js";
 import { drawMinimap as _drawMinimap } from "../src/ui/minimap.js";
@@ -3554,10 +3553,6 @@ export class Game {
       alive: this.player.alive,
       time: this.time,
     });
-  }
-
-  drawCrosshairAt(ctx, cx, cy) {
-    drawCrosshair(ctx, cx, cy, this.settings.crosshair);
   }
 
   drawMinimap(ctx, x, y, w, h) {
