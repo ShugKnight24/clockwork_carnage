@@ -461,7 +461,9 @@ export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time,
 /**
  * Camera for the current frame, in the renderer's projection terms. The
  * renderer sets it once per frame (setFxCamera); streaks project their tail
- * through it. Until it is set, bolts draw without a streak.
+ * through it. Until it is set, bolts draw without a streak. `h` is the
+ * vertical focal length (renderer focalY: the canvas height times the
+ * sights' zoom), so heights and sizes magnify with the scope.
  */
 const FX_CAM = {
   valid: false,

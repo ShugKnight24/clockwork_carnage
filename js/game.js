@@ -63,7 +63,7 @@ import {
   isPassable as _isPassable,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
-import { updateAdsFov, resetAdsFov, currentBarH, updateBloom, resetBloom } from "../src/systems/aim.js";
+import { updateAdsFov, resetAdsFov, currentBarH, reticlePoint, updateBloom, resetBloom } from "../src/systems/aim.js";
 import { padAim } from "../src/systems/pad-look.js";
 import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
@@ -3430,12 +3430,17 @@ export class Game {
     // height of everyone else. The model is 55 units, helmet to boots.
     const r = this.renderer;
     const dist = Math.max(0.6, r?.thirdPersonDist || 1.8);
-    const box = h / dist;
+    // Aimed in, the sights magnify the view (renderer focalY) about the
+    // reticle's row; the cadet is magnified with it, as every sprite is.
+    // Sideways the renderer's x already is.
+    const zoom = r?.viewZoom || 1;
+    const box = (h * zoom) / dist;
     const sc = (box * 0.9) / 55;
-    const eyeLift = ((r?._eyeDrop || 0) * h) / dist;
+    const eyeLift = ((r?._eyeDrop || 0) * h * zoom) / dist;
     const bobX = Math.sin(this.player.weaponBob) * 0.06 * sc;
     const bobY = Math.abs(Math.cos(this.player.weaponBob)) * 0.08 * sc;
-    const feetY = h / 2 + box / 2 + eyeLift;
+    const ry = zoom === 1 ? 0 : reticlePoint(w, h, currentBarH(this), this.player).y;
+    const feetY = ry + zoom * (h / 2 - ry) + box / 2 + eyeLift;
     // Off-centre with the camera over the shoulder; the renderer's x is in
     // its own (render-scaled) pixels.
     const cx = (r?.thirdPersonX != null && r.width ? (r.thirdPersonX * w) / r.width : w / 2) + bobX;

@@ -5,9 +5,11 @@
  * trace through that exact pixel. `aimAngles()` and `reticlePoint()` are
  * inverses of each other under the renderer's projection.
  *
- * Renderer projection (see renderer.js _projectWorld):
+ * Renderer projection (see renderer.js _projectWorld), at the hip:
  *   screenX = (w/2) · (1 + tan(Δyaw) / planeMul)        planeMul = tan(fov_h/2)
  *   screenY =  h/2  - tan(pitch) · h                    (signed: pitch up → up)
+ * Aimed in, planeMul shrinks by the sights' zoom and heights grow by it about
+ * the reticle's row (zoomedShiftPx), which leaves every relation below as is.
  *
  * Reticle screen position:
  *   chx = w/2     + offsetX · w
@@ -235,6 +237,20 @@ export function sceneShiftPx(player, h) {
   return lean + look;
 }
 
+/**
+ * The scene's vertical shift (canvas px) as the raycaster draws it through
+ * sights of magnification `zoom`. Sideways the zoom narrows the FOV; up and
+ * down the renderer scales every height by the same factor (its focalY,
+ * `h · zoom`) about the reticle's row `ry`. A height `z` at depth `d` is drawn
+ * at `h/2 + shift - z · h · zoom / d`, so with this shift a point the hip
+ * view draws at row y is drawn at `ry + zoom · (y - ry)`: the reticle's row
+ * keeps what it had, and aimAngles (which needs no zoom) still names the
+ * point under the reticle.
+ */
+export function zoomedShiftPx(yShift, ry, h, zoom) {
+  return zoom === 1 ? yShift : yShift * zoom + (h / 2 - ry) * (zoom - 1);
+}
+
 /** Centred aim's look speed: radians per input unit (a mouse pixel), before the sensitivity settings. */
 export const CENTRED_LOOK_RATE = 0.0033;
 /** How far centred aim looks up: tan of the angle, ~23°. */
@@ -271,9 +287,9 @@ export function centredLook(player, dx, dy, settings = {}) {
  *
  * The zoom narrows the view about the screen centre, where the reticle is,
  * so whatever is under it stays under it without turning the view; the
- * view's rows are magnified about the reticle's own row (magnifyRows in
- * src/rendering/render-pipeline.js). `settings` gives the scope's breath the
- * FOV it turns the view by.
+ * renderer draws heights magnified by the same factor about the reticle's
+ * own row (zoomedShiftPx, renderer focalY). `settings` gives the scope's
+ * breath the FOV it turns the view by.
  */
 export function updateAdsFov(player, dt, settings = null) {
   const step = Math.min(dt, 0.1) / ADS_TRANSITION;

@@ -8,7 +8,7 @@ import { renderPostFX as _renderPostFX } from "./postfx.js";
 import { drawBlackout } from "../ui/tutorial-ui.js";
 import { renderWeather } from "./weather.js";
 import { GameState } from "../types.js";
-import { effectiveAimFov, updateSprintFov, sceneShiftPx, aimZoom, reticlePoint, currentBarH, getAimBlend } from "../systems/aim.js";
+import { effectiveAimFov, updateSprintFov, sceneShiftPx, zoomedShiftPx, aimZoom, reticlePoint, currentBarH, getAimBlend } from "../systems/aim.js";
 import { isModernArt } from "./art-style.js";
 import { styleName, camFromPlayer } from "../systems/voxel-glue.js";
 import { streamerFor, drawRadiusFor } from "../world/world-streamer.js";
@@ -657,6 +657,15 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   updateSprintFov(p, game.deltaTime);
   const renderFov = effectiveAimFov(p, game.settings);
   const renderPlaneMul = Math.tan((renderFov * 0.5 * Math.PI) / 180);
+  // Aimed in, the sights magnify. Sideways the narrower FOV does it; up and
+  // down the raycaster scales every height by the same factor (renderer
+  // focalY), about the reticle's row, so whatever sat under the reticle stays
+  // under it and the aim math (aimAngles) is the same at any zoom. A voxel
+  // level's camera zooms on its own.
+  const viewZoom = game.world ? 1 : aimZoom();
+  if (game.renderer) game.renderer.viewZoom = viewZoom;
+  const aim = reticlePoint(w, h, currentBarH(game), p);
+  const drawShift = zoomedShiftPx(yShift, aim.y, h, viewZoom);
   // The governor's low tier drops the floor to save the CPU floor caster. A
   // GPU floor costs next to nothing, and without one the room's floor is a
   // black void that cuts every prop off at its base, so there only the
@@ -690,12 +699,12 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
       renderFov,
       game.settings.viewMode,
       skipFloorCeil,
-      yShift,
+      drawShift,
     );
     // Chronos: Foresight, the Time-Lock, the echo, set pieces, the Hound.
-    renderChronoWorld(game, game.renderer, renderPlaneMul, yShift);
+    renderChronoWorld(game, game.renderer, renderPlaneMul, drawShift);
     // Tears and vents enemies are coming through, in every mode (arrival.js).
-    if (game.arrivals?.length) renderArrivals(game, game.renderer, renderPlaneMul, yShift);
+    if (game.arrivals?.length) renderArrivals(game, game.renderer, renderPlaneMul, drawShift);
   } else {
     ctx.fillStyle = "#020610";
     ctx.fillRect(0, 0, w, h);
@@ -708,16 +717,15 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
 
   // Render atmospheric dust motes
   if (flat2D && (game.quality?.particleMultiplier ?? 1) >= 0.5 && game.dustMotes && game.dustMotes.length > 0) {
-    game.renderer.renderParticles(game.player, game.dustMotes, game.time, renderPlaneMul, undefined, undefined, yShift);
+    game.renderer.renderParticles(game.player, game.dustMotes, game.time, renderPlaneMul, undefined, undefined, drawShift);
   }
 
   // Hitscan tracers — drawn after sprites so they read on top, before vignette
   if (flat2D && game.tracers && game.tracers.length > 0) {
-    game.renderer.renderTracers(game.player, game.tracers, renderPlaneMul, undefined, undefined, yShift);
+    game.renderer.renderTracers(game.player, game.tracers, renderPlaneMul, undefined, undefined, drawShift);
   }
 
   ctx.restore();
-  if (flat2D && game.map?.grid) magnifyRows(game, ctx, w, h);
   if (profiling) {
     // The voxel pass reports itself as `voxel` (drawVoxelScene); counting it in
     // `raycast` as well would show the same milliseconds twice. Each branch
@@ -730,8 +738,8 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
   // The menu's settings showcase shows an act without loading its campaign.
   const _act = game.showcaseAct || game.campaign?.act || 1;
   if (game.map?.grid) {
-    const horizonY = (h >> 1) + yShift;
-    const bandH = 40;
+    const horizonY = (h >> 1) + drawShift;
+    const bandH = 40 * viewZoom;
     const hy0 = horizonY - bandH / 2;
     const actHorizon = _act === 2
       ? "20,10,4" : _act === 3
@@ -890,27 +898,6 @@ function renderWorld(game, ctx, w, h, { weapon = true } = {}) {
     });
   }
   if (profiling) game.profiler.currentPhases.effects = performance.now() - _tFx0;
-}
-
-/**
- * The raycaster's zoom is horizontal only: a narrower FOV squeezes the view
- * plane, but wall and sprite heights stay h / distance. Aimed in, stretch the
- * rows by the same magnification about the reticle's row, so the sight
- * magnifies evenly (a 4x scope is 4x both ways) on the GPU wall pass and the
- * Canvas2D path alike, and whatever sat under the reticle stays under it:
- * the vertical aim math is unchanged by the zoom.
- */
-function magnifyRows(game, ctx, w, h) {
-  const zoom = aimZoom();
-  if (!(zoom > 1.001)) return;
-  // The reticle's row as drawn this frame: moved with the frame (frameOffset).
-  const ry = reticlePoint(w, h, currentBarH(game), game.player).y + (game._frameOffset?.y || 0);
-  const sy = ry - ry / zoom;
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(ctx.canvas, 0, sy, ctx.canvas.width, ctx.canvas.height / zoom, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.restore();
 }
 
 /**

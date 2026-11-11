@@ -110,7 +110,7 @@ function worldPane(ctx, r, game, planeMul, yShift, ax, ay, bx, by, top, fill, st
 function floorMark(ctx, r, game, planeMul, yShift, x, y, rw, fill) {
   const pt = proj(r, game, planeMul, yShift, x, y, FLOOR);
   if (!visible(r, pt)) return;
-  const px = (r.height / pt.depth) * rw;
+  const px = (r.focalY / pt.depth) * rw;
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.ellipse(pt.x, pt.y, px, px * 0.28, 0, 0, Math.PI * 2);
@@ -175,7 +175,7 @@ function drawForesight(ctx, r, game, planeMul, yShift) {
     for (const dot of projectilePath(pr, game.map)) {
       const pt = proj(r, game, planeMul, yShift, dot.x, dot.y, -0.02);
       if (!visible(r, pt)) continue;
-      const s = Math.max(1.5, Math.min(4, 30 / pt.depth));
+      const s = Math.max(1.5, Math.min(4, 30 / pt.depth)) * r.viewZoom;
       ctx.fillRect(pt.x - s / 2, pt.y - s / 2, s, s);
     }
   }
@@ -339,7 +339,7 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
       }
       const pt = proj(r, game, planeMul, yShift, h.x, h.y, 0.05);
       if (visible(r, pt) && !h.stopped) {
-        const s = Math.max(4, (r.height / pt.depth) * 0.22);
+        const s = Math.max(4, (r.focalY / pt.depth) * 0.22);
         ctx.fillStyle = "#1a1d24";
         ctx.fillRect(pt.x - s, pt.y - s * 0.7, s * 2, s * 1.4);
         ctx.fillStyle = `rgba(255,60,40,${0.6 + 0.4 * Math.sin(now * 8)})`;
@@ -383,7 +383,7 @@ function drawHazards(ctx, r, game, planeMul, yShift) {
         const z = FLOOR - 0.2 - rnd() * 0.8 + Math.sin(now * 0.3 + i) * 0.01;
         const pt = proj(r, game, planeMul, yShift, x, y, z);
         if (!visible(r, pt)) continue;
-        const s = Math.max(1.5, (r.height / pt.depth) * 0.03);
+        const s = Math.max(1.5, (r.focalY / pt.depth) * 0.03);
         ctx.fillStyle = i % 3 ? "rgba(170,220,255,0.75)" : "rgba(210,200,180,0.8)";
         ctx.fillRect(pt.x - s / 2, pt.y - s / 2, s, s * (i % 3 ? 1.6 : 1));
       }
@@ -465,7 +465,7 @@ function drawForm2(ctx, r, game, planeMul, yShift) {
     if (c && visible(r, c)) {
       // A clock face standing over him, facing you: it fills from gold to
       // crimson as his hand closes, and when the hand reaches twelve he has it.
-      const R = Math.max(14, Math.min(220, (r.height / c.depth) * 0.75));
+      const R = Math.max(14, Math.min(220, (r.focalY / c.depth) * 0.75));
       const k = Math.min(1, charge);
       const warm = k < 0.5;
       ctx.lineWidth = Math.max(2, R * 0.12);
@@ -550,7 +550,7 @@ function drawTrain(ctx, r, game, planeMul, yShift, h, st, now) {
   worldPane(ctx, r, game, planeMul, yShift, n0.x, n0.y, n1.x, n1.y, TOP, "rgba(60,54,48,0.98)", 4);
   const lamp = proj(r, game, planeMul, yShift, at(head + 0.05, 0).x, at(head + 0.05, 0).y, 0.15);
   if (visible(r, lamp)) {
-    const s = Math.max(3, (r.height / lamp.depth) * 0.12);
+    const s = Math.max(3, (r.focalY / lamp.depth) * 0.12);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     ctx.fillStyle = "rgba(255,240,200,0.9)";
@@ -747,13 +747,7 @@ export function renderChronoWorld(game, r, planeMul, yShift) {
     figure(ctx, r, game, planeMul, yShift, cp.echo.x, cp.echo.y, "#ff5fb4", 0.55 * Math.min(1, left / 0.5));
   }
   if (cp?.foresightOn?.(game.player)) sprites = sprites.concat(drawForesight(ctx, r, game, planeMul, yShift));
-  if (sprites.length) {
-    const shift = yShift | 0;
-    ctx.save();
-    if (shift) ctx.translate(0, shift);
-    r.renderSprites(game.player, sprites, game.time, planeMul, undefined, undefined, game.player._drawDistance);
-    ctx.restore();
-  }
+  if (sprites.length) r.renderSpritesShifted(game.player, sprites, game.time, planeMul, yShift, game.player._drawDistance);
 }
 
 // ── Arrivals (src/systems/arrival.js) ─────────────────────────────────────
@@ -941,7 +935,7 @@ function drawVent(ctx, r, game, planeMul, yShift, a, now) {
       const fall = (since * 0.9 + hash01(a.id * 17 + i)) % 1;
       const pt = proj(r, game, planeMul, yShift, a.tx + (hash01(i * 5 + a.id) - 0.5) * 0.45, a.ty + (hash01(i * 9 + a.id) - 0.5) * 0.45, CEILING + fall);
       if (!pt) continue;
-      const sz = Math.min(3, Math.max(1, (r.height / pt.depth) * 0.005));
+      const sz = Math.min(3, Math.max(1, (r.focalY / pt.depth) * 0.005));
       ctx.globalAlpha = 0.65 * (1 - fall);
       ctx.fillRect(pt.x - sz / 2, pt.y - sz / 2, sz, sz);
     }
@@ -969,11 +963,7 @@ export function renderArrivals(game, r, planeMul, yShift) {
     // out of the light, or drops past the panel, in front of either.
     if ((a.phase === "step" || a.phase === "done") && a.enemy.active !== false && !a.enemy.dissolving) {
       _stepping[0] = a.enemy;
-      const shift = yShift | 0;
-      ctx.save();
-      if (shift) ctx.translate(0, shift);
-      r.renderSprites(game.player, _stepping, game.time, planeMul, undefined, undefined, game.player._drawDistance);
-      ctx.restore();
+      r.renderSpritesShifted(game.player, _stepping, game.time, planeMul, yShift, game.player._drawDistance);
       _stepping[0] = null;
     }
   }

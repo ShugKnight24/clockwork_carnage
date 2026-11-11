@@ -3,7 +3,7 @@
  *
  * Pins, per weapon in src/data/weapons.js:
  *   1. the hit ray projects back onto the reticle / ADS sight pixel through
- *      the frame the renderer draws (zoomed FOV, magnified rows, eye height and
+ *      the frame the renderer draws (zoomed FOV and heights, eye height and
  *      recoil shift, HUD bar), hip and aimed, standing and crouched
  *   2. rounds scatter inside the cone the spread brackets draw, which closes
  *      to the weapon's adsSpread aimed (none for the precision guns); hip
@@ -61,8 +61,9 @@ function settle(p) {
 
 /**
  * Where a round on (yaw, pitch) is drawn: the raycaster's projection
- * (js/renderer.js _projectWorld) shifted by the scene's yShift, then the
- * rows magnified about the reticle row (magnifyRows in render-pipeline.js).
+ * (js/renderer.js _projectWorld) shifted by the scene's yShift, its heights
+ * magnified by the zoom about the reticle row (renderer focalY with
+ * zoomedShiftPx; tests/unit/scope-zoom.test.js checks the renderer itself).
  */
 function project(p, yaw, pitch, barH) {
   const fov = effectiveAimFov(p, settings);

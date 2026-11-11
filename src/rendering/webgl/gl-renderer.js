@@ -41,6 +41,7 @@ uniform vec2 u_dir;            // camera direction
 uniform vec2 u_plane;          // camera plane (FOV)
 uniform float u_yShift;        // pitch offset
 uniform float u_eyeZ;          // eye height in wall units (0.5 standing)
+uniform float u_zoom;          // the sights' magnification (renderer focalY)
 uniform sampler2D u_floorTex;  // 256x256 floor texture
 uniform sampler2D u_ceilTex;   // 256x256 ceiling texture
 uniform vec3 u_fogColor;       // act-tinted fog RGB (0-1)
@@ -56,7 +57,7 @@ void main() {
   float w = u_resolution.x;
   float h = u_resolution.y;
   float halfH = floor(h * 0.5) + u_yShift;
-  float projH = floor(h * 0.5);
+  float projH = floor(h * 0.5) * u_zoom;
 
   float y = uv.y;
   // Flip Y — WebGL origin is bottom-left, canvas is top-left
@@ -144,6 +145,7 @@ uniform vec2 u_dir;
 uniform vec2 u_plane;
 uniform float u_yShift;
 uniform float u_eyeZ;          // eye height in wall units (0.5 standing)
+uniform float u_zoom;          // the sights' magnification (renderer focalY)
 uniform sampler2D u_floorTex;
 uniform sampler2D u_ceilTex;
 uniform sampler2D u_envMap;    // RGBA8 per cell: R wall bits, G glow bits, B glow index, A deck
@@ -362,7 +364,7 @@ void main() {
   float w = u_resolution.x;
   float h = u_resolution.y;
   float halfH = floor(h * 0.5) + u_yShift;
-  float projH = floor(h * 0.5);
+  float projH = floor(h * 0.5) * u_zoom;
   float screenY = h - 1.0 - gl_FragCoord.y;
   bool isFloor = screenY > halfH;
   float p = max(abs(screenY - halfH), 0.5);
@@ -727,6 +729,7 @@ export class GLRenderer {
       plane: gl.getUniformLocation(fp, 'u_plane'),
       yShift: gl.getUniformLocation(fp, 'u_yShift'),
       eyeZ: gl.getUniformLocation(fp, 'u_eyeZ'),
+      zoom: gl.getUniformLocation(fp, 'u_zoom'),
       floorTex: gl.getUniformLocation(fp, 'u_floorTex'),
       ceilTex: gl.getUniformLocation(fp, 'u_ceilTex'),
       fogColor: gl.getUniformLocation(fp, 'u_fogColor'),
@@ -844,7 +847,7 @@ export class GLRenderer {
    * Render floor and ceiling to the WebGL canvas.
    * Call this, then draw the result onto the main Canvas2D via drawImage.
    */
-  renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift, fogColor, fogMax, lights, eyeZ = 0.5) {
+  renderFloorCeiling(camX, camY, dirX, dirY, planeX, planeY, yShift, fogColor, fogMax, lights, eyeZ = 0.5, zoom = 1) {
     const gl = this.gl;
     const w = this.width;
     const h = this.height;
@@ -860,6 +863,7 @@ export class GLRenderer {
     gl.uniform2f(this.u_floor.plane, planeX, planeY);
     gl.uniform1f(this.u_floor.yShift, yShift);
     gl.uniform1f(this.u_floor.eyeZ, eyeZ);
+    gl.uniform1f(this.u_floor.zoom, zoom);
     gl.uniform3f(this.u_floor.fogColor, fogColor[0], fogColor[1], fogColor[2]);
     gl.uniform1f(this.u_floor.fogMax, fogMax);
 
@@ -912,7 +916,7 @@ export class GLRenderer {
     const u = (n) => gl.getUniformLocation(prog, n);
     this.u_modern = {
       resolution: u('u_resolution'), camPos: u('u_camPos'), dir: u('u_dir'), plane: u('u_plane'),
-      yShift: u('u_yShift'), eyeZ: u('u_eyeZ'), floorTex: u('u_floorTex'), ceilTex: u('u_ceilTex'), envMap: u('u_envMap'),
+      yShift: u('u_yShift'), eyeZ: u('u_eyeZ'), zoom: u('u_zoom'), floorTex: u('u_floorTex'), ceilTex: u('u_ceilTex'), envMap: u('u_envMap'),
       mapSize: u('u_mapSize'), fogNear: u('u_fogNear'), fogFar: u('u_fogFar'), fogMax: u('u_fogMax'),
       fogDensity: u('u_fogDensity'), numLights: u('u_numLights'), lights: u('u_lights'),
       lightColors: u('u_lightColors'), glowColors: u('u_glowColors'), realistic: u('u_realistic'),
@@ -988,7 +992,7 @@ export class GLRenderer {
    * generateModernEnv(); lights are game.lights ({x, y, color 0-255, radius,
    * intensity}). Returns false when the Modern program/textures aren't ready.
    */
-  renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, lights, eyeZ = 0.5) {
+  renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, lights, eyeZ = 0.5, zoom = 1) {
     if (!this._ensureModernFloor() || !this.modernFloorTex || !this.envMapTex) return false;
     const gl = this.gl;
     const u = this.u_modern;
@@ -1001,6 +1005,7 @@ export class GLRenderer {
     gl.uniform2f(u.plane, planeX, planeY);
     gl.uniform1f(u.yShift, yShift);
     gl.uniform1f(u.eyeZ, eyeZ);
+    gl.uniform1f(u.zoom, zoom);
     gl.uniform3fv(u.fogNear, env.fogNearGL);
     gl.uniform3fv(u.fogFar, env.fogFarGL);
     gl.uniform1f(u.fogMax, env.fogMax);
