@@ -594,7 +594,7 @@ svg { display: block; }
   transition: transform var(--cc-dur-slow) var(--cc-ease); }
 .panel > .frame { position: absolute; inset: 0; }
 .handle { display: none; }
-.tabs { position: relative; display: grid; grid-template-columns: auto repeat(${CATEGORIES.length}, 1fr) auto; align-items: center; gap: 4px; padding: 14px 14px 10px 22px; }
+.tabs { position: relative; z-index: 1; display: grid; grid-template-columns: auto repeat(${CATEGORIES.length}, 1fr) auto; align-items: center; gap: 4px; padding: 14px 14px 10px 22px; }
 .tabkey { margin: 0 2px; }
 .tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 2px 10px; color: var(--cc-text-dim); background: transparent;
   font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.5px; text-transform: uppercase; outline: none;
@@ -611,7 +611,12 @@ svg { display: block; }
 .tab:focus-visible, :host(.kbd) .tab:focus { box-shadow: inset 0 0 0 2px var(--cc-cyan); }
 .tabs::after { content: ""; position: absolute; left: 22px; right: 14px; bottom: 0; height: 1px; background: var(--cc-hairline); }
 
-.content { position: relative; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 16px 18px 22px; scrollbar-width: thin; scrollbar-color: #2e3f51 transparent; overscroll-behavior: contain; }
+/* The tile list is clipped by its own clip-path, not only by its overflow. Under the
+   panel's drop-shadow filter Chromium hit-tests a positioned or clip-pathed tile
+   scrolled out of the list as if the overflow clip were not there: hidden from view,
+   it still took clicks meant for the tabs above it. A clip-path clips hits as well as
+   paint, for every tile however it is positioned. The tab strip sits a layer up too. */
+.content { position: relative; flex: 1; clip-path: inset(0); overflow-y: auto; overflow-x: hidden; padding: 4px 16px 18px 22px; scrollbar-width: thin; scrollbar-color: #2e3f51 transparent; overscroll-behavior: contain; }
 .content::-webkit-scrollbar { width: 8px; }
 .content::-webkit-scrollbar-thumb { background: #2e3f51; border: 1px solid var(--cc-ink); }
 .content.swap { animation: swapIn var(--cc-dur-base) var(--cc-ease); }

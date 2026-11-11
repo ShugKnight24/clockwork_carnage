@@ -88,6 +88,67 @@ test("scrolling a tile into view never scrolls the creator itself", async ({ pag
   await tab(page, "gear").click();
 });
 
+// Tiles scrolled up under the tab strip are clipped from view, but in Chromium
+// (the panel's drop-shadow filter) they still caught clicks there, so at some
+// scroll depths no tab answered. The scroll position is set directly across
+// the whole range of every category, so where a real scroll happens to stop
+// (font metrics move it) does not decide whether this sees it.
+for (const [w, h] of [[1280, 720], [844, 390]]) {
+  test(`at ${w}x${h} the tabs and buttons around the panel take the hit at every scroll depth of every category`, async ({ page }) => {
+    // Every category is drawn in turn; in software GL (a CI runner) the Suit tab alone takes ~20 s here.
+    test.slow();
+    await page.setViewportSize({ width: w, height: h });
+    await openCreator(page);
+    await grantAll(page);
+    const misses = [];
+    const ids = await room(page).evaluate((host) => [...host.shadowRoot.querySelectorAll('[role="tab"]')].map((t) => t.id.slice(4)));
+    expect(ids.length).toBeGreaterThan(5);
+    // Tabs and modes are switched with a DOM click: this test is about where a
+    // pointer lands, and a real click would wait out the slide-in on a slow runner.
+    const pick = (sel) => room(page).evaluate((host, sel) => host.shadowRoot.querySelector(sel).click(), sel);
+    for (const id of ids) {
+      await pick(`#tab-${id}`);
+      const modes = await room(page).evaluate((host) => [...host.shadowRoot.querySelectorAll('.content [data-mode]:not([aria-disabled="true"])')].map((b) => b.dataset.mode));
+      for (const mode of modes.length ? modes : [null]) {
+        if (mode) await pick(`[data-mode="${mode}"]`);
+        const found = await room(page).evaluate(async (host, where) => {
+          const sr = host.shadowRoot;
+          const content = sr.querySelector(".content");
+          await new Promise(requestAnimationFrame);
+          // The tab swap slides the list in; a transformed scroller clipped its tiles' hits, so it hid the bug.
+          await Promise.all(content.getAnimations().map((a) => a.finished));
+          // Every control in the panel outside the scroller: the tabs, BACK, SAVE & DEPLOY, the phone sheet handle.
+          const controls = [...sr.querySelector(".panel").querySelectorAll("button, input")].filter((el) => !content.contains(el) && el.getClientRects().length);
+          const max = content.scrollHeight - content.clientHeight;
+          const out = [];
+          for (let y = 0; y <= max + 4; y += 4) {
+            content.scrollTop = Math.min(y, max);
+            for (const el of controls) {
+              const r = el.getBoundingClientRect();
+              const hit = sr.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              if (hit && el.contains(hit)) continue;
+              const what = hit ? `${content.contains(hit) ? "tile " : ""}${hit.closest(".opt")?.dataset.key ?? hit.tagName.toLowerCase()}` : "nothing";
+              out.push({ where, control: el.id || el.className, depth: content.scrollTop, what });
+            }
+          }
+          content.scrollTop = 0;
+          return { out, max, controls: controls.length };
+        }, mode ? `${id}/${mode}` : id);
+        expect(found.controls).toBeGreaterThan(ids.length);
+        misses.push(...found.out);
+      }
+    }
+    // One line per category and control: how many depths missed, the first and last, and what took the hit.
+    const lines = {};
+    for (const m of misses) {
+      const k = `${m.where}: ${m.control}`;
+      const l = (lines[k] ??= { n: 0, from: m.depth, to: m.depth, what: new Set() });
+      l.n++; l.to = m.depth; l.what.add(m.what);
+    }
+    expect(Object.entries(lines).map(([k, l]) => `${k} missed at ${l.n} depths (${l.from}-${l.to}px), hit ${[...l.what].join(", ")}`)).toEqual([]);
+  });
+}
+
 test("eyewear and a face item show under an open helmet; a closed helmet says they are hidden", async ({ page }) => {
   await openCreator(page);
   await grantAll(page);
