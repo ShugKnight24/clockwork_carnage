@@ -598,7 +598,6 @@ function collectWeapons(game, maxTicks = 900) {
 function collectAllPickups(game, maxTicks = 3000) {
   let totalTicks = 0;
   for (let i = 0; i < 50; i++) {
-    const pickup = findClosest(game, null);
     // Filter to actual pickups
     const pickups = game.entities.filter(
       (e) =>
@@ -1592,8 +1591,6 @@ function botSpeedrunner(game) {
     `Exit at (${game.exitEntity?.x}, ${game.exitEntity?.y})`,
     "No exit entity found",
   );
-
-  const startTick = performance.now();
 
   // Kill required enemies (all of them to open exit)
   const combatTicks = killAllEnemies(game, 8000);

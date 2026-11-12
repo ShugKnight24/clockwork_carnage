@@ -1599,7 +1599,7 @@ function shieldCommander() {
   });
   const poses = build(COMMANDER, table, (R, key) => {
     const [name, view] = viewOf(key);
-    const { shY, hipY } = R;
+    const { shY } = R;
     const legs = legsOf(R, { pad: "url(#armor)", trim: "#e8c46a" });
     let torso = torsoOf(R, { w: 27, waist: 17, mat: "url(#armor)" });
     torso += plate([[-10, shY + 2], [10, shY + 2], [7, shY + 24], [-7, shY + 24]], "url(#armorDk)", 1, 0.3);

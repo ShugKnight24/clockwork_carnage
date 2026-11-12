@@ -1123,7 +1123,6 @@ export class Renderer {
       this._floorCeilBuffer = this.ctx.createImageData(w, h);
       this._floorCeilBuf32 = new Uint32Array(this._floorCeilBuffer.data.buffer);
     }
-    const buf = this._floorCeilBuffer.data;
     // Uint32Array view for single 32-bit pixel writes (4× fewer stores)
     const buf32 = this._floorCeilBuf32;
     const floorTex = this._floorTexPixels;
@@ -2283,7 +2282,6 @@ export class Renderer {
     dist,
     time,
   ) {
-    const w = this.width;
     const h = this.height;
     const centerY = (h / 2) | 0;
 
@@ -2499,9 +2497,8 @@ export class Renderer {
     ctx.globalAlpha = alpha;
 
     // Death dissolve effect — fade out + scanline noise
-    let dissolveAlpha = 1;
     if (enemy.dissolving && enemy.dissolveTimer != null) {
-      dissolveAlpha = Math.max(0, enemy.dissolveTimer / 0.5);
+      const dissolveAlpha = Math.max(0, enemy.dissolveTimer / 0.5);
       ctx.globalAlpha = alpha * dissolveAlpha;
       // Shift hue toward white during dissolve
       if (dissolveAlpha < 0.5) {

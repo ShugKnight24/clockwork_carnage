@@ -218,7 +218,6 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
     weaponAnimFrame,
     time,
     lastFireTime,
-    isTouchDevice,
     drawGlow,
   } = opts;
 

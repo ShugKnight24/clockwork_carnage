@@ -427,12 +427,7 @@ export function armoredArm(arm, s, chrono, kw = 1) {
   const up = heading(sh, el);
   const top = polar(sh, up, -4);
   const sleeve = muscleGeom(top, el, W(UPPER_ARM.out), W(UPPER_ARM.in), s).d + muscleGeom(el, wr, W(FOREARM.out), W(FOREARM.in), s).d;
-  const upA = angle(sh, el);
   const foA = angle(el, wr);
-  let delta = foA - upA;
-  delta -= 360 * Math.round(delta / 360);
-  const copA = upA + delta / 2;
-  const foreLen = dist(el, wr);
   const devAt = lerp(el, wr, VAMBRACE.device);
   let body =
     `<path d="${sleeve}" fill="#000" opacity=".55" filter="url(#ao)" transform="translate(${f(-s * 1.8)},1.6)"/>` +

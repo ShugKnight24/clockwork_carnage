@@ -1071,7 +1071,6 @@ export function drawPowerCell(ctx, screenX, centerY, sprWidth, sprHeight, dist, 
   if (fog <= 0) return;
   const t = time / 1000;
   const unit = sprHeight;
-  const floorY = centerY + unit / 2;
   const bob = Math.sin(t * 2.2) * unit * 0.03;
   const cy = centerY + unit * 0.12 + bob; // waist height, bobbing
   const r = unit * 0.12;
