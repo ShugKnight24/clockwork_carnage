@@ -11,6 +11,7 @@ import { noteQuit } from "./playtest-log.js";
 import { shareSession } from "./playtest-export.js";
 import {
   CREATOR_CATEGORIES,
+  cssScale,
   faceSlotFoot,
   getCreatorLayout,
   hairColorSwatches,
@@ -32,7 +33,7 @@ export function handleCreatorClick(game, e) {
 
   const w = game.canvas.width;
   const h = game.canvas.height;
-  const isMobile = game.isTouchDevice && w < 700;
+  const isMobile = game.isTouchDevice && w / cssScale(w) < 700;
   const categories = CREATOR_CATEGORIES;
   const L = getCreatorLayout(w, h, isMobile, !!game.isTouchDevice, game.touchControls?.safeArea);
 

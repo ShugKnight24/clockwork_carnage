@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { CREATOR_CATEGORIES, HAIR_SWATCH_MIN_TOUCH, drawHairColorHint, getCreatorLayout, hairColorSwatches, listRows } from "../../src/ui/character-creator.js";
 import { HAIR_COLORS } from "../../src/data/cosmetics.js";
 import { DEFAULT_KEYBINDS } from "../../src/systems/input-manager.js";
@@ -64,6 +64,26 @@ describe("legacy creator hair colour swatches", () => {
       expect(L.contentX + L.totalContentW).toBeLessThanOrEqual(w - L.inset);
     }
   });
+
+  // A phone's game canvas is in device pixels (js/main.js resizeCanvases),
+  // not CSS px: an 844x390 phone at DPR 2 can get a 1480x684 canvas.
+  it.each([[844, 390, 1480, 684], [667, 375, 1170, 658], [844, 390, 1097, 507]])(
+    "measure a fingertip and a short screen in CSS px: %ix%i CSS on a %ix%i canvas",
+    (cssW, cssH, w, h) => {
+      vi.stubGlobal("window", { innerWidth: cssW });
+      try {
+        const L = getCreatorLayout(w, h, false, true);
+        const k = w / cssW;
+        // On its side: the short-screen strip (tighter gaps), as at CSS size.
+        expect(L.tabGap).toBe(getCreatorLayout(cssW, cssH, false, true).tabGap);
+        expect(L.tabGap).toBe(3);
+        expect(L.tip).toBe(Math.round(HAIR_SWATCH_MIN_TOUCH * k));
+        for (const r of hairColorSwatches(L).rects) expect(Math.min(r.w, r.h) / k).toBeGreaterThanOrEqual(HAIR_SWATCH_MIN_TOUCH - 0.5);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 
   it("keep two rows of nine under the cuts with a mouse", () => {
     const L = getCreatorLayout(1440, 900, false, false);

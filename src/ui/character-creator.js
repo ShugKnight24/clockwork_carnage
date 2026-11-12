@@ -114,7 +114,7 @@ export function tabRect(L, i) {
 // ── Layout calculator (shared between render + click detection) ──
 
 /** Canvas px per CSS px: the touch overlay and the safe area are measured in CSS px. */
-function cssScale(w) {
+export function cssScale(w) {
   const cssW = typeof window !== "undefined" && window.innerWidth > 0 ? window.innerWidth : w;
   return w / cssW;
 }
@@ -138,12 +138,18 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false, safeArea = nul
   const sa = safeArea || {};
   const titleY = isMobile ? 34 : 44;
   const n = CREATOR_CATEGORIES.length;
+  // The canvas is sized in device pixels on a phone (js/main.js
+  // resizeCanvases), so what is measured against a finger or the screen
+  // goes through CSS px: `k` canvas px each.
+  const k = cssScale(w);
+  // A fingertip on touch (28 CSS px), in canvas px.
+  const tip = Math.round(TOUCH_TIP * (isTouch ? k : 1));
   // A touch phone on its side is short of rows, not of width: its tabs
-  // narrow to a fingertip (28px) with tighter gaps, so thirty-odd tabs keep
-  // to two rows and the lists keep their height.
-  const shortTouch = isTouch && h < 500;
+  // narrow to a fingertip with tighter gaps, so thirty-odd tabs keep to two
+  // rows and the lists keep their height.
+  const shortTouch = isTouch && h / k < 500;
   const tabGap = shortTouch ? 3 : isMobile ? 4 : 8;
-  const minTabW = isMobile || shortTouch ? 28 : 42;
+  const minTabW = isMobile || shortTouch ? tip : 42;
   const maxTabW = isMobile ? 46 : 86;
   // Two dozen-odd tabs no longer fit on one row, so the strip wraps: take the
   // fewest rows that let every tab keep its minimum width, then spread the
@@ -184,7 +190,6 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false, safeArea = nul
   // with most of the screen empty, and the panel height jumped between tabs.
   // On touch the panels end above BACK / SAVE (creatorTouchControls), which
   // stand on the bottom safe area.
-  const k = cssScale(w);
   const availH = isTouch
     ? Math.floor(creatorTouchControls(w / k, h / k, sa).back.y * k) - 8 - contentY
     : h - contentY - (isMobile ? 80 : 70);
@@ -194,6 +199,7 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false, safeArea = nul
   return {
     width: w,
     touch: isTouch,
+    tip,
     inset: edgeInset(w, isTouch, sa),
     titleY,
     tabGap,
@@ -217,8 +223,11 @@ export function getCreatorLayout(w, h, isMobile, isTouch = false, safeArea = nul
   };
 }
 
-/** The smallest hair colour swatch on touch, in canvas px: a fingertip. */
-export const HAIR_SWATCH_MIN_TOUCH = 28;
+/** A fingertip, in CSS px: the smallest tab or swatch a touch screen gets. */
+const TOUCH_TIP = 28;
+
+/** The smallest hair colour swatch on touch, in CSS px (the layout's `tip` in canvas px). */
+export const HAIR_SWATCH_MIN_TOUCH = TOUCH_TIP;
 
 /**
  * The hair colour swatches under the cuts on the HAIR tab: a labelled grid
@@ -234,7 +243,7 @@ export function hairColorSwatches(L) {
   const right = Math.min(L.contentX + L.listW - pad, L.width - (L.inset || 0));
   const avail = right - left;
   // Mouse: two tidy rows of nine. Touch: as many columns as keep a fingertip swatch.
-  const cols = L.touch ? Math.max(1, Math.min(9, Math.floor((avail + gap) / (HAIR_SWATCH_MIN_TOUCH + gap)))) : 9;
+  const cols = L.touch ? Math.max(1, Math.min(9, Math.floor((avail + gap) / ((L.tip ?? HAIR_SWATCH_MIN_TOUCH) + gap)))) : 9;
   const size = Math.floor((avail - (cols - 1) * gap) / cols);
   const rows = Math.ceil(HAIR_COLORS.length / cols);
   const h = labelH + rows * size + (rows - 1) * gap + pad;
@@ -474,7 +483,7 @@ export function faceSlotFoot(L, curCat, ch) {
     const right = Math.min(L.contentX + L.listW - pad, L.width - (L.inset || 0));
     const avail = right - left;
     const n = PAINT_SWATCHES.length;
-    const cols = L.touch ? Math.max(1, Math.min(n, Math.floor((avail + gap) / (PAINT_SWATCH_MIN_TOUCH + gap)))) : n;
+    const cols = L.touch ? Math.max(1, Math.min(n, Math.floor((avail + gap) / ((L.tip ?? PAINT_SWATCH_MIN_TOUCH) + gap)))) : n;
     const size = Math.min(L.touch ? Infinity : 24, Math.floor((avail - (cols - 1) * gap) / cols));
     const rows = Math.ceil(n / cols);
     tintH = labelH + rows * size + (rows - 1) * gap + pad;
@@ -773,7 +782,8 @@ export function renderCharacterCreator(
     ctx.stroke();
   }
 
-  const isMobile = isTouchDevice && w < 700;
+  // An upright phone, by its CSS width (the canvas may be in device px).
+  const isMobile = isTouchDevice && w / cssScale(w) < 700;
   const L = getCreatorLayout(w, h, isMobile, !!isTouchDevice, safeArea);
 
   // ── Ambient floating particles ──
