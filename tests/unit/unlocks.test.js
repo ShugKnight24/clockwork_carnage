@@ -470,33 +470,38 @@ describe("theme piece pacing", () => {
     }
   });
 
-  it("exo pieces unlock with Act 2", () => {
+  it("exo pieces unlock with Act 4, last of all", () => {
     const exo = WARDROBE_THEMES.find((t) => t.id === "exo");
     const pieces = [["frame", exo.frames], ["helmet", exo.helmets], ["shoulder", exo.shoulders]].flatMap(([key, items]) => items.map((it) => [key, it.id]));
     expect(pieces.length).toBe(3);
     for (const [key, id] of pieces) {
-      expect(ruleFor(key, id), `${key} ${id}`).toBe(TIER_UNLOCKS[3]);
-      expect(unlockState(key, id, actsCleared(1)).unlocked, `${key} ${id}`).toBe(false);
-      expect(unlockState(key, id, actsCleared(2)).unlocked, `${key} ${id}`).toBe(true);
+      expect(ruleFor(key, id), `${key} ${id}`).toBe(TIER_UNLOCKS[5]);
+      expect(unlockState(key, id, actsCleared(3)).unlocked, `${key} ${id}`).toBe(false);
+      expect(unlockState(key, id, actsCleared(4)).unlocked, `${key} ${id}`).toBe(true);
     }
   });
 
-  it("every designed theme spreads frame and shoulders at tier 2, the helmet at tier 3", () => {
-    for (const t of WARDROBE_THEMES.filter((x) => x.id !== "issue" && x.id !== "exo")) {
-      for (const f of t.frames) expect(f.tier, `${t.id} frame`).toBe(2);
-      for (const s of t.shoulders) expect(s.tier, `${t.id} shoulders`).toBe(2);
-      for (const h of t.helmets) expect(h.tier, `${t.id} helmet`).toBe(3);
+  it("every act opens theme pieces: each set's frame and shoulders, then its helmet an act later", () => {
+    const designed = WARDROBE_THEMES.filter((x) => x.id !== "issue" && x.id !== "exo");
+    for (const t of designed) {
+      const tier = t.frames[0].tier;
+      for (const s of t.shoulders) expect(s.tier, `${t.id} shoulders`).toBe(tier);
+      for (const h of t.helmets) expect(h.tier, `${t.id} helmet`).toBe(tier + 1);
     }
+    // Acts 1 to 4 (tiers 2 to 5) each open something; a tier has a rule for every act.
+    const opened = new Set(WARDROBE_THEMES.filter((x) => x.id !== "issue").flatMap((t) => [...t.frames, ...t.helmets, ...t.shoulders].map((p) => p.tier)));
+    expect([...opened].sort()).toEqual([2, 3, 4, 5]);
+    for (const tier of [2, 3, 4, 5]) expect(TIER_UNLOCKS[tier].rules[0]).toMatchObject({ type: "campaignActs", count: tier - 1 });
   });
 
   it("a frame can drop in the act that is working towards it", () => {
     const actOne = unlockContext({ campaignSaveAct: 1, campaignSaveLevel: 2 });
     const frames = droppableItems(actOne).filter(({ key }) => key === "frame").map(({ id }) => id).sort();
     expect(frames).toEqual(themeFrames(2).sort());
-    // Act 2's pool has the Exo-Frame; an owned frame never drops again.
+    // Act 4's pool has the Exo-Frame; an owned frame never drops again.
     const owned = { [ownedKey("frame", "exo")]: true };
-    expect(droppableItems(unlockContext({ campaignSaveAct: 2 })).some(({ key, id }) => key === "frame" && id === "exo")).toBe(true);
-    expect(droppableItems(unlockContext({ campaignSaveAct: 2, owned })).some(({ key, id }) => key === "frame" && id === "exo")).toBe(false);
+    expect(droppableItems(unlockContext({ campaignSaveAct: 4 })).some(({ key, id }) => key === "frame" && id === "exo")).toBe(true);
+    expect(droppableItems(unlockContext({ campaignSaveAct: 4, owned })).some(({ key, id }) => key === "frame" && id === "exo")).toBe(false);
   });
 
   it("hair colours and eyes/face tier-1 items are unlocked from the start", () => {

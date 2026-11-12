@@ -63,6 +63,11 @@ describe("unlock toast announcements", () => {
     ]);
   });
 
+  it("names Acts 3 and 4's tiers in Roman numerals, MK IV and MK V", () => {
+    const ids = [4, 5].map((tier) => ownedKey("frame", BODY_FRAMES.find((x) => x.tier === tier).id));
+    expect(announcements(ids).map((a) => a.name.split(" ").slice(0, 2).join(" "))).toEqual(["MK IV", "MK V"]);
+  });
+
   it("skips an id whose table entry has gone", () => {
     expect(announcements(["badge.symbol:#no-such-symbol", "nonsense:4"])).toEqual([]);
   });

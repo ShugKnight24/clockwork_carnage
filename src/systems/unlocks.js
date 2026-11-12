@@ -22,6 +22,7 @@ import {
   CHARACTER_COLORS,
   CAMO_STYLES,
   TIER_UNLOCKS,
+  tierMark,
   DEFAULT_LOOK_IDS,
 } from "../data/cosmetics.js";
 import { FIELD_TABLES, getId, pieceOf } from "../core/character-fields.js";
@@ -241,7 +242,7 @@ export function announcements(ids) {
     if (TIER_SLOTS.has(key) && info.tier) {
       if (tiers.has(info.tier)) continue;
       tiers.add(info.tier);
-      out.push({ kind: "Gear tier", name: `MK ${"I".repeat(info.tier)} armor, frames, helmets, visors & shoulders` });
+      out.push({ kind: "Gear tier", name: `${tierMark(info.tier)} armor, frames, helmets, visors & shoulders` });
       continue;
     }
     // An id whose table entry has gone (a renamed item in an old save) has no

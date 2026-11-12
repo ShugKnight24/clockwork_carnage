@@ -110,7 +110,9 @@ test("a gear drop can be a frame, and a frame with stats goes on over a plain on
     };
   });
 
-  expect(result.frames).toEqual(expect.arrayContaining(["clockwork", "duster", "lamellar", "diving"]));
+  // Act 1 works towards the Act 1 frames only: the Diver opens with Act 2, the Exo-Frame with Act 4.
+  expect(result.frames).toEqual(expect.arrayContaining(["clockwork", "duster", "lamellar"]));
+  expect(result.frames).not.toContain("diving");
   expect(result.frames).not.toContain("exo");
   expect(result.drop).toEqual({ slot: "frame", pieceId: "clockwork", label: "Clockwork", kind: "Frame" });
   expect(result.granted).toBe(true);

@@ -222,13 +222,13 @@ describe("helmets", () => {
 });
 
 describe("the Exo-Frame theme", () => {
-  it("comes second, with one tier-3 frame, helmet and shoulder", () => {
+  it("comes second, with one frame, helmet and shoulder, all earned with Act 4", () => {
     expect(WARDROBE_THEMES.map((t) => t.id).slice(0, 2)).toEqual(["issue", "exo"]);
     const exo = WARDROBE_THEMES[1];
     expect(exo.name).toBe("Exo-Frame");
-    expect(exo.frames.map((e) => [e.id, e.tier])).toEqual([["exo", 3]]);
-    expect(exo.helmets.map((e) => [e.id, e.tier])).toEqual([["cockpit", 3]]);
-    expect(exo.shoulders.map((e) => [e.id, e.tier])).toEqual([["pods", 3]]);
+    expect(exo.frames.map((e) => [e.id, e.tier])).toEqual([["exo", 5]]);
+    expect(exo.helmets.map((e) => [e.id, e.tier])).toEqual([["cockpit", 5]]);
+    expect(exo.shoulders.map((e) => [e.id, e.tier])).toEqual([["pods", 5]]);
     for (const [table, id] of [["frames", "exo"], ["helmets", "cockpit"], ["shoulders", "pods"]]) expect(themeOf(table, id)).toBe("exo");
   });
 
@@ -255,11 +255,13 @@ describe("the spike themes", () => {
     expect(ids).toEqual(THEME_ORDER.slice(0, ids.length));
   });
 
-  it("each has one frame (tier 2), helmet (tier 3) and shoulder (tier 2), all its own", () => {
+  it("each has one frame, helmet and shoulder, all its own, the helmet a tier after the rest", () => {
     for (const t of spike()) {
-      expect(t.frames.map((e) => e.tier), t.id).toEqual([2]);
-      expect(t.helmets.map((e) => e.tier), t.id).toEqual([3]);
-      expect(t.shoulders.map((e) => e.tier), t.id).toEqual([2]);
+      expect(t.frames).toHaveLength(1);
+      expect(t.helmets).toHaveLength(1);
+      expect(t.shoulders).toHaveLength(1);
+      expect(t.shoulders[0].tier, t.id).toBe(t.frames[0].tier);
+      expect(t.helmets[0].tier, t.id).toBe(t.frames[0].tier + 1);
       for (const table of ["frames", "helmets", "shoulders"]) expect(themeOf(table, t[table][0].id), t.id).toBe(t.id);
     }
   });

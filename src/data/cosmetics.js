@@ -376,8 +376,11 @@ export const SHOULDER_STYLES = themeTable("shoulders");
 /**
  * Unlock rules for tiered gear (armor, frame, helmet, visor, shoulders, and
  * the accessories in src/data/accessories.js). Tier 1 is standard issue. Spread
- * over the campaign: MK II with Act I, MK III with Act II, so each act still
- * has a wardrobe to earn. Rule shapes are evaluated in src/systems/unlocks.js.
+ * over the campaign, one tier an act: MK II with Act 1 up to MK V with Act 4,
+ * so each act still has a wardrobe to earn. The themes stagger over them, a
+ * set's helmet an act after its frame and shoulders, with the Exo-Frame last
+ * (src/data/wardrobe-themes/). Rule shapes are evaluated in
+ * src/systems/unlocks.js.
  */
 export const TIER_UNLOCKS = {
   2: {
@@ -396,7 +399,26 @@ export const TIER_UNLOCKS = {
       { type: "arenaRound", count: 15, label: "Survive arena round 15", unit: "rounds" },
     ],
   },
+  4: {
+    type: "anyOf",
+    label: "Clear Act 3 or survive arena round 20",
+    rules: [
+      { type: "campaignActs", count: 3, label: "Clear Act 3", unit: "acts" },
+      { type: "arenaRound", count: 20, label: "Survive arena round 20", unit: "rounds" },
+    ],
+  },
+  5: {
+    type: "anyOf",
+    label: "Clear Act 4 or survive arena round 25",
+    rules: [
+      { type: "campaignActs", count: 4, label: "Clear Act 4", unit: "acts" },
+      { type: "arenaRound", count: 25, label: "Survive arena round 25", unit: "rounds" },
+    ],
+  },
 };
+
+/** A gear tier's mark: MK II for tier 2, through MK V. */
+export const tierMark = (tier) => `MK ${["", "I", "II", "III", "IV", "V"][tier] ?? tier}`;
 
 export const BADGES = [
   { id: "none", name: "None", icon: null },

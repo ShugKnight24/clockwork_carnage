@@ -215,7 +215,12 @@ describe("the budget", () => {
   const LEGACY_ACCESSORIES = Object.entries(ACCESSORIES)
     .filter(([slot]) => !FACE_SLOTS.includes(slot))
     .flatMap(([, items]) => items);
-  const ceiling = (pieces, tier) => Math.max(...pieces.filter((p) => p.tier === tier).map((p) => gearValue(p.bonuses)));
+  // A piece paced later than any old tier (MK IV, MK V) is held to the old
+  // top tier: the act it opens with moved, not what it is worth.
+  const ceiling = (pieces, tier) => {
+    const top = Math.max(...pieces.filter((p) => p.tier <= tier).map((p) => p.tier));
+    return Math.max(...pieces.filter((p) => p.tier === top).map((p) => gearValue(p.bonuses)));
+  };
 
   const cases = [
     // Legacy frames carry no stats: a frame is held to the helmets of its tier.

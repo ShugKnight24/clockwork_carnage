@@ -259,7 +259,7 @@ const groupName = (by, g) => (by === "theme" ? THEME_NAMES[g] : GROUP_NAMES[g]) 
 /** Field equality for flat indices and the nested badge / accessory records. */
 const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const TIER = ["", "I", "II", "III"];
+const TIER = ["", "I", "II", "III", "IV", "V"];
 
 /** Notes under a section's grid, shown by refreshContent when they apply. */
 const SECTION_NOTES = {
@@ -3045,7 +3045,7 @@ class AgentShowroom extends HTMLElement {
     const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${perkText ? `. Perk: ${perkText}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
     const perk = gperk ? `<span class="gperk${item.bonuses ? "" : " looks"}">${esc(gperk)}</span>` : "";
     const tick = `<span class="tick" aria-hidden="true">${I.check}</span>`;
-    const tier = item.tier ? `<span class="tier" aria-hidden="true">${[1, 2, 3].map((t) => `<i class="${t <= item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
+    const tier = item.tier ? `<span class="tier" aria-hidden="true">${TIER.slice(1).map((_, i) => `<i class="${i < item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
     // Locked badge and gear tiles: amber lock corner, rule in the tooltip, progress along the foot.
     const lockAttr = locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : "";
     const lockMark = locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : "";
