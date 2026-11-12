@@ -8,6 +8,7 @@ import {
   updateAdsFov,
   resetAdsFov,
   getAimBlend,
+  aimZoom,
   CENTRED_LOOK_LIMIT,
   CENTRED_LOOK_DOWN,
 } from "../../src/systems/aim.js";
@@ -205,5 +206,44 @@ describe("centred aim (every input)", () => {
     const after = findAssistTarget(g);
     expect(g.player.aimOffsetY).toBe(0);
     expect(Math.abs(after.dPitch)).toBeLessThan(Math.abs(before.dPitch));
+  });
+});
+
+describe("centred aim through a scope", () => {
+  const sniper = WEAPONS.find((w) => w.id === 5);
+  const scoped = (extra = {}) => ({ x: 5, y: 5, angle: 0, aimOffsetX: 0, aimOffsetY: 0, lookShiftY: 0, isAiming: true, getWeaponDef: () => sniper, ...extra });
+  const settle = (p) => { for (let i = 0; i < 240; i++) updateAdsFov(p, 1 / 60, { fov: 70 }); };
+
+  it("looking up and down slows by the zoom, as turning does", () => {
+    const hip = { angle: 0, lookShiftY: 0 };
+    centredLook(hip, 50, 50, {});
+    const p = scoped();
+    settle(p);
+    const zoom = aimZoom();
+    expect(zoom).toBeGreaterThan(3);
+    const [a0, y0] = [p.angle, p.lookShiftY];
+    centredLook(p, 50, 50, {});
+    // The same share of the hip speed both ways (the zoom, and the scope's
+    // own sensitivity): a scope is not 4x faster up and down.
+    const turn = (p.angle - a0) / hip.angle;
+    expect(turn).toBeLessThanOrEqual(1 / zoom + 1e-9);
+    expect((p.lookShiftY - y0) / hip.lookShiftY).toBeCloseTo(turn, 9);
+  });
+
+  it("the scope's breath drifts the drawn view by its share up and down, not that times the zoom", () => {
+    const p = scoped();
+    settle(p);
+    const zoom = aimZoom();
+    let lo = Infinity, hi = -Infinity;
+    // Walking, so the breath is at its widest (1% of the view, 0.7 of it up and down).
+    for (let i = 0; i < 600; i++) {
+      p.x += 0.05;
+      updateAdsFov(p, 1 / 60, { fov: 70 });
+      lo = Math.min(lo, p.lookShiftY);
+      hi = Math.max(hi, p.lookShiftY);
+    }
+    // Drawn, lookShiftY is magnified by the zoom (zoomedShiftPx).
+    expect(((hi - lo) / 2) * zoom).toBeLessThanOrEqual(0.0071);
+    expect(((hi - lo) / 2) * zoom).toBeGreaterThan(0.005);
   });
 });

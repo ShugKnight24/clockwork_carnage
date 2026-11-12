@@ -275,8 +275,11 @@ export const CENTRED_LOOK_DOWN = 0.8;
  */
 export function centredLook(player, dx, dy, settings = {}) {
   const rate = CENTRED_LOOK_RATE * (settings.sensitivity || 1) * aimSensitivityScale();
-  player.angle += (dx * rate * (settings.invertX ? -1 : 1)) / aimZoom();
-  const y = (player.lookShiftY || 0) + dy * rate * (settings.invertY ? -1 : 1);
+  // Aimed in, both ways slow by the zoom: the renderer draws lookShiftY
+  // magnified by it (zoomedShiftPx), as the narrower FOV magnifies a turn.
+  const zoom = aimZoom();
+  player.angle += (dx * rate * (settings.invertX ? -1 : 1)) / zoom;
+  const y = (player.lookShiftY || 0) + (dy * rate * (settings.invertY ? -1 : 1)) / zoom;
   player.lookShiftY = clamp(y, -CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN);
   player.aimOffsetX = 0;
   player.aimOffsetY = 0;
@@ -323,7 +326,8 @@ const BREATH_SETTLE = 1.2;
  * each frame so it never fights the mouse. The drift is measured as a share
  * of the view, so sideways it turns by the angle that share spans at the
  * current FOV (the yaw term of aimAngles), and up or down it shifts the
- * world one for one (lookShiftY).
+ * world by that share divided by the zoom, since the renderer draws
+ * lookShiftY magnified by it (zoomedShiftPx).
  */
 function scopeBreath(player, wep, dt, settings) {
   const d = Math.min(dt, 0.1);
@@ -337,9 +341,10 @@ function scopeBreath(player, wep, dt, settings) {
   const by = amp * 0.7 * Math.sin(_breathT * 1.8 + 0.6);
   const yaw = Math.atan(2 * bx * Math.tan((effectiveAimFov(player, settings ?? {}) * Math.PI) / 360));
   if (Number.isFinite(player.angle)) player.angle += yaw - _breathYaw;
-  if (Number.isFinite(player.lookShiftY)) player.lookShiftY += by - _breathY;
+  const shift = by / aimZoom();
+  if (Number.isFinite(player.lookShiftY)) player.lookShiftY += shift - _breathY;
   _breathYaw = yaw;
-  _breathY = by;
+  _breathY = shift;
 }
 
 /** How settled a scope's breath is, 0 (moving) … 1 (held still). */
