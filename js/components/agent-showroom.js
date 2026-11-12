@@ -1949,9 +1949,10 @@ class AgentShowroom extends HTMLElement {
       if (key === "loadout") next.loadout = open.length ? open[r(open.length)] : this.character.loadout;
       else if (!open.includes(next[key])) next[key] = open.length ? open[r(open.length)] : DEFAULT_CHARACTER[key];
     }
-    const roll = (key, table, skip = -1) => {
-      const open = unlocked(key, table).filter((i) => i !== skip);
-      return table[open.length ? open[r(open.length)] : 0].id;
+    // An earned id from the table, never `skip`; the table's first when none is.
+    const roll = (key, table, skip = null) => {
+      const open = unlocked(key, table).filter((id) => id !== skip);
+      return open.length ? open[r(open.length)] : table[0].id;
     };
     // Most agents wear the badge on the chest; bare suits stay rare.
     next.badge = {
@@ -1959,9 +1960,9 @@ class AgentShowroom extends HTMLElement {
       finish: "auto",
       placements: Math.random() < 0.85 ? ["chest"] : [],
     };
-    // Half the slots stay empty; the rest take an earned item ("none" is index 0).
+    // Half the slots stay empty; the rest take an earned item.
     next.accessories = Object.fromEntries(
-      ACCESSORY_SLOTS.map(({ id }) => [id, Math.random() < 0.5 ? "none" : roll(`acc.${id}`, ACCESSORIES[id], 0)]),
+      ACCESSORY_SLOTS.map(({ id }) => [id, Math.random() < 0.5 ? "none" : roll(`acc.${id}`, ACCESSORIES[id], "none")]),
     );
     next.armorVariant = 0;
     this.commit(next);

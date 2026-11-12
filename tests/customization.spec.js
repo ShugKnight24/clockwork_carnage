@@ -32,6 +32,32 @@ test("undo restores badge after symbol change", async ({ page }) => {
   expect(await page.evaluate(() => JSON.stringify(window.ccDebug.game.character.badge))).toBe(before);
 });
 
+test("randomize rolls earned looks without an error, and fills a gear slot with an item", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await openCreator(page);
+  const look = () => page.evaluate(() => JSON.stringify(window.ccDebug.game.character));
+  const before = await look();
+  const looks = new Set();
+  let filled = 0;
+  for (let i = 0; i < 6; i++) {
+    await room(page).locator('[data-act="random"]').click();
+    looks.add(await look());
+    filled += await page.evaluate(() => Object.values(window.ccDebug.game.character.accessories).filter((v) => v !== "none").length);
+  }
+  expect(errors).toEqual([]);
+  looks.add(before);
+  expect(looks.size).toBeGreaterThan(2);
+  // Half the slots on average take an item: six rolls of eight slots never leave them all bare.
+  expect(filled).toBeGreaterThan(0);
+  // Nothing rolled is locked on a fresh save.
+  expect(await page.evaluate(async () => {
+    const { sanitizeLocked, gameUnlockContext } = await import("/src/systems/unlocks.js");
+    const g = window.ccDebug.game;
+    return sanitizeLocked(g.character, gameUnlockContext(g, { fresh: true }));
+  })).toEqual({});
+});
+
 test("gear choice persists across reload", async ({ page }) => {
   await openCreator(page);
   await tab(page, "gear").click();
