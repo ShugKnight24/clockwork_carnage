@@ -25,8 +25,8 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
 - **Analytics.** Level events are sent only after consent, with a privacy note and a "Share Play Data" setting to withdraw (#19).
 - **Soft locks.** Fixed two: the Foundry's sentry staying silent after a retry (II-7), and a collapse walling you into a side room (IV-1) (#20).
 - **Hitches.** The station arrival and level starts no longer re-upload the wall art or build the lamp field mid-play (#20).
-- **Prologue.** Calibration no longer leaves you endless stamina when you step off the pad mid-reading; the Supervisor opens the range door instead of walking through it; skipping the locker room's lines no longer leaves most of the squad standing at their lockers.
-- **Wardrobe themes.** Eight themed sets join the Field Issue suit, each with its own frame, helmet, shoulders and glove: Exo-Frame, Frontier Marshal, Ronin, Horologist, Neon Runner, Abyssal Diver, Void Ranger and Chronomancer. Pieces mix freely across sets, and they unlock across the acts (#26).
+- **Prologue.** Calibration no longer leaves you endless stamina when you step off the pad mid-reading; the Supervisor opens the range door instead of walking through it; skipping the locker room's lines no longer leaves most of the squad standing at their lockers. The officers carry real guns (a carbine, a pump shotgun, a short carbine) at low ready, with holsters to match. Blind fire counts only in its own part of the cover drill, and the drill's targets moved (#26).
+- **Wardrobe themes.** Eight themed sets join the Field Issue suit, each with its own frame, helmet, shoulders and glove: Exo-Frame, Frontier Marshal, Ronin, Horologist, Neon Runner, Abyssal Diver, Void Ranger and Chronomancer. Pieces mix freely across sets, and they unlock one act at a time: a set's frame and shoulders, then its helmet an act later, from the Marshal, Ronin and Horologist with Act 1 to the Exo-Frame with Act 4 (MK II to MK V) (#26).
   - **Creator.** Pieces are grouped by theme with one-tap sets. Hair colour is picked apart from the cut. New Eyewear and Face slots (shades, an eyepatch, a monocle, war paint in a colour you pick, a cigar, piercings, a beard and more). A mouth expression shows on bare faces and on the LED Mask. The canvas creator draws its preview from the same rig as the showroom.
   - **Hands.** Every hand is drawn from one posed rig, in the glove its suit names, and the first-person hands wear that glove too: its material and cuff, with bare fingertips for fingerless gloves.
   - **Do-Rag.** Eyewear and face items now show under it. It takes a headset, but nothing that mounts on a helmet shell.
@@ -37,6 +37,13 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
   - **Guns at the hip** point down the room where you shoot, turned in only a little; long guns sit higher, so you see the hand wrapped round the grip and the support hand under the handguard.
   - **Arms bend at the elbow,** with the upper arm running back to the shoulder, and stay put while the gun moves.
   - **Sleeves for every suit,** and gloves are one piece with their cuff: snug at the wrist, opening over the sleeve. The Field glove reads apart from the gun it holds.
+- **Aim and gunplay** (#26).
+  - **Centred aim on every input.** Mouse and pad aim the way touch already did: the reticle stays in the middle and looking up or down moves the view. The free-aim reticle that wandered inside a box is gone.
+  - **The pad** has its own turn curve and aim assist.
+  - **Pace your shots.** Hip fire blooms while you hold the trigger and closes again between paced shots; aimed shots go dead on.
+  - **Kick moves the whole frame, never the aim:** the world and the reticle jump together, so the next round goes where the reticle sits.
+  - **The reticle turns red** over an enemy in range.
+  - **Sights magnify without stretching.** Aimed in, the view zooms in both directions, so a scoped enemy keeps its shape, and looking up and down through a scope is no faster than turning.
 - **Only gear you can see counts.** A piece your look keeps but does not draw gives no stats:
   - shoulders on a frame that wears none (the Operator frame no longer counts shoulder stats);
   - a visor on a helmet that has no visor (the Cockpit and the other visorless helmets ignore visor stats);
