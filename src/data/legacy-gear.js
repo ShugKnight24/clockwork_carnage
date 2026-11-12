@@ -10,10 +10,12 @@
  * once.
  *
  * Those releases summed the armour, helmet, visor and shoulder picks and
- * every accessory slot, each counted whether drawn or not (a visor under a
- * helmet with none included), with the numbers below: every piece that had
- * stats, by look field and id. Frames and the eyes and face slots had none,
- * and no piece then gave ammo capacity, fire rate or either regen.
+ * every accessory slot, with the numbers below: every piece that had stats,
+ * by look field and id. The one piece they skipped was a visor under a
+ * helmet with no visor to fit (takesVisor): the Do-Rag and the Reaper came
+ * in with that rule, so no save ever counted one. Frames and the eyes and
+ * face slots had none, and no piece then gave ammo capacity, fire rate or
+ * either regen.
  *
  * The one assumption: the save was made wearing the gear worn now. The save
  * does not say what was worn, and the creator is the only way to change it
@@ -22,7 +24,7 @@
  */
 import { deepFreeze } from "../utils/freeze.js";
 import { ACCESSORY_SLOTS } from "./accessories.js";
-import { ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES, pieceIn } from "./cosmetics.js";
+import { ARMOR_STYLES, HELMET_STYLES, VISOR_STYLES, SHOULDER_STYLES, pieceIn, takesVisor } from "./cosmetics.js";
 
 /** Stats by look field (`acc.<slot>` for an accessory slot), then piece id. */
 export const LEGACY_GEAR_BONUSES = deepFreeze({
@@ -89,7 +91,10 @@ export function legacyGearBonuses(character) {
   const add = (bonuses) => {
     for (const [stat, value] of Object.entries(bonuses || {})) out[stat] = (out[stat] || 0) + value;
   };
-  for (const [field, table] of SLOTS) add(LEGACY_GEAR_BONUSES[field][pieceIn(table, field, character[field]).id]);
+  for (const [field, table] of SLOTS) {
+    if (field === "visor" && !takesVisor(character.helmet)) continue;
+    add(LEGACY_GEAR_BONUSES[field][pieceIn(table, field, character[field]).id]);
+  }
   const acc = character.accessories || {};
   for (const { id: slot } of ACCESSORY_SLOTS) add(LEGACY_GEAR_BONUSES[`acc.${slot}`]?.[acc[slot]]);
   return out;

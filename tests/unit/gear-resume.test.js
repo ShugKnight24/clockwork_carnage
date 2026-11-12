@@ -130,10 +130,18 @@ describe("a save from before gear was saved", () => {
     expect(stats(q)).toEqual(stats(startRun(ch)));
   });
 
-  it("counts the old visor rule: a visor under a visorless helmet was in the stats", () => {
-    const ch = look({ helmet: "bandana", visor: "glow" });
-    expect(legacyGearBonuses(ch).maxChronoEnergyAdd).toBe(25);
-    expect(stats(continueRun(legacySave(ch), ch))).toEqual(stats(startRun(ch)));
+  it("keeps the old visor rule: a visor under a visorless helmet was never in the stats", () => {
+    // The Do-Rag and the Reaper shipped with the rule (17839ad9), so a save
+    // wearing one never had the visor's +25 chrono to take back off.
+    for (const helmet of ["bandana", "reaper"]) {
+      const ch = look({ helmet, visor: "glow" });
+      expect(legacyGearBonuses(ch).maxChronoEnergyAdd ?? 0, helmet).toBe(0);
+      // The save as that release wrote it: stats without the visor's share.
+      const written = legacySave(look({ helmet, visor: "standard" }));
+      expect(stats(continueRun(written, ch)), helmet).toEqual(stats(startRun(ch)));
+    }
+    // Under a helmet that takes one, the visor counted, as it always did.
+    expect(legacyGearBonuses(look({ helmet: "wide", visor: "glow" })).maxChronoEnergyAdd).toBe(25);
   });
 
   it("takes maxStamina's share from the gear worn now, which the load put there", () => {
