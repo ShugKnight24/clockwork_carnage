@@ -36,10 +36,22 @@ test("a dropped piece is granted, announced and kept", async ({ page }) => {
       slot: pick.key, pieceId: pick.id,
       label: m.itemOf(pick.key, pick.id).name, kind: m.LOCKABLE[pick.key].kind,
     }));
-    await new Promise((r) => setTimeout(r, 700));
+    // Wait for the pickup frame rather than a fixed time: a slow runner can
+    // take longer than a fast one to run it.
+    const has = () => m.unlockState(pick.key, pick.id, m.gameUnlockContext(g, { fresh: true })).unlocked;
+    for (const end = performance.now() + 8000; !has() && performance.now() < end; ) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
     const ctx = m.gameUnlockContext(g, { fresh: true });
+    const drop = g.entities.find((e) => e.type === "gear" && e.pieceId === pick.id);
     return {
       granted: m.unlockState(pick.key, pick.id, ctx).unlocked,
+      // What the pickup saw, should it never happen.
+      seen: {
+        player: [g.player.x, g.player.y, g.player.z],
+        drop: drop && [drop.x, drop.y, drop.z, drop.active],
+        state: g.state,
+      },
       stillLocked: m.lockedItems(ctx).length,
       gearFound: g.achievementStats.gearFound,
       toast: !!document.querySelector("unlock-toast"),
@@ -47,7 +59,7 @@ test("a dropped piece is granted, announced and kept", async ({ page }) => {
     };
   });
 
-  expect(result.granted).toBe(true);
+  expect(result.granted, JSON.stringify(result.seen)).toBe(true);
   expect(result.stillLocked).toBe(before.lockedCount - 1);
   expect(result.gearFound).toBe(1);
   expect(result.toast).toBe(true);
@@ -96,7 +108,10 @@ test("a gear drop can be a frame, and a frame with stats goes on over a plain on
       Math.random = random;
     }
     const was = g.character.frame;
-    await new Promise((r) => setTimeout(r, 700));
+    const has = () => m.unlockState("frame", "clockwork", m.gameUnlockContext(g, { fresh: true })).unlocked;
+    for (const end = performance.now() + 8000; !has() && performance.now() < end; ) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
     const ctx = m.gameUnlockContext(g, { fresh: true });
     return {
       frames,
