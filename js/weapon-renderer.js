@@ -248,7 +248,6 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const ads = adsBlend ?? (isAiming ? 1 : 0);
 
   const restOffsetX = lerp(0.112 * w, 0, ads);   // right-hand offset, centred on ADS
-  const restCant = lerp(-0.11, 0, ads);          // inward cant, upright on ADS
   const sc = lerp(4.5, 3.4, ads) * viewportFactor;
 
   // Sway is cosmetic lag from look/strafe input; it shrinks hard when aiming.
@@ -263,8 +262,11 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
   const followY = (opts.aimOffsetY || 0) * (h - hudOffset) * ads;
 
   const cx = w / 2 + restOffsetX + bobX + swayX - (crouch * 11 + slide * 10) * viewportFactor + followX;
-  const cy = h - hudOffset - lerp(196, 150, ads) * viewportFactor + bobY + swayY +
+  const cy = h - hudOffset - lerp(160, 150, ads) * viewportFactor + bobY + swayY +
     kickY * lerp(1, 0.45, ads) + (crouch * 26 + slide * 20) * viewportFactor + followY;
+  // The art is drawn muzzle up. Stood upright off to the right it points at
+  // the ceiling; at the hip it leans in toward the reticle, upright on ADS.
+  const restCant = lerp(-0.5, 0, ads);
 
   // Contact shadow — the viewmodel is the nearest object in the scene, so it
   // occludes ambient light behind itself. Without this the gun floats.
@@ -288,7 +290,7 @@ function drawProceduralWeapon(ctx, w, h, opts, adsBlend) {
 
   // Mild vertical foreshortening sells that the weapon is angled away from the
   // eye rather than pasted flat against the screen.
-  ctx.scale(sc, sc * lerp(0.94, 0.99, ads));
+  ctx.scale(sc, sc * lerp(0.72, 0.99, ads));
   // All coordinates now relative to (0, 0) at weapon centre
 
   // Recoil animation for frames 2 & 3
