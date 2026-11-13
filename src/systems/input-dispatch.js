@@ -10,7 +10,8 @@ import { isModernArt } from "../rendering/art-style.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 import { UPGRADES } from "../data/upgrades.js";
 import { CREATOR_CATEGORIES, setCreatorCategory } from "../ui/character-creator.js";
-import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
+import { getIndex, withIndex, withTint, togglePlacement, LOOK_TABLES } from "../core/character-fields.js";
+import { PAINT_SWATCHES, tintFor } from "../data/accessories.js";
 import { archiveLayout, archiveEntries, ARCHIVE_TABS, FILMS_TAB } from "../ui/archive-screen.js";
 import { playFilm } from "../cinematic/films.js";
 import { directorInput } from "../cinematic/director.js";
@@ -212,6 +213,29 @@ export function dispatchKeyPress(game, code, e) {
       return;
     }
 
+    // Hair colour, under the cuts on the HAIR tab: Q / E (LB / RB on a pad)
+    // step through the swatches. Never locked.
+    if (curCat.key === "hair" && (code === "KeyQ" || code === "KeyE")) {
+      const n = LOOK_TABLES.hairColor.length;
+      const next = (getIndex(game.character, "hairColor") + (code === "KeyQ" ? -1 : 1) + n) % n;
+      Object.assign(game.character, withIndex(game.character, "hairColor", next));
+      game.audio.menuSelect();
+      return;
+    }
+
+    // Paint colour, under a tintable eyes / face item (War Paint): Q / E step
+    // through the swatches as they do the hair colours; a custom colour
+    // steps on from the ends.
+    const paintSlot = curCat.slot && tintFor(game.character, curCat.slot) ? curCat.slot : null;
+    if (paintSlot && (code === "KeyQ" || code === "KeyE")) {
+      const n = PAINT_SWATCHES.length;
+      const at = PAINT_SWATCHES.findIndex((p) => p.hex === tintFor(game.character, paintSlot));
+      const next = at < 0 ? (code === "KeyQ" ? n - 1 : 0) : (at + (code === "KeyQ" ? -1 : 1) + n) % n;
+      Object.assign(game.character, withTint(game.character, paintSlot, PAINT_SWATCHES[next].hex));
+      game.audio.menuSelect();
+      return;
+    }
+
     // Navigate items within category. Badge and gear fields are nested, so the
     // index is read and written through character-fields rather than off the
     // character directly.
@@ -227,7 +251,7 @@ export function dispatchKeyPress(game, code, e) {
       // Skip options that are still locked (classes, tiered gear).
       const unlockCtx = gameUnlockContext(game);
       for (let tries = 0; tries < itemLen; tries++) {
-        if (isUnlocked(curCat.key, next, unlockCtx)) break;
+        if (isUnlocked(curCat.key, curCat.data[next].id, unlockCtx)) break;
         next = (next + step + itemLen) % itemLen;
       }
       Object.assign(game.character, withIndex(game.character, curCat.key, next));

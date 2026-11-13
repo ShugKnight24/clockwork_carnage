@@ -461,7 +461,9 @@ export function drawExit(ctx, screenX, centerY, sprWidth, sprHeight, dist, time,
 /**
  * Camera for the current frame, in the renderer's projection terms. The
  * renderer sets it once per frame (setFxCamera); streaks project their tail
- * through it. Until it is set, bolts draw without a streak.
+ * through it. Until it is set, bolts draw without a streak. `h` is the
+ * vertical focal length (renderer focalY: the canvas height times the
+ * sights' zoom), so heights and sizes magnify with the scope.
  */
 const FX_CAM = {
   valid: false,
@@ -1069,7 +1071,6 @@ export function drawPowerCell(ctx, screenX, centerY, sprWidth, sprHeight, dist, 
   if (fog <= 0) return;
   const t = time / 1000;
   const unit = sprHeight;
-  const floorY = centerY + unit / 2;
   const bob = Math.sin(t * 2.2) * unit * 0.03;
   const cy = centerY + unit * 0.12 + bob; // waist height, bobbing
   const r = unit * 0.12;

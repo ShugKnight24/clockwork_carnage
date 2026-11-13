@@ -224,6 +224,12 @@ function pixelScale(ctx) {
  * Device pixels per model unit for one layer, capped so the layer never
  * exceeds MAX_BITMAP_PX. The cap snaps to the raster's half-octave bucket below
  * it, so raster.js never rounds back up past the limit.
+ *
+ * The cap is also where a scoped figure's sharpness stops: the renderer draws
+ * the sights' zoom at full resolution (renderer focalY), so through the 4x
+ * scope a figure near enough to stand taller than its cap on screen is this
+ * bitmap upscaled (256 px on a phone). Kept as it is for the memory and
+ * decode budgets above.
  */
 function capScale(box, pxPerUnit) {
   const cap = 2 ** (Math.floor(Math.log2(MAX_BITMAP_PX / Math.max(box[2], box[3])) * 2) / 2);

@@ -15,6 +15,7 @@ import { GAMEPAD_ACTIONS } from "../src/systems/pad-actions.js";
 import { loadPadBinds, STORAGE_KEY_PADBINDS } from "../src/systems/remap.js";
 import { initXInputUsb } from "./xinput-usb.js";
 import { drawWeapon as renderWeapon } from "./weapon-renderer.js";
+import { viewmodelLook } from "../src/rendering/svg-art/viewmodels.js";
 import {
   spawnPickupBurst as _spawnPickupBurst,
   spawnEnergyBurst as _spawnEnergyBurst,
@@ -33,12 +34,6 @@ import {
   ENEMY_TYPES,
   ARENA_MAPS,
   UPGRADES,
-  CHARACTER_COLORS,
-  SKIN_TONES,
-  WEAPON_SKINS,
-  LOADOUT_CLASSES,
-  BACKSTORIES,
-  VOICE_PROFILES,
   DEFAULT_CHARACTER,
   gearBonuses,
 } from "../src/data/index.js";
@@ -60,7 +55,7 @@ import { KillStreakSystem } from "../src/systems/kill-streak.js";
 import { AriaCommsSystem } from "../src/systems/aria-comms.js";
 import { SquadCommsController, getPresentSquad } from "../src/systems/squad-comms.js";
 import * as Save from "../src/core/save-system.js";
-import { cloneLook, getIndex, withIndex } from "../src/core/character-fields.js";
+import { cloneLook, getId, withId, pieceOf } from "../src/core/character-fields.js";
 import { AchievementSystem } from "../src/systems/achievement-system.js";
 import { ArchiveSystem } from "../src/systems/archive.js";
 import { renderArchiveScreen as _renderArchiveScreen } from "../src/ui/archive-screen.js";
@@ -68,7 +63,8 @@ import {
   isPassable as _isPassable,
 } from "../src/systems/physics.js";
 import { PlayerUpdateSystem } from "../src/systems/player-update.js";
-import { updateAdsFov, resetAdsFov } from "../src/systems/aim.js";
+import { updateAdsFov, resetAdsFov, currentBarH, reticlePoint, updateBloom, resetBloom } from "../src/systems/aim.js";
+import { padAim } from "../src/systems/pad-look.js";
 import { AISystem } from "../src/systems/ai.js";
 import { ChronoPowers, POWERS } from "../src/systems/chrono-powers.js";
 import { teachHint } from "../src/ui/chrono-hud.js";
@@ -109,7 +105,6 @@ import {
   damagePlayer as _damagePlayer,
   maybeDropGear as _maybeDropGear,
 } from "../src/systems/combat-orchestrator.js";
-import { drawCrosshair } from "../src/ui/crosshair.js";
 import { drawScanlines } from "../src/ui/scanlines.js";
 import { drawPortrait as _drawPortrait } from "../src/ui/portrait.js";
 import { drawMinimap as _drawMinimap } from "../src/ui/minimap.js";
@@ -169,10 +164,10 @@ import {
   sanitizeLocked,
   earnedIds,
   announcements,
-  LOCKABLE,
+  itemOf,
 } from "../src/systems/unlocks.js";
 import { GEAR_SLOTS } from "../src/data/cosmetics.js";
-import { syncGearStats } from "../src/systems/gear-sync.js";
+import { resumeGearStats, syncGearStats } from "../src/systems/gear-sync.js";
 import { getAct, levelsBefore } from "../src/data/campaign/acts.js";
 import {
   parSeconds,
@@ -1035,9 +1030,14 @@ export class Game {
       was.fire = held.fire;
       was.aim = held.aim;
       if (gp.lookX || gp.lookY) {
-        const aimScale = 420 * dt;
-        this.mouse.dx += gp.lookX * aimScale;
-        this.mouse.dy += gp.lookY * aimScale;
+        if (this.world) {
+          // The voxel Forge keeps its own pad look.
+          const aimScale = 420 * dt;
+          this.mouse.dx += gp.lookX * aimScale;
+          this.mouse.dy += gp.lookY * aimScale;
+        } else {
+          padAim(this, gp.lookX, gp.lookY, dt);
+        }
       }
       if (jp.dash) {
         const cos = Math.cos(p.angle);
@@ -1382,7 +1382,12 @@ export class Game {
     this.mode = "arena";
     this.arenaRound = data.round;
     this.player.reset();
+    // As a campaign continue: stats the save does not carry come from the
+    // class and gear; what it does carry is overwritten, then the gear the
+    // save was built with is moved to the gear worn now.
+    this.applyLoadoutBonuses();
     this.player.deserialize(data);
+    this.resumeSavedGear(data);
     this.upgradeLevels = data.upgradeLevels || {};
     this.settings.difficulty = data.difficulty ?? this.settings.difficulty;
     this.startArenaRound();
@@ -1505,6 +1510,7 @@ export class Game {
     this.player.x = mMap.playerStart.x;
     this.player.y = mMap.playerStart.y;
     this.player.angle = mMap.playerStart.dir;
+    this.player.lookShiftY = 0;
     this.player.alive = true;
     resetAdsFov();
 
@@ -1539,6 +1545,8 @@ export class Game {
     this.player.x = this.map.playerStart.x;
     this.player.y = this.map.playerStart.y;
     this.player.angle = this.map.playerStart.dir;
+    // Each round starts looking level, not where the last one ended.
+    this.player.lookShiftY = 0;
     this.player.alive = true;
     resetAdsFov();
     // Each round restocks the guns you hold, more as the rounds get longer.
@@ -1771,7 +1779,7 @@ export class Game {
   }
 
   applyLoadoutBonuses() {
-    const cls = LOADOUT_CLASSES[this.character.loadoutIndex];
+    const cls = pieceOf(this.character, "loadout");
     // Only the class block depends on class bonuses. Returning early here also
     // skipped the origin and gear bonuses below.
     const b = (cls && cls.bonuses) || {};
@@ -1812,7 +1820,7 @@ export class Game {
       this.player.maxChronoEnergy = 95;
     }
 
-    const origin = BACKSTORIES[this.character.backstoryIndex || 0];
+    const origin = pieceOf(this.character, "backstory");
     const ob = origin?.bonuses || {};
     if (ob.maxHealthAdd) {
       this.player.maxHealth += ob.maxHealthAdd;
@@ -1846,17 +1854,26 @@ export class Game {
   }
 
   /**
+   * After a saved run's stats are loaded: they already hold the gear the
+   * save was made in, so record that and bring them to the gear worn now
+   * (gear-sync.js resumeGearStats), never adding it a second time.
+   * @param {object} data the save
+   */
+  resumeSavedGear(data) {
+    resumeGearStats(this.player, data, this.character, gearBonuses(this.character));
+  }
+
+  /**
    * Put on a battlefield drop if its slot holds nothing with stats (standard
    * issue, or a purely cosmetic pick): the piece then works this run. A slot
    * already carrying a stat piece is left as the player chose it.
    * @returns {boolean} true when it was equipped
    */
-  _equipDroppedGear(key, index) {
+  _equipDroppedGear(key, id) {
     const isGear = GEAR_SLOTS.some(([k]) => k === key) || key?.startsWith("acc.");
-    const table = LOCKABLE[key]?.table;
-    if (!isGear || !table?.[index]?.bonuses) return false;
-    if (table[getIndex(this.character, key)]?.bonuses) return false;
-    Object.assign(this.character, withIndex(this.character, key, index));
+    if (!isGear || !itemOf(key, id)?.bonuses) return false;
+    if (itemOf(key, getId(this.character, key))?.bonuses) return false;
+    Object.assign(this.character, withId(this.character, key, id));
     this.saveCharacter();
     setCastCharacter(this.character);
     setSkinCharacter(this.character);
@@ -1865,15 +1882,15 @@ export class Game {
   }
 
   getCharacterColor() {
-    return CHARACTER_COLORS[this.character.colorIndex] || CHARACTER_COLORS[0];
+    return pieceOf(this.character, "color");
   }
 
   getWeaponSkin() {
-    return WEAPON_SKINS[this.character.weaponSkinIndex] || WEAPON_SKINS[0];
+    return pieceOf(this.character, "weaponSkin");
   }
 
   getVoiceProfile() {
-    return VOICE_PROFILES[this.character.voiceIndex || 0] || VOICE_PROFILES[0];
+    return pieceOf(this.character, "voice");
   }
 
   renderCharacterCreator(ctx, w, h) {
@@ -1886,6 +1903,8 @@ export class Game {
       this.isTouchDevice,
       gameUnlockContext(this),
       this.creatorPlacementSel,
+      this,
+      this.touchControls?.safeArea,
     );
   }
 
@@ -2235,7 +2254,7 @@ export class Game {
     }
 
     // Before the pad reads it: switches made by key events since last frame count.
-    this.player?.trackWeapon();
+    this._trackWeaponSwitch();
     this._updateGamepadInput(this.deltaTime);
 
     this._updateTimeScale();
@@ -2464,9 +2483,13 @@ export class Game {
     // Weapon kick recovery (framerate-invariant)
     this.player.weaponKick *= decay(0.85, dt);
     if (this.player.weaponKick < 0.01) this.player.weaponKick = 0;
-    // Camera punch recovery (faster than weapon kick — camera snaps back)
-    this.player.cameraPunch *= decay(0.78, dt);
+    // The frame's bump settles at the gun's own rate (src/data/weapons.js
+    // `kick.settle`), faster than the gun's shove: the camera snaps back.
+    const settle = decay(this.player.getWeaponDef?.()?.kick?.settle ?? 0.78, dt);
+    this.player.cameraPunch *= settle;
     if (Math.abs(this.player.cameraPunch) < 0.001) this.player.cameraPunch = 0;
+    this.player.kickSide = (this.player.kickSide || 0) * settle;
+    if (Math.abs(this.player.kickSide) < 0.001) this.player.kickSide = 0;
   }
 
   /** Slow-mo (last kill) outranks Chrono Shift; both drain here. */
@@ -3059,6 +3082,11 @@ export class Game {
     if (!drop) this.entities.push(new Pickup(x, y, "health"), new Pickup(x + 0.3, y, "ammo"));
   }
 
+  /** Note a weapon switch (Player.trackWeapon): a gun drawn starts from its base cone, not the last one's bloom. */
+  _trackWeaponSwitch() {
+    if (this.player?.trackWeapon()) resetBloom();
+  }
+
   updatePlayer(dt) {
     this.player._drawDistance = this.quality?.drawDistance;
     const flags = this.playerUpdateSystem.update(
@@ -3091,6 +3119,9 @@ export class Game {
     _updateCover(this, dt);
     // Smooth ADS FOV transition — must run every frame
     updateAdsFov(this.player, dt, this.settings);
+    // On the clock the fire rate runs on (game.time), so a slow-mo neither
+    // stacks a steady tap's bloom nor closes it early.
+    updateBloom(this.deltaTime);
   }
 
   /**
@@ -3269,7 +3300,12 @@ export class Game {
       }
 
       if (e.type === "health") {
-        if (this.player.health >= this.player.maxHealth && this.mode !== "tutorial") continue;
+        if (this.player.health >= this.player.maxHealth) {
+          // Full: it stays on the floor. The prologue's lesson still counts
+          // the cadet finding it (the "patch" step waits on a pickup).
+          if (this.mode === "tutorial") this.tutorialPickedUp = true;
+          continue;
+        }
         this.player.health = Math.min(
           this.player.maxHealth,
           this.player.health + 25,
@@ -3350,14 +3386,14 @@ export class Game {
         // A battlefield drop grants the piece outright: it shows up unlocked
         // in both creators, and is put on at once when its slot is free of
         // stats, so its bonuses work this run (_equipDroppedGear).
-        const granted = grantOwned(e.slot, e.slotIndex);
+        const granted = grantOwned(e.slot, e.pieceId);
         e.active = false;
         this.spawnPickupBurst(e.x, e.y, "weapon", this.world ? e.z : null);
         this.audio.pickup();
         this._spawnParticlesAt(this.world ? e.z : null, (ps) =>
           _spawnEnergyBurst(ps, e.x, e.y, { count: 18, r: 255, g: 200, b: 90 }));
         if (granted) {
-          const worn = this._equipDroppedGear(e.slot, e.slotIndex);
+          const worn = this._equipDroppedGear(e.slot, e.pieceId);
           this.showGearToast?.(e.kind, worn ? `${e.label} · equipped` : e.label);
           this.achievementStats.gearFound = (this.achievementStats.gearFound || 0) + 1;
           this._levelLog?.gear.push({ kind: e.kind || "Gear", name: e.label || "Salvage" });
@@ -3399,12 +3435,17 @@ export class Game {
     // height of everyone else. The model is 55 units, helmet to boots.
     const r = this.renderer;
     const dist = Math.max(0.6, r?.thirdPersonDist || 1.8);
-    const box = h / dist;
+    // Aimed in, the sights magnify the view (renderer focalY) about the
+    // reticle's row; the cadet is magnified with it, as every sprite is.
+    // Sideways the renderer's x already is.
+    const zoom = r?.viewZoom || 1;
+    const box = (h * zoom) / dist;
     const sc = (box * 0.9) / 55;
-    const eyeLift = ((r?._eyeDrop || 0) * h) / dist;
+    const eyeLift = ((r?._eyeDrop || 0) * h * zoom) / dist;
     const bobX = Math.sin(this.player.weaponBob) * 0.06 * sc;
     const bobY = Math.abs(Math.cos(this.player.weaponBob)) * 0.08 * sc;
-    const feetY = h / 2 + box / 2 + eyeLift;
+    const ry = zoom === 1 ? 0 : reticlePoint(w, h, currentBarH(this), this.player).y;
+    const feetY = ry + zoom * (h / 2 - ry) + box / 2 + eyeLift;
     // Off-centre with the camera over the shoulder; the renderer's x is in
     // its own (render-scaled) pixels.
     const cx = (r?.thirdPersonX != null && r.width ? (r.thirdPersonX * w) / r.width : w / 2) + bobX;
@@ -3471,7 +3512,7 @@ export class Game {
 
   // TODO: Improve weapon art and animations / Reloading / Idle / Skins / Upgraded versions with visual changes?
   drawWeapon(ctx, w, h) {
-    const charColor = CHARACTER_COLORS[this.character.colorIndex];
+    const charColor = pieceOf(this.character, "color");
     const wep = this.player.getWeaponDef();
     renderWeapon(ctx, w, h, {
       wep,
@@ -3486,7 +3527,8 @@ export class Game {
       weaponKick: this.player.weaponKick,
       weaponSwayX: this.settings.weaponBob ? this.player.weaponSwayX : 0,
       weaponSwayY: this.settings.weaponBob ? this.player.weaponSwayY : 0,
-      skinTone: (SKIN_TONES[this.character.skinToneIndex] || SKIN_TONES[0])?.color,
+      // The suit's gloves on the hands (and the skin of bare fingertips).
+      ...viewmodelLook(this.character),
       weaponAnimFrame: this.weaponAnimFrame,
       time: this.time,
       lastFireTime: this.player.lastFireTime || 0,
@@ -3494,6 +3536,8 @@ export class Game {
       hudStyle: this.settings.hudStyle,
       hudScale: this.settings.hudScale,
       hudH: this.hudH,
+      // The HUD bar on the scene canvas, as the reticle measures it (reticlePoint).
+      barH: currentBarH(this),
       aimOffsetX: this.player.aimOffsetX || 0,
       aimOffsetY: this.player.aimOffsetY || 0,
       state: this.state,
@@ -3519,10 +3563,6 @@ export class Game {
       alive: this.player.alive,
       time: this.time,
     });
-  }
-
-  drawCrosshairAt(ctx, cx, cy) {
-    drawCrosshair(ctx, cx, cy, this.settings.crosshair);
   }
 
   drawMinimap(ctx, x, y, w, h) {

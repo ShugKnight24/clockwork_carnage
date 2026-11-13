@@ -311,9 +311,10 @@ function findClosest(game, type) {
 const liveEnemy = (e) => e.type === "enemy" && e.active && e.state !== "dead" && e.health > 0 && !e._oddity;
 
 /**
- * Put the reticle on an enemy's head, as a good player does: the vertical
- * aim offset whose pitch (aimAngles in src/systems/aim.js) lands the shot
- * in the head zone at this distance. Zones without a head get the centre.
+ * Put the reticle on an enemy's head, as a good player does: the look up or
+ * down (lookShiftY, whose pitch aimAngles in src/systems/aim.js works out)
+ * that lands the shot in the head zone at this distance. Zones without a
+ * head get the centre.
  */
 function aimForHead(game, e) {
   aimAtZone(game, e, "head");
@@ -330,11 +331,11 @@ function aimAtZone(game, e, zone) {
   const h = game.canvas?.height || 1;
   const barH = currentBarH(game);
   const tanPitch = y / d;
-  // Through the recoil's kick too (sceneShiftPx): the view a player aims at
-  // is the kicked one.
-  const shift = game.world ? 0 : sceneShiftPx(p, h);
-  p.aimOffsetX = 0;
-  p.aimOffsetY = (barH / (2 * h) + shift / h - tanPitch) / ((h - barH) / h);
+  // Through the scene's own shift too (sceneShiftPx: a slide's lean, less
+  // the look it is setting). A shot's kick is not in it: it moves the whole
+  // frame, reticle and all, so the aim never sees it.
+  const shift = game.world ? 0 : sceneShiftPx(p, h) / h + (p.lookShiftY || 0);
+  p.lookShiftY = barH / (2 * h) + shift - tanPitch;
 }
 
 /**
@@ -575,7 +576,7 @@ function killAllEnemies(game, maxTicks = 5000, { weapon = null } = {}) {
     if (game.state !== GameState.PLAYING) break;
   }
   clearInput(game);
-  p.aimOffsetY = 0;
+  p.lookShiftY = 0;
   return totalTicks;
 }
 
@@ -597,7 +598,6 @@ function collectWeapons(game, maxTicks = 900) {
 function collectAllPickups(game, maxTicks = 3000) {
   let totalTicks = 0;
   for (let i = 0; i < 50; i++) {
-    const pickup = findClosest(game, null);
     // Filter to actual pickups
     const pickups = game.entities.filter(
       (e) =>
@@ -1592,8 +1592,6 @@ function botSpeedrunner(game) {
     "No exit entity found",
   );
 
-  const startTick = performance.now();
-
   // Kill required enemies (all of them to open exit)
   const combatTicks = killAllEnemies(game, 8000);
   r.pass(`Enemies cleared in ${combatTicks} ticks`);
@@ -2007,7 +2005,6 @@ function botCadet(game) {
       const b = game.entities.find((e) => e.propType === "calib_beacon" && e.state === "on");
       if (b) {
         p.angle = Math.atan2(b.y - p.y, b.x - p.x);
-        p.aimOffsetX = 0;
       }
       return stepGame(game, 1);
     },
@@ -2115,15 +2112,18 @@ function botCadet(game) {
         if (p.coverDashTarget) game.dashFromKeys();
         return stepGame(game, 1);
       }
-      const e = live("coverDrill")[0];
+      // Blind fire at the close one first, then peek at the pairs.
+      const blind = live("coverBlind")[0];
+      const e = blind ?? live("coverDrill")[0];
       if (!e) return stepGame(game, 1);
       aimAt(game, e.x, e.y);
       aimForHead(game, e);
       // Peek: sights up stands the cadet over the block; fire once up.
       // Blind: sights down, fire over the top.
-      p.isAiming = stage === "peek";
+      const peek = !blind;
+      p.isAiming = peek;
       pull = !pull;
-      p.isFiring = pull && (stage !== "peek" || p.coverPeeking);
+      p.isFiring = pull && (!peek || p.coverPeeking);
       stepGame(game, 1);
       p.isFiring = false;
     },
@@ -2208,7 +2208,7 @@ function botCadet(game) {
       pacing.shots = game.shotsFired;
     }
     clearInput(game);
-    p.aimOffsetY = 0;
+    p.lookShiftY = 0;
     p.isAiming = false;
     if (t.step === at) {
       stuck.push(id);

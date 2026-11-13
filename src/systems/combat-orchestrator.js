@@ -17,11 +17,11 @@ import {
 } from "./combat.js";
 import { playerEyeZ, eyeOffsetZ } from "./physics.js";
 import { playerEyeZ3D } from "../world/voxel-physics.js";
-import { LOCKABLE, gameUnlockContext, droppableItems } from "./unlocks.js";
+import { LOCKABLE, gameUnlockContext, droppableItems, itemOf } from "./unlocks.js";
 import { FINISHES } from "../data/weapon-skins.js";
 import { WEAPONS } from "../data/weapons.js";
 import { Projectile, Enemy, Pickup } from "../entities/index.js";
-import { aimAnglesForGame, currentSpread } from "./aim.js";
+import { aimAnglesForGame, currentSpread, noteShotBloom } from "./aim.js";
 import { KILL_DROP_CHANCE } from "./ammo-economy.js";
 import { noteDamageCue } from "./player-feedback.js";
 import { readyToFire, spendShot } from "./reload.js";
@@ -58,8 +58,8 @@ export function falloffMult(wep, dist) {
   return 1 + (f[2] - 1) * t;
 }
 
-/** Vertical recoil in radians. */
-const CAMERA_PUNCH = [0.015, 0.03, 0.015, 0.04, 0.025, 0.035, 0.02, 0.025];
+/** A gun without its own `kick` (src/data/weapons.js): a light one. */
+const LIGHT_KICK = { view: 0.015, side: 0, settle: 0.78, shove: 1, shake: 2 };
 const TRACER_COLORS = { 0: "255,210,80", 1: "255,180,80", 4: "255,160,40", 5: "120,220,255", 6: "100,255,120" };
 
 export function fireWeapon(game) {
@@ -110,8 +110,8 @@ export function fireWeapon(game) {
 
   const damage = wep.damage * game.player.damageMultiplier * boost;
   const camera = aimAnglesForGame(game);
-  // Every round scatters inside the weapon's cone: the hip `spread`, easing
-  // to its `adsSpread` as the sights come up. Single rounds used to ignore
+  // Every round scatters inside the weapon's cone: the hip `spread` and its
+  // bloom, easing to its `adsSpread` as the sights come up. Single rounds used to ignore
   // the cone and pellets spread only sideways, so the sights and the
   // crosshair said nothing about where a weapon's rounds actually went.
   // Blind fire from cover sprays wider (src/systems/cover-play.js); a hip
@@ -138,7 +138,11 @@ export function fireWeapon(game) {
     const shots = game.player.multiShot || 1;
     for (let ms = 0; ms < shots; ms++) {
       const [dy, dp] = scatter(cone);
-      const spreadAngle = shots > 1 ? (ms - (shots - 1) / 2) * 0.12 * fanMul : 0;
+      // Aimed, the first bolt goes through the reticle and the rest fan out
+      // either side of it; centred on the aim, an even fan put none there.
+      const spreadAngle = shots < 2 ? 0 : game.player.isAiming
+        ? (ms === 0 ? 0 : (ms % 2 ? 1 : -1) * Math.ceil(ms / 2) * 0.12 * fanMul)
+        : (ms - (shots - 1) / 2) * 0.12 * fanMul;
       const shotAngle = aimAngle + spreadAngle + dy;
       const dirX = Math.cos(shotAngle);
       const dirY = Math.sin(shotAngle);
@@ -168,17 +172,18 @@ export function fireWeapon(game) {
     }
   }
   endCoverShot(game, coverShot);
+  // The next shot's hip cone opens a little (src/systems/aim.js bloom).
+  noteShotBloom(wep);
 
-  game.screenShake = Math.max(
-    game.screenShake,
-    wep.id === 3 ? 6 : wep.id === 1 ? 4 : 2,
-  );
-  // Camera punch — heavier weapons kick harder. ADS halves it.
+  // The kick, per gun: a shake, and a bump of the whole frame up and a
+  // little aside (frameOffset in src/rendering/render-pipeline.js). The
+  // reticle moves with the world, so the next round still goes where it sits.
+  // ADS halves the bump.
+  const kick = wep.kick || LIGHT_KICK;
+  game.screenShake = Math.max(game.screenShake, kick.shake);
   const punchMul = game.player.isAiming ? 0.5 : 1;
-  game.player.cameraPunch = Math.max(
-    game.player.cameraPunch,
-    (CAMERA_PUNCH[wep.id] || 0.015) * punchMul,
-  );
+  game.player.cameraPunch = Math.max(game.player.cameraPunch, kick.view * punchMul);
+  game.player.kickSide = (Math.random() * 2 - 1) * kick.side * punchMul;
   // Gamepad haptics — weapon fire
   game.gamepad?.vibrateLight?.();
 }
@@ -626,8 +631,8 @@ export function maybeDropGear(game, enemy, { chance = GEAR_DROP_CHANCE } = {}) {
   const entry = LOCKABLE[pick.key];
   const drop = new Pickup(enemy.x, enemy.y, "gear", {
     slot: pick.key,
-    slotIndex: pick.index,
-    label: entry.table[pick.index]?.name || "Gear",
+    pieceId: pick.id,
+    label: itemOf(pick.key, pick.id)?.name || "Gear",
     kind: entry.kind,
   });
   game.entities.push(drop);

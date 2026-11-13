@@ -9,11 +9,12 @@
  * Persistence (`cc_unlocks`): `owned` grandfathers gear a player had already
  * equipped before unlocks existed (or earned before a rule tightened), and
  * `seen` records which unlocks have been announced so the celebration toast
- * fires once.
+ * fires once. Both are keyed by ownedKey(): `<key>:#<item id>`.
  */
 
 import {
   ARMOR_STYLES,
+  BODY_FRAMES,
   HELMET_STYLES,
   VISOR_STYLES,
   SHOULDER_STYLES,
@@ -21,9 +22,11 @@ import {
   CHARACTER_COLORS,
   CAMO_STYLES,
   TIER_UNLOCKS,
+  tierMark,
+  DEFAULT_LOOK_IDS,
 } from "../data/cosmetics.js";
-import { FIELD_TABLES, getIndex } from "../core/character-fields.js";
-import { indexOfId } from "../data/badges.js";
+import { FIELD_TABLES, getId, pieceOf } from "../core/character-fields.js";
+import { LEGACY_LOOK_INDICES, LEGACY_FIELD_NAMES } from "../core/legacy-look-indices.js";
 import { ACCESSORY_SLOTS } from "../data/accessories.js";
 import { levelsBefore, totalActs, totalLevels } from "../data/campaign/acts.js";
 
@@ -31,13 +34,15 @@ const STORE_KEY = "cc_unlocks";
 
 /** Character fields whose options can be locked, with their tables. */
 export const LOCKABLE = {
-  armorIndex: { table: ARMOR_STYLES, kind: "Armor" },
-  helmetIndex: { table: HELMET_STYLES, kind: "Helmet" },
-  visorIndex: { table: VISOR_STYLES, kind: "Visor" },
-  shoulderIndex: { table: SHOULDER_STYLES, kind: "Shoulders" },
-  loadoutIndex: { table: LOADOUT_CLASSES, kind: "Loadout class" },
-  colorIndex: { table: CHARACTER_COLORS, kind: "Palette" },
-  camoIndex: { table: CAMO_STYLES, kind: "Camo" },
+  armor: { table: ARMOR_STYLES, kind: "Armor" },
+  // Theme frames carry a tier; the stock frames have none and stay open.
+  frame: { table: BODY_FRAMES, kind: "Frame" },
+  helmet: { table: HELMET_STYLES, kind: "Helmet" },
+  visor: { table: VISOR_STYLES, kind: "Visor" },
+  shoulder: { table: SHOULDER_STYLES, kind: "Shoulders" },
+  loadout: { table: LOADOUT_CLASSES, kind: "Loadout class" },
+  color: { table: CHARACTER_COLORS, kind: "Palette" },
+  camo: { table: CAMO_STYLES, kind: "Camo" },
 };
 
 const VIRTUAL_KINDS = {
@@ -48,22 +53,31 @@ const VIRTUAL_KINDS = {
   "badge.metal": "Metal",
   "badge.finish": "Badge finish",
 };
-// Badge and accessory fields are nested (a layer stack, a per-slot id), not
-// flat indices, so they carry their own table and are looked up by item id
-// rather than array position — see ownedKey().
+// Badge and accessory fields are nested (a layer stack, a per-slot id) rather
+// than one flat field on the character; `virtual` marks them for
+// sanitizeLocked, which strips them its own way.
 for (const [key, table] of Object.entries(FIELD_TABLES)) {
-  LOCKABLE[key] = { table, kind: VIRTUAL_KINDS[key] || `${key.slice(4)[0].toUpperCase()}${key.slice(5)} gear`, byId: true };
+  LOCKABLE[key] = { table, kind: VIRTUAL_KINDS[key] || `${key.slice(4)[0].toUpperCase()}${key.slice(5)} gear`, virtual: true };
 }
 
-/** Ownership id: index for the legacy flat tables, item id for id-based tables. */
-export function ownedKey(key, index) {
-  const entry = LOCKABLE[key];
-  return entry?.byId ? `${key}:#${entry.table[index]?.id}` : `${key}:${index}`;
+/** The lockable item `id` names under `key`, or null. */
+export function itemOf(key, id) {
+  return LOCKABLE[key]?.table.find((x) => x.id === id) || null;
 }
 
-/** Rule attached to an item, or null when it is always available. */
-export function ruleFor(key, index) {
-  const item = LOCKABLE[key]?.table[index];
+/**
+ * Ownership id, by item id so it survives table reordering: `helmet:#reaper`.
+ * Throws a RangeError for an id the key's table does not have, so a bad id
+ * never becomes a key like `helmet:#undefined`.
+ */
+export function ownedKey(key, id) {
+  if (!itemOf(key, id)) throw new RangeError(`ownedKey: "${key}" has no item "${id}"`);
+  return `${key}:#${id}`;
+}
+
+/** Rule attached to an item, or null when it is always available (or unknown). */
+export function ruleFor(key, id) {
+  const item = itemOf(key, id);
   if (!item) return null;
   if (item.unlock) return item.unlock;
   if (item.tier && TIER_UNLOCKS[item.tier]) return TIER_UNLOCKS[item.tier];
@@ -154,11 +168,11 @@ export function progressText(rule, evaluation) {
  * Full state for one option.
  * @returns {{ unlocked: boolean, rule: object|null, value: number, target: number, pct: number, hint: string }}
  */
-export function unlockState(key, index, ctx) {
-  const rule = ruleFor(key, index);
+export function unlockState(key, id, ctx) {
+  const rule = ruleFor(key, id);
   if (!rule) return { unlocked: true, rule: null, value: 1, target: 1, pct: 1, hint: "" };
   const e = evaluateRule(rule, ctx);
-  const owned = !!ctx.owned?.[ownedKey(key, index)];
+  const owned = !!ctx.owned?.[ownedKey(key, id)];
   return {
     unlocked: e.met || owned,
     rule,
@@ -169,16 +183,16 @@ export function unlockState(key, index, ctx) {
   };
 }
 
-export const isUnlocked = (key, index, ctx) => unlockState(key, index, ctx).unlocked;
+export const isUnlocked = (key, id, ctx) => unlockState(key, id, ctx).unlocked;
 
 /** Every lockable option that is currently unlocked by its rule, as ownedKey() ids. */
 export function earnedIds(ctx) {
   const out = [];
   for (const [key, { table }] of Object.entries(LOCKABLE)) {
-    table.forEach((_, i) => {
-      const rule = ruleFor(key, i);
-      if (rule && evaluateRule(rule, ctx).met) out.push(ownedKey(key, i));
-    });
+    for (const { id } of table) {
+      const rule = ruleFor(key, id);
+      if (rule && evaluateRule(rule, ctx).met) out.push(ownedKey(key, id));
+    }
   }
   // Armour variants live on ARMOR_STYLES[i].variant, not in a LOCKABLE table.
   for (const a of ARMOR_STYLES) {
@@ -202,13 +216,13 @@ export function describeId(id) {
   }
   const entry = LOCKABLE[key];
   if (!entry) return { kind: "", name: id, tier: 0 };
-  const item = idx?.startsWith("#") ? entry.table.find((x) => x.id === idx.slice(1)) : entry.table[Number(idx)];
+  const item = idx?.startsWith("#") ? entry.table.find((x) => x.id === idx.slice(1)) : null;
   return item ? { kind: entry.kind, name: item.name, tier: item.tier || 0 } : { kind: "", name: id, tier: 0 };
 }
 
-// The four flat slots that share TIER_UNLOCKS: one tier opens items across all
-// of them at once, so they are announced together rather than four times over.
-const TIER_SLOTS = new Set(["armorIndex", "helmetIndex", "visorIndex", "shoulderIndex"]);
+// The flat slots that share TIER_UNLOCKS: one tier opens items across all of
+// them at once, so they are announced together rather than once per slot.
+const TIER_SLOTS = new Set(["armor", "frame", "helmet", "visor", "shoulder"]);
 
 /**
  * The lines the unlock toast should show for a batch of freshly earned ids, in
@@ -228,7 +242,7 @@ export function announcements(ids) {
     if (TIER_SLOTS.has(key) && info.tier) {
       if (tiers.has(info.tier)) continue;
       tiers.add(info.tier);
-      out.push({ kind: "Gear tier", name: `MK ${"I".repeat(info.tier)} armor, helmets, visors & shoulders` });
+      out.push({ kind: "Gear tier", name: `${tierMark(info.tier)} armor, frames, helmets, visors & shoulders` });
       continue;
     }
     // An id whose table entry has gone (a renamed item in an old save) has no
@@ -248,7 +262,7 @@ export function loadUnlockStore() {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return { owned: data.owned || {}, seen: data.seen || {}, v2: !!data.v2, paced: !!data.paced };
+    return { owned: data.owned || {}, seen: data.seen || {}, v2: !!data.v2, paced: !!data.paced, v3: !!data.v3 };
   } catch (_) {
     return null;
   }
@@ -256,8 +270,44 @@ export function loadUnlockStore() {
 
 export function saveUnlockStore(store) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ owned: store.owned, seen: store.seen, v2: !!store.v2, paced: !!store.paced }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ owned: store.owned, seen: store.seen, v2: !!store.v2, paced: !!store.paced, v3: !!store.v3 }));
   } catch (_) {}
+}
+
+/** `"helmetIndex:3"` -> its legacy field and position; null for any other key. */
+function legacyKey(key) {
+  const m = /^([A-Za-z]+Index):(\d+)$/.exec(key);
+  return m && m[1] in LEGACY_LOOK_INDICES ? { legacy: m[1], pos: Number(m[2]) } : null;
+}
+
+/**
+ * Stores written before the look moved to ids (no `v3` flag) keyed the flat
+ * tables by position (`"helmetIndex:3"`). Rewrite those keys in both `owned`
+ * and `seen` to item ids (`"helmet:#reaper"`), reading each position through
+ * the order its table shipped in (LEGACY_LOOK_INDICES), so the same pieces stay
+ * owned and the same unlocks stay announced. A position past the end of its
+ * shipped table named nothing and is dropped. Id keys pass through. A store
+ * with `v3` is returned as it is: it is never read as positions again.
+ * @param {{ owned: object, seen: object, v2?: boolean, paced?: boolean, v3?: boolean }} store
+ */
+export function migrateUnlockStore(store) {
+  if (store.v3) return store;
+  const rekey = (map) => {
+    const out = {};
+    for (const [key, val] of Object.entries(map || {})) {
+      const old = legacyKey(key);
+      if (!old) {
+        out[key] = out[key] || val;
+        continue;
+      }
+      const id = LEGACY_LOOK_INDICES[old.legacy][old.pos];
+      if (id === undefined) continue;
+      const next = `${LEGACY_FIELD_NAMES[old.legacy]}:#${id}`;
+      out[next] = out[next] || val;
+    }
+    return out;
+  };
+  return { ...store, owned: rekey(store.owned), seen: rekey(store.seen), v3: true };
 }
 
 /** How far an in-progress campaign save got: `{ level, act }`, 0/0 when there is none. */
@@ -293,6 +343,11 @@ export function ensureUnlockStore(character, stats, achievements) {
   if (_store) return _store;
   let store = loadUnlockStore();
   if (store) {
+    // Keys to ids first: the steps below write id keys alongside them.
+    if (!store.v3) {
+      store = migrateUnlockStore(store);
+      saveUnlockStore(store);
+    }
     if (!store.v2) {
       const save = readCampaignSave();
       const ctx = unlockContext({ stats, achievements, campaignSaveLevel: save.level, campaignSaveAct: save.act, owned: store.owned });
@@ -307,7 +362,7 @@ export function ensureUnlockStore(character, stats, achievements) {
     }
     return (_store = store);
   }
-  store = { owned: {}, seen: {}, v2: true, paced: true };
+  store = { owned: {}, seen: {}, v2: true, paced: true, v3: true };
   const save = readCampaignSave();
   const ctx = unlockContext({ stats, achievements, campaignSaveLevel: save.level, campaignSaveAct: save.act });
   let hasSavedCharacter = false;
@@ -316,8 +371,9 @@ export function ensureUnlockStore(character, stats, achievements) {
   } catch (_) {}
   if (hasSavedCharacter && character) {
     for (const key of Object.keys(LOCKABLE)) {
-      const i = getIndex(character, key);
-      if (ruleFor(key, i) && !evaluateRule(ruleFor(key, i), ctx).met) store.owned[ownedKey(key, i)] = true;
+      const id = getId(character, key);
+      const rule = ruleFor(key, id);
+      if (rule && !evaluateRule(rule, ctx).met) store.owned[ownedKey(key, id)] = true;
     }
   }
   for (const id of earnedIds(ctx)) store.seen[id] = true;
@@ -345,31 +401,30 @@ export function invalidateUnlockContext() {
  * battlefield drop is recorded. Returns false when it was already owned, so
  * callers can skip the pickup toast for a duplicate.
  */
-export function grantOwned(key, index) {
-  if (!LOCKABLE[key]?.table[index]) return false;
+export function grantOwned(key, id) {
+  if (!itemOf(key, id)) return false;
   const store = ensureUnlockStore();
-  const id = ownedKey(key, index);
-  if (store.owned[id]) return false;
-  store.owned[id] = true;
+  const owned = ownedKey(key, id);
+  if (store.owned[owned]) return false;
+  store.owned[owned] = true;
   // A dropped item is never a surprise — the player watched it fall — so mark
   // it seen and let the pickup speak for itself instead of the unlock toast.
-  store.seen[id] = true;
+  store.seen[owned] = true;
   saveUnlockStore(store);
   invalidateUnlockContext();
   return true;
 }
 
 /**
- * Items the player has not earned or been given yet, as {key, index} pairs.
+ * Items the player has not earned or been given yet, as {key, id} pairs.
  * Gear drops pick from here so a kill never hands over a duplicate.
  */
 export function lockedItems(ctx) {
   const out = [];
-  for (const key of Object.keys(LOCKABLE)) {
-    const table = LOCKABLE[key].table;
-    for (let i = 0; i < table.length; i++) {
-      if (!ruleFor(key, i)) continue; // always-available items are not loot
-      if (!unlockState(key, i, ctx).unlocked) out.push({ key, index: i });
+  for (const [key, { table }] of Object.entries(LOCKABLE)) {
+    for (const { id } of table) {
+      if (!ruleFor(key, id)) continue; // always-available items are not loot
+      if (!unlockState(key, id, ctx).unlocked) out.push({ key, id });
     }
   }
   return out;
@@ -410,17 +465,18 @@ export function withinReach(rule, ctx) {
  * little and never a later act's.
  */
 export function droppableItems(ctx) {
-  return lockedItems(ctx).filter(({ key, index }) => withinReach(ruleFor(key, index), ctx));
+  return lockedItems(ctx).filter(({ key, id }) => withinReach(ruleFor(key, id), ctx));
 }
 
 /**
  * Unlock state for an armour style's variant treatment. Variants live on
  * ARMOR_STYLES[i].variant rather than in a LOCKABLE table, so they get their
- * own reader instead of `unlockState`.
+ * own reader instead of `unlockState`. An unknown armour has no variant.
+ * @param {string} armorId
  * @returns {{ unlocked: boolean, rule: object|null, value: number, target: number, pct: number, hint: string }}
  */
-export function variantState(armorIndex, ctx) {
-  const v = ARMOR_STYLES[armorIndex]?.variant;
+export function variantState(armorId, ctx) {
+  const v = ARMOR_STYLES.find((a) => a.id === armorId)?.variant;
   if (!v) return { unlocked: false, rule: null, value: 0, target: 1, pct: 0, hint: "" };
   const e = evaluateRule(v.unlock, ctx);
   const owned = !!ctx.owned?.[`armorVariant:#${v.id}`];
@@ -443,7 +499,7 @@ export function variantState(armorIndex, ctx) {
  */
 export function sanitizeLocked(ch, ctx) {
   const changes = {};
-  const ok = (key, id) => unlockState(key, indexOfId(LOCKABLE[key].table, id), ctx).unlocked;
+  const ok = (key, id) => unlockState(key, id, ctx).unlocked;
   const acc = { ...ch.accessories };
   let accChanged = false;
   for (const { id } of ACCESSORY_SLOTS) {
@@ -462,14 +518,17 @@ export function sanitizeLocked(ch, ctx) {
     }
   }
   // The flat picks too (palette, camo, armour, helmet...): a saved look worn
-  // after its unlock was cleared falls back to the first one still earned.
-  for (const [key, { table, byId }] of Object.entries(LOCKABLE)) {
-    const i = ch[key];
-    if (byId || i == null || unlockState(key, i, ctx).unlocked) continue;
-    const free = table.findIndex((_, j) => unlockState(key, j, ctx).unlocked);
-    if (free >= 0) changes[key] = free;
+  // after its unlock was cleared falls back to the field's default, or the
+  // first piece still earned if even that is locked.
+  for (const [key, { table, virtual }] of Object.entries(LOCKABLE)) {
+    if (virtual || unlockState(key, pieceOf(ch, key).id, ctx).unlocked) continue;
+    const fallback = [DEFAULT_LOOK_IDS[key], ...table.map((e) => e.id)].find((id) => unlockState(key, id, ctx).unlocked);
+    if (fallback) changes[key] = fallback;
   }
-  if (ch.armorVariant && !variantState((changes.armorIndex ?? ch.armorIndex) | 0, ctx).unlocked) changes.armorVariant = 0;
+  if (ch.armorVariant) {
+    const armor = pieceOf({ armor: changes.armor ?? ch.armor }, "armor");
+    if (!variantState(armor.id, ctx).unlocked) changes.armorVariant = 0;
+  }
   return changes;
 }
 

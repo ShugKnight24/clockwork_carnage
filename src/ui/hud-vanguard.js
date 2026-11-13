@@ -36,6 +36,7 @@ import { drawMinimap } from "./minimap.js";
 import { silhouetteLayers, SILHOUETTE_BOX, drawWeaponIcon } from "./weapon-silhouettes.js";
 import { WEAPONS } from "../data/index.js";
 import { reticlePoint } from "../systems/aim.js";
+import { frameShift } from "./hud-shared.js";
 import { exitIsOpen } from "../systems/exit-cells.js";
 import { drawChronoCluster } from "./chrono-hud.js";
 import { ammoTint } from "./reload-hud.js";
@@ -905,7 +906,10 @@ function drawCompass(game, ctx, cx, y, W, compact) {
 /** Arcs around the reticle toward close hostiles that are off to the side. */
 export function drawVanguardThreatRing(game, ctx, w, h, barH = 0, compact = false) {
   const p = game.player;
-  const { x: cx, y: cy } = reticlePoint(w, h, barH, p);
+  // Round the reticle as drawn: moved with the frame (moveWithFrame in hud-shared.js).
+  const at = reticlePoint(w, h, barH, p);
+  const shift = frameShift(game, w, h);
+  const cx = at.x + shift.x, cy = at.y + shift.y;
   const r = Math.min(w, h - barH) * 0.16;
   const ink = HT.outline;
   ctx.lineCap = "butt";

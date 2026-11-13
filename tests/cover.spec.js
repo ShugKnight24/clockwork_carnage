@@ -38,8 +38,7 @@ async function coverAtCounter(page, x = 29.5) {
     const d = window.ccDebug;
     d.teleport(x, 50.9);
     d.game.player.angle = -Math.PI / 2;
-    d.game.player.aimOffsetX = 0;
-    d.game.player.aimOffsetY = 0;
+    d.game.player.lookShiftY = 0;
   }, x);
   await play(page, 150);
   await page.evaluate(() => window.ccDebug.pressKey("KeyG"));
@@ -121,8 +120,7 @@ test("peeks over low cover and kills a target", async ({ page }) => {
     const h = g.canvas.height;
     const barH = currentBarH(g);
     const tanPitch = (zoneAimHeight(t, "body") - eyeOffsetZ(p)) / d;
-    p.aimOffsetX = 0;
-    p.aimOffsetY = (barH / (2 * h) - tanPitch) / ((h - barH) / h);
+    p.lookShiftY = barH / (2 * h) - tanPitch;
   });
   await page.evaluate(() => window.ccDebug.fire(true));
   await page.waitForFunction(() => window.ccDebug.game.coverStats.peekKills > 0, null, { timeout: 30_000 });
@@ -148,8 +146,7 @@ test("blind fire over low cover lands on a target the view cannot see", async ({
     t.state = "idle";
     t.health = 1;
     g.player.isAiming = false;
-    g.player.aimOffsetX = 0;
-    g.player.aimOffsetY = 0;
+    g.player.lookShiftY = 0;
   });
   await play(page, 200);
   expect((await player(page)).down).toBe(true);

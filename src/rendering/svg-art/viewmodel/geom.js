@@ -98,7 +98,8 @@ export function circle(cx, cy, r, n = 14, rot = 0) {
 }
 
 /**
- * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear) },
+ * @param {object} cam  { F (focal length, units), ox, oy, oz (gun offset from the eye, mm), kx (cant shear),
+ *   yaw, pitch (radians) and about (gun-space pivot): the gun turned before it is placed },
  *   or { side: true, scale } — an orthographic profile of the left flank, muzzle
  *   pointing right, at `scale` units per mm (HUD weapon icons)
  * @param {string} accent  character energy colour (emissives, rim light)
@@ -106,13 +107,37 @@ export function circle(cx, cy, r, n = 14, rot = 0) {
  *   skin: a weapon finish — { remap: Map(material ramp → ramp), pattern: SVG pattern id or null } }
  */
 export function createScene(cam, accent, opts = {}) {
-  const { F, ox, oy, oz, kx = 0 } = cam;
+  const { F, ox, oy, oz, kx = 0, yaw = 0, pitch = 0, about = [0, 0, 0] } = cam;
+  const roll = cam.roll ?? 0;
   const side = !!cam.side;
   const S = cam.scale || 1;
   const real = !!opts.real;
   const skin = opts.skin || null;
+  // The gun turned about the gun-space point `about` before it is placed:
+  // `yaw` swings the muzzle left (+) about the vertical, `pitch` raises it
+  // (+). Rotation keeps lines and handedness, so culling, rays and painter
+  // order hold.
+  const [cy, sy, cp, sp] = [Math.cos(yaw), Math.sin(yaw), Math.cos(pitch), Math.sin(pitch)];
+  const [cr, sr] = [Math.cos(roll), Math.sin(roll)];
+  const turned = !!(yaw || pitch || roll);
+  /** Gun space → turned space (pitch about x, then yaw about y), and back. */
+  const [ax, ay, az] = about;
+  const rot = ([x0, y0, z0]) => {
+    // Roll about the barrel first (+ turns the right flank up).
+    const [x, y, z] = [(x0 - ax) * cr - (y0 - ay) * sr, (x0 - ax) * sr + (y0 - ay) * cr, z0 - az];
+    const y1 = y * cp + z * sp;
+    const z1 = -y * sp + z * cp;
+    return [x * cy - z1 * sy + ax, y1 + ay, x * sy + z1 * cy + az];
+  };
+  const unrot = ([x0, y0, z0]) => {
+    const [x, y, z] = [x0 - ax, y0 - ay, z0 - az];
+    const x1 = x * cy + z * sy;
+    const z1 = -x * sy + z * cy;
+    const [xr, yr] = [x1, y * cp - z1 * sp];
+    return [xr * cr + yr * sr + ax, -xr * sr + yr * cr + ay, y * sp + z1 * cp + az];
+  };
   // Side view: the eye far off the left flank, so painter order follows x.
-  const eye = side ? [-1e5, 0, 0] : [-ox, -oy, -oz];
+  const eye = side ? [-1e5, 0, 0] : turned ? unrot([-ox, -oy, -oz]) : [-ox, -oy, -oz];
   const core = mix(accent, "#ffffff", 0.55);
 
   const layers = {};
@@ -131,14 +156,15 @@ export function createScene(cam, accent, opts = {}) {
   };
 
   /** Units per millimetre at a gun-space point's depth. */
-  const k = side ? () => S : ([, , z]) => F / Math.max(20, z + oz);
+  const kq = ([, , z]) => F / Math.max(20, z + oz);
+  const k = side ? () => S : turned ? (p) => kq(rot(p)) : kq;
+  /** Project a point in turned space (mm) to viewmodel units. */
+  const Pq = (p) => {
+    const q = kq(p);
+    return [(p[0] + ox + p[1] * kx) * q, -(p[1] + oy) * q];
+  };
   /** Project a gun-space point (mm) to viewmodel units. */
-  const P = side
-    ? (p) => [p[2] * S, -p[1] * S]
-    : (p) => {
-      const q = k(p);
-      return [(p[0] + ox + p[1] * kx) * q, -(p[1] + oy) * q];
-    };
+  const P = side ? (p) => [p[2] * S, -p[1] * S] : turned ? (p) => Pq(rot(p)) : Pq;
   // Which screen winding means "facing the camera"? Probe with a quad facing the
   // eye: a floor below it, or for the side view the left flank.
   const area2 = (p2) => {
@@ -153,7 +179,8 @@ export function createScene(cam, accent, opts = {}) {
     ? [[0, 0, 0], [0, 0, 10], [0, 10, 10], [0, 10, 0]]
     : [[-5, -oy - 60, 200], [5, -oy - 60, 200], [5, -oy - 60, 210], [-5, -oy - 60, 210]];
   const toEye = side ? [-1, 0, 0] : [0, 1, 0];
-  const VIS = Math.sign(area2((dot(newell(probe), toEye) < 0 ? probe.slice().reverse() : probe).map(P))) || 1;
+  // (Probed in turned space: the turn keeps handedness, so the sign holds for P.)
+  const VIS = Math.sign(area2((dot(newell(probe), toEye) < 0 ? probe.slice().reverse() : probe).map(side ? P : Pq))) || 1;
   const path = (pts2, close = true) => {
     for (const p of pts2) grow(cur, p);
     return "M" + pts2.map(pt).join("L") + (close ? "Z" : "");
@@ -324,8 +351,28 @@ export function createScene(cam, accent, opts = {}) {
     cur = prev;
   }
 
+  // The eye in unsheared gun space: the projection is a pinhole at `eye` after
+  // the cant shear, and a shear maps lines to lines, so rays from `view` to a
+  // point pass through whatever covers it on screen (hand occlusion, painter order).
+  const view = side ? eye : turned ? unrot([-ox + kx * oy, -oy, -oz]) : [-ox + kx * oy, -oy, -oz];
+
+  // A point fixed to the body rather than the gun (an elbow): where it lies
+  // in gun space once the gun's roll about the barrel is undone, so the roll
+  // turns the gun and the hands on it but not the arms behind them.
+  const steady = roll
+    ? ([x, y, z]) => {
+        const [dx, dy] = [x - ax, y - ay];
+        return [dx * cr + dy * sr + ax, -dx * sr + dy * cr + ay, z];
+      }
+    : (p) => p;
+
+  // A point given relative to the eye (mm: x right, y up, z ahead, as the
+  // camera sees it) in gun space: where the body is (a shoulder), whatever
+  // the gun's turn and roll.
+  const fromEye = side ? (c) => c : ([x, y, z]) => (turned ? unrot([x - ox, y - oy, z - oz]) : [x - ox, y - oy, z - oz]);
+
   return {
-    P, k, F, eye, accent, core, layers, target, emit, path, grow, real,
+    P, k, F, eye, view, KEY, accent, core, layers, target, emit, path, grow, real, steady, fromEye,
     solid, loft, prismZ, boxZ, cylZ, post, poly, line, disc, glowLine, glowPoly,
   };
 }

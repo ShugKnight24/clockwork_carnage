@@ -77,7 +77,7 @@ describe("modern portrait layer cache", () => {
       (c) => { c.badge.placements = ["chest"]; },
       (c) => { c.badge.layers[0].symbol = "star"; },
       (c) => { c.accessories.back = "cloak"; },
-      (c) => { c.helmetIndex = 1; },
+      (c) => { c.helmet = "wide"; },
     ]) {
       const before = characterLayers(live);
       mutate(live);

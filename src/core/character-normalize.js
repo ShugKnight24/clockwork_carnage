@@ -1,10 +1,12 @@
 /**
- * Validation for the object-valued character fields. Every function returns a
- * fresh object, so callers never share state with DEFAULT_CHARACTER.
+ * Validation for the character's look: the id fields (normalizeLook) and the
+ * object-valued fields. Every function returns a fresh object, so callers
+ * never share state with DEFAULT_CHARACTER.
  */
 import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, DEFAULT_BADGE, LEGACY_ICON_SYMBOL, byId } from "../data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES } from "../data/accessories.js";
-import { BADGES, SHOULDER_STYLES } from "../data/cosmetics.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, wornTints } from "../data/accessories.js";
+import { BADGES } from "../data/cosmetics.js";
+import { LOOK_TABLES, pieceOf } from "./character-fields.js";
 
 const MAX_LAYERS = 8;
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
@@ -48,14 +50,49 @@ export function normalizeAccessories(raw) {
   return out;
 }
 
-export function migrateLegacyBadge(badgeIndex, shoulderIndex) {
-  const icon = BADGES[badgeIndex]?.icon;
+/**
+ * The accessory colours a saved character keeps (accessoryTints), by the
+ * rule the creator keeps them by while editing (wornTints): the colours
+ * stored are the colours drawn. A valid `#rrggbb` (lower-cased), only for a
+ * slot whose worn item declares a `tint`; everything else is dropped.
+ * @param {unknown} raw stored tints
+ * @param {object} accessories the slots worn (normalizeAccessories)
+ * @returns {Record<string, string>}
+ */
+export function normalizeAccessoryTints(raw, accessories) {
+  return wornTints(raw, accessories);
+}
+
+/**
+ * Every look field holding an id its table knows: a known id stays, a retired
+ * one becomes its replacement, anything else (a cut piece, a newer build's
+ * id, a wrong type, a missing field) becomes the table's first entry, the
+ * default. `armorVariant` is clamped to 0..1. Other keys pass through as
+ * they are; the object fields have their own normalisers above.
+ * @param {object} raw a version 2 save (see migrateCharacterSave)
+ */
+export function normalizeLook(raw) {
+  const src = isObj(raw) ? raw : {};
+  const out = { ...src };
+  for (const field of Object.keys(LOOK_TABLES)) out[field] = pieceOf(src, field).id;
+  out.armorVariant = num(src.armorVariant, 0, 1, 0);
+  return out;
+}
+
+/**
+ * The badge a save from before the badge editor wore: its one legacy badge
+ * pick as a single insignia layer, on the shoulder too when the shoulder
+ * plates are big enough to carry it. An unknown badge is the default badge.
+ * @param {string|undefined} badgeId BADGES id
+ * @param {string|undefined} shoulderId SHOULDER_STYLES id
+ */
+export function migrateLegacyBadge(badgeId, shoulderId) {
+  const icon = byId(BADGES, badgeId)?.icon;
   const symbol = icon && LEGACY_ICON_SYMBOL[icon];
   if (!symbol) return structuredClone(DEFAULT_BADGE);
-  const sh = SHOULDER_STYLES[shoulderIndex]?.id;
   return {
     layers: [{ frame: "disc", symbol, enamel: "black", metal: "brass", x: 0, y: 0, scale: 1, rot: 0 }],
     finish: "insignia",
-    placements: sh === "pauldrons" || sh === "armored" ? ["chest", "shoulder"] : ["chest"],
+    placements: shoulderId === "pauldrons" || shoulderId === "armored" ? ["chest", "shoulder"] : ["chest"],
   };
 }

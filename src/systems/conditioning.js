@@ -6,8 +6,8 @@
  *   Stamina     XP per tile sprinted. Faster stamina regen, more stamina.
  *   Reload      XP per active-reload hit, double for a perfect. A quicker
  *               reload and a wider sweet zone.
- *   Steadiness  XP per kill with the sights up, and per headshot kill. Less
- *               spread and scope sway while aimed.
+ *   Steadiness  XP per kill with the sights up, and per headshot kill. Hip
+ *               spread recovers faster and scope sway settles.
  *
  * Five levels each. The bonuses are small and capped: a level-5 agent is a
  * little better, not a different game, so the skill of playing still decides
@@ -86,7 +86,8 @@ export function addXp(cond, id, amount) {
  *   staminaBonus      max stamina, +5 a level
  *   reloadMult        reload time, −3% a level
  *   zoneMult          sweet-zone width, +6% a level
- *   steadyMult        aimed spread and scope sway, −6% a level
+ *   steadyMult        hip bloom closes 1/(1 − 0.06·level) as fast, scope
+ *                     sway −6% a level
  */
 export function conditioningBonuses(cond) {
   const s = levelOf(cond, "stamina");

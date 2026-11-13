@@ -25,11 +25,57 @@ Getting the game ready for outside playtesters: fixing what a stranger would hit
 - **Analytics.** Level events are sent only after consent, with a privacy note and a "Share Play Data" setting to withdraw (#19).
 - **Soft locks.** Fixed two: the Foundry's sentry staying silent after a retry (II-7), and a collapse walling you into a side room (IV-1) (#20).
 - **Hitches.** The station arrival and level starts no longer re-upload the wall art or build the lamp field mid-play (#20).
+- **Prologue.** Calibration no longer leaves you endless stamina when you step off the pad mid-reading; the Supervisor opens the range door instead of walking through it; skipping the locker room's lines no longer leaves most of the squad standing at their lockers. The officers carry real guns (a carbine, a pump shotgun, a short carbine) at low ready, with holsters to match. The cover drill takes peek kills and blind fire in either order, and its targets moved. The Supervisor opens his office door on his way back from the range instead of walking through the walls. Med packs stay on the floor at full health, in the prologue too (#26).
+- **Wardrobe themes.** Eight themed sets join the Field Issue suit, each with its own frame, helmet, shoulders and glove: Exo-Frame, Frontier Marshal, Ronin, Horologist, Neon Runner, Abyssal Diver, Void Ranger and Chronomancer. Pieces mix freely across sets, and they unlock one act at a time: a set's frame and shoulders, then its helmet an act later, from the Marshal, Ronin and Horologist with Act 1 to the Exo-Frame with Act 4 (MK II to MK V) (#26).
+  - **Creator.** Pieces are grouped by theme with one-tap sets. Hair colour is picked apart from the cut. New Eyewear and Face slots (shades, an eyepatch, a monocle, war paint in a colour you pick, a cigar, piercings, a beard and more). A mouth expression shows on bare faces and on the LED Mask. The canvas creator draws its preview from the same rig as the showroom.
+  - **Hands.** Every hand is drawn from one posed rig, in the glove its suit names, and the first-person hands wear that glove too: its material and cuff, with bare fingertips for fingerless gloves.
+  - **Do-Rag.** Eyewear and face items now show under it. It takes a headset, but nothing that mounts on a helmet shell.
+  - **Gunslinger** fires 10% faster instead of 10% slower.
+  - **Saves** store every look by piece id, so new pieces never shuffle an old look. Saves from earlier builds keep their look.
+- **First-person hands, rebuilt** (#26).
+  - **A jointed hand rig.** Each finger has three joints and wraps round the grip it holds; the trigger finger curls round the front of the grip onto the trigger, and the thumb lies along the grip. On a pistol the web of the hand rides up the back strap, so the thumb rises out of the hand.
+  - **Guns at the hip** point down the room where you shoot, turned in only a little; long guns sit higher, so you see the hand wrapped round the grip and the support hand under the handguard.
+  - **Arms bend at the elbow,** with the upper arm running back to the shoulder, and stay put while the gun moves.
+  - **Sleeves for every suit,** and gloves are one piece with their cuff: snug at the wrist, opening over the sleeve. The Field glove reads apart from the gun it holds.
+- **Aim and gunplay** (#26).
+  - **Centred aim on every input.** Mouse and pad aim the way touch already did: the reticle stays in the middle and looking up or down moves the view. The free-aim reticle that wandered inside a box is gone.
+  - **The pad** has its own turn curve and aim assist.
+  - **Pace your shots.** Hip fire blooms while you hold the trigger and closes again between paced shots; aimed shots go dead on.
+  - **Kick moves the whole frame, never the aim:** the world and the reticle jump together, so the next round goes where the reticle sits.
+  - **The reticle turns red** over an enemy in range.
+  - **Sights magnify without stretching.** Aimed in, the view zooms in both directions, so a scoped enemy keeps its shape, and looking up and down through a scope is no faster than turning.
+  - **Legacy guns point forward.** The Legacy art style's hip gun leans in toward the reticle instead of standing upright at the ceiling.
+- **Only gear you can see counts.** A piece your look keeps but does not draw gives no stats:
+  - shoulders on a frame that wears none (the Operator frame no longer counts shoulder stats);
+  - a visor on a helmet that has no visor (the Cockpit and the other visorless helmets ignore visor stats);
+  - helmet gear on a helmet with no place for it (nothing on the Bubble's glass; only a headset on the Do-Rag);
+  - eyewear and face items under a closed helmet, or where an open helmet has no room for them (anything on the face under the LED Mask, or a face item under the Marshal's Brim).
+  - A frame that covers the chest kit, the collar or the cape keeps every stat: it changes the look, not the gear.
+- **Gear on a continued run.** Continuing a campaign or arena run counts your gear once: gear changed since the save swaps its stats cleanly, and a piece picked up later no longer adds your whole kit's stats again. Saves from earlier builds move to the new gear stats on their first continue. An arena continue also keeps your class's and gear's stamina.
+- **Gear stats that fit the piece.** Plate gives armour, a gun belt carries rounds, a heavy suit slows you down, chrono hardware feeds chrono energy. A piece nothing fits is cosmetic, and its tile says "Looks only". Gear can now also raise ammo capacity, fire rate, stamina regen and health regen; dropping ammo capacity mid-run trims your rounds to the new cap, and putting the gear back on adds room, not rounds. Every tile states the real effect (move speed as a percent of your base speed). Old gear that changed:
+  - Engineer armour: +25 chrono energy, +10 max health → +25 chrono energy, +0.2 health per second.
+  - Bucket helmet: +18 max health → +6 armour.
+  - Vanguard helmet: +20 stamina, +3% move speed → +3 armour.
+  - Sealed helmet: +12 stamina, +2% move speed → +20% stamina regen.
+  - Pilot helmet: +10 stamina → +3% fire rate.
+  - Slit visor: +10 chrono energy → +2 armour.
+  - Dual Lens visor: +10 stamina → +3% fire rate.
+  - Layered shoulders: +14 stamina, +3% move speed → +4 armour.
+  - Launcher shoulders: +6 armour, +10 max health, -3% move speed → +6 armour, +10% ammo capacity, -3% move speed.
+  - Tactical Backpack: +8 stamina → +10% ammo capacity.
+  - Utility Belt: +5 max health → +0.1 health per second.
+  - Drop Holster: +1% move speed (shown as +3%) → +5% ammo capacity.
+  - Thigh Holster: +1% move speed (shown as +2%) → +5% ammo capacity.
+  - Bandolier: +5 stamina → +10% ammo capacity.
+  - Forearm Screen: -2 stamina per dash → +2% fire rate.
+  - Grenade Rig: +3 armour → looks only.
+  - Dog Tags: +3 max health → looks only.
 
 ### For developers
 - `?debug` and `?bench` no longer load the dev tools on the live site: they load only on the Vite dev server (#18).
 - CI is one job. It runs unit tests, the build, smoke, and a **Pages test** of the site served the way GitHub Pages serves it (#18).
 - `dist/` is no longer tracked (#18).
+- Wardrobe pieces live in theme modules (`src/data/wardrobe-themes/` for data, `src/rendering/svg-art/wardrobe-themes/` for art) behind a validated contract, and every rig piece is pinned by an SVG golden snapshot.
 - A 29-level fighting bot sweep: `ccTest.sweep`, `CC_SWEEP=1 npm run test:sweep` (#20).
 - Phase 4 code health:
   - dead code removed;

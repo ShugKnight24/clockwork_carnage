@@ -55,18 +55,32 @@ On Linux, add `--with-deps` to the last command.
 
 | Command | What runs |
 | --- | --- |
-| `npm run test:unit` | Vitest unit tests, no browser (about 10 s) |
+| `npm test` / `npm run test:unit` | Vitest unit tests, no browser (about 10 s) |
 | `npm run test:smoke` | Boot, menus and a level in Chromium |
-| `npm test` | Every Playwright spec (tens of minutes) |
+| `npm run test:e2e` / `npx playwright test` | Every Playwright spec (tens of minutes) |
 | `npm run test:perf` | Frame budgets across device profiles, one worker |
 | `npm run bench` | The benchmark above, in a Playwright window |
 
-Playwright starts its own Vite server on port 3100. If something else holds that
-port, or `npm run dev` is already running, point the tests at it with
-`CC_TEST_PORT` (`$env:CC_TEST_PORT=5173` in PowerShell):
+Playwright starts its own Vite server on port 3100 and refuses to run if
+something else already holds the port, so it never tests a server left over
+from another run or another app. Pick a free port with `CC_TEST_PORT`
+(`$env:CC_TEST_PORT=5196` in PowerShell), and check it is free first
+(`lsof -iTCP:5196 -sTCP:LISTEN` prints nothing):
 
 ```bash
-CC_TEST_PORT=5173 npm test
+CC_TEST_PORT=5196 npx playwright test tests/customization.spec.js
+```
+
+The server Playwright starts stops when the run ends.
+
+To test a server you started yourself (`npm run dev`), point at its port and
+opt in to reusing it with `CC_REUSE_SERVER=1` (it is off by default, so a
+server left over from another run or another checkout is never tested by
+accident). The Pages-style specs (`npm run test:pages`, port `CC_PAGES_PORT`,
+default 4455) follow the same rule:
+
+```bash
+CC_REUSE_SERVER=1 CC_TEST_PORT=5173 npx playwright test
 ```
 
 Failures leave a trace, screenshot and video in `test-results/`.

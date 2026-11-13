@@ -18,9 +18,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Pinned to the Ubuntu release this Playwright has browser builds for, as
+  # the e2e job in ci.yml is (see the note there).
   suite:
     name: nightly (${{ matrix.suite }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       CI: true
@@ -55,12 +57,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Keyed on the OS release, architecture and Playwright version, as in
+      # ci.yml: browsers restored onto a different release may not load.
+      - name: Playwright cache key
+        id: pw-key
+        run: |
+          . /etc/os-release
+          echo "key=playwright-chromium-webkit-${ID}${VERSION_ID}-$(uname -m)-$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: ${{ steps.pw-key.outputs.key }}
 
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'

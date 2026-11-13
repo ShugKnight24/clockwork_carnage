@@ -44,6 +44,14 @@ describe("settings sections", () => {
     expect(touchGroups(true)).toContain("Touch");
   });
 
+  it("shows Aim Assist with the controller rows on every device", () => {
+    const s = { ...DEFAULT_SETTINGS };
+    for (const touch of [false, true]) {
+      const pad = rowsForSection("controls", touch, s).find((g) => g.group === "Controller");
+      expect(pad.rows.map((d) => d.key)).toContain("aimAssist");
+    }
+  });
+
   it("defines the four preset cards", () => {
     expect(QUICK_CARDS.map((c) => c.id)).toEqual(["battery", "balanced", "max", "custom"]);
   });

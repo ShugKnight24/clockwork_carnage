@@ -705,6 +705,7 @@ export class ChronoHazards {
     p.x = spot.x;
     p.y = spot.y;
     p.angle = spot.dir;
+    p.lookShiftY = 0;
     p.isDashing = false;
     p.isSliding = false;
     // The front comes back to the landing COLLAPSE_GRACE seconds from now.

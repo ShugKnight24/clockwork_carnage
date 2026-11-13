@@ -15,10 +15,13 @@ export const groundY = (cy, sh) => cy + sh * 0.45;
 /**
  * FOV-aware minimum size scale.
  * At default FOV (70), fovScale = 1. Wider FOV → smaller floor, narrower → larger.
+ * `zoom` is the sights' magnification (renderer focalY): pass the hip view's
+ * FOV and the zoom, so a far prop's floor magnifies with everything else
+ * rather than stopping at the 50° clamp.
  * Set by renderer before sprite pass; read by individual prop renderers via propMinSize().
  */
 let _fovScale = 1;
-export function setFovScale(fov) { _fovScale = 70 / Math.max(50, fov); }
+export function setFovScale(fov, zoom = 1) { _fovScale = (70 / Math.max(50, fov)) * zoom; }
 
 /** FOV-scaled minimum pixel size for prop details */
 const propMinSize = (base, sw, mul) =>

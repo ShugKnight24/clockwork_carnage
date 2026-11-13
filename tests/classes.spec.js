@@ -13,10 +13,10 @@ for (const id of CLASSES) {
     await page.evaluate(async (cid) => {
       const g = window.ccDebug.game;
       const m = await import("/src/systems/unlocks.js");
-      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
+      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.id);
       const d = await import("/src/data/cosmetics.js");
-      g.character.loadoutIndex = Math.max(0, d.LOADOUT_CLASSES.findIndex((c) => c.id === cid));
-      g.character.armorIndex = 0;
+      g.character.loadout = (d.LOADOUT_CLASSES.find((c) => c.id === cid) || d.LOADOUT_CLASSES[0]).id;
+      g.character.armor = d.ARMOR_STYLES[0].id;
       const el = document.querySelector("agent-showroom");
       if (el?.isOpen) el.renderAll();
     }, id);
@@ -33,7 +33,7 @@ test("every class starts a run with its own kit", async ({ page }) => {
     const g = window.ccDebug.game;
     const rows = [];
     for (let i = 0; i < d.LOADOUT_CLASSES.length; i++) {
-      g.character.loadoutIndex = i;
+      g.character.loadout = d.LOADOUT_CLASSES[i].id;
       window.ccDebug.startArena();
       rows.push({
         id: d.LOADOUT_CLASSES[i].id,

@@ -12,7 +12,8 @@ import { test, expect } from "@playwright/test";
 import { loadGame, enterModeSelect, waitForState } from "./helpers.js";
 
 const DISTANCES = [5, 15];
-const HORIZONTAL_OFFSETS = [0, 0.1, -0.12]; // center, right, left
+// The reticle is always centred; the view turns instead (radians).
+const TURNS = [0, 0.1, -0.12]; // ahead, right, left
 const ADS_MODES = [false, true];
 
 async function setupArena(page) {
@@ -42,9 +43,9 @@ async function setupArena(page) {
   });
 }
 
-async function fireOneShotAt(page, dist, aimOffsetX, ads) {
+async function fireOneShotAt(page, dist, turn, ads) {
   const result = await page.evaluate(
-    async ({ dist, aimOffsetX, ads }) => {
+    async ({ dist, turn, ads }) => {
       // Put the reticle on the middle of the figure as drawn, as a player
       // would: with a HUD bar, a centred reticle looks slightly up, and over
       // a beast's back at range (src/data/enemy-art.js).
@@ -54,25 +55,21 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       const [top, bottom] = ENEMY_ART_SPAN.beast;
       const h = game.canvas.height;
       const barH = currentBarH(game);
-      const aimOffsetY = (barH / (2 * h) - (top + bottom) / 2 / dist) / ((h - barH) / h);
-      window.ccDebug.setPlayer({ aimOffsetX, aimOffsetY: 0, isAiming: ads });
-      // ADS eases the FOV in (rate 8/s) rather than snapping. Let it settle,
-      // then place the dummy using the FOV the renderer is actually drawing
-      // with. Assuming the fully-zoomed value and firing 80ms later put the
-      // dummy on the wrong ray whenever there was a horizontal offset.
+      const lookShiftY = barH / (2 * h) - (top + bottom) / 2 / dist;
+      window.ccDebug.setPlayer({ angle: turn, lookShiftY: 0, isAiming: ads });
+      // ADS eases the FOV in rather than snapping. Let it settle before
+      // firing, so the shot goes out through the zoom the renderer draws.
       await window.ccDebug.waitGameTime(600);
 
       const player = window.ccDebug.getPlayer();
-      const fov = window.ccDebug.getAimFov();
-      const planeMul = Math.tan((fov * 0.5 * Math.PI) / 180);
-      // The reticle as it is now: aiming in eases it to centre, turning the view.
-      const yaw = player.angle + Math.atan(2 * (player.aimOffsetX || 0) * planeMul);
+      // The reticle is centred: the shot goes where the view faces.
+      const yaw = player.angle;
 
       // Target on the yaw ray.
       const tx = player.x + Math.cos(yaw) * dist;
       const ty = player.y + Math.sin(yaw) * dist;
 
-      window.ccDebug.setPlayer({ aimOffsetY });
+      window.ccDebug.setPlayer({ lookShiftY });
       // Clear the field again: the arena can bring in more while the FOV
       // settles, and one of those in the line of fire takes the shot.
       window.ccDebug.killAll();
@@ -95,20 +92,20 @@ async function fireOneShotAt(page, dist, aimOffsetX, ads) {
       const me = { x: player.x, y: player.y, angle: player.angle };
       return { spawn, target, others, me, yaw, targetXY: { x: tx, y: ty } };
     },
-    { dist, aimOffsetX, ads },
+    { dist, turn, ads },
   );
   return result;
 }
 
 test.describe("Bot Aim Verification", () => {
   for (const dist of DISTANCES) {
-    for (const offX of HORIZONTAL_OFFSETS) {
+    for (const turn of TURNS) {
       for (const ads of ADS_MODES) {
-        test(`hits dummy at ${dist}m, offX=${offX}, ADS=${ads}`, async ({
+        test(`hits dummy at ${dist}m, turn=${turn}, ADS=${ads}`, async ({
           page,
         }) => {
           await setupArena(page);
-          const r = await fireOneShotAt(page, dist, offX, ads);
+          const r = await fireOneShotAt(page, dist, turn, ads);
           expect(r.spawn).toBeTruthy();
           expect(r.spawn.error).toBeUndefined();
           expect(r.target).toBeDefined();

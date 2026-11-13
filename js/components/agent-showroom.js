@@ -1,11 +1,15 @@
-import { AGENT_VIEW, GEAR_VIEW, OPEN_HELMETS, buildAgentSvg, buildRifleSvg, camoPattern } from "../../src/rendering/svg-art/agent-rig.js";
+import { AGENT_VIEW, GEAR_VIEW, MOUTH_VIEW, buildAgentSvg, buildRifleSvg, camoPattern, hairOf } from "../../src/rendering/svg-art/agent-rig.js";
 import { tokensCss } from "../../src/ui/design-tokens.js";
 import { isRealisticArt, onArtStyleChange } from "../../src/rendering/art-style.js";
 import { GLYPH_CSS, activeDevice, renderDomGlyphs } from "../../src/ui/input-glyphs.js";
 import { gameUnlockContext, unlockState, variantState, sanitizeLocked, LOCKABLE } from "../../src/systems/unlocks.js";
-import { cloneLook, getIndex, lookKey, tableFor, togglePlacement, withIndex } from "../../src/core/character-fields.js";
-import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, indexOfId, layer } from "../../src/data/badges.js";
-import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES } from "../../src/data/accessories.js";
+import { LOOK_TABLES, cloneLook, getId, getIndex, lookKey, pieceOf, tableFor, togglePlacement, withId, withIndex, withTint } from "../../src/core/character-fields.js";
+import { CHARACTER_SAVE_VERSION, migrateCharacterSave } from "../../src/core/save-system.js";
+import { normalizeAccessories } from "../../src/core/character-normalize.js";
+import { SYMBOLS, FRAMES, ENAMELS, METALS, FINISHES, PLACEMENTS, BADGE_PRESETS, byId, layer } from "../../src/data/badges.js";
+import { ACCESSORY_SLOTS, ACCESSORIES, DEFAULT_ACCESSORIES, FACE_SLOTS, PAINT_SWATCHES, accessoryItem, tintFor, wornTints } from "../../src/data/accessories.js";
+import { FACE_HELMETS, WARDROBE_THEMES } from "../../src/data/wardrobe-themes/index.js";
+import { SET_THEMES, equipSet, setPieces, wearsSet } from "../../src/systems/wardrobe-sets.js";
 import { renderBadge, resolveTreatment } from "../../src/rendering/svg-art/insignia/compose.js";
 import {
   ARMOR_STYLES,
@@ -17,6 +21,8 @@ import {
   CHARACTER_COLORS,
   DEFAULT_CHARACTER,
   EYE_COLORS,
+  EXPRESSIONS,
+  HAIR_COLORS,
   HAIR_STYLES,
   HELMET_STYLES,
   LOADOUT_CLASSES,
@@ -25,9 +31,13 @@ import {
   VISOR_STYLES,
   VOICE_PROFILES,
   WEAPON_SKINS,
+  GEAR_SLOTS,
   takesVisor,
 } from "../../src/data/cosmetics.js";
-import { FRAME_SHAPE } from "../../src/rendering/svg-art/frames.js";
+import { bonusText } from "../../src/data/gear-stats.js";
+import { classStats } from "../../src/ui/class-stats.js";
+import { frameShape } from "../../src/rendering/svg-art/frames.js";
+import { faceSlotBlock, frameHides, helmetMouth, mouthBlock } from "../../src/rendering/svg-art/wardrobe-themes/index.js";
 import * as Skins from "../../src/data/weapon-skins.js";
 import { WEAPONS } from "../../src/data/weapons.js";
 import { weaponProfile } from "../../src/rendering/svg-art/viewmodels.js";
@@ -45,51 +55,58 @@ import { clamp } from "../../src/utils/math.js";
  * is exactly one input path.
  */
 
-const APPEARANCE = [
-  "colorIndex",
-  "skinToneIndex",
-  "hairIndex",
-  "eyeIndex",
-  "armorIndex",
-  "helmetIndex",
-  "visorIndex",
-  "shoulderIndex",
-  "badgeIndex",
-  "weaponSkinIndex",
-  "armorVariant",
-];
+const APPEARANCE = ["color", "skinTone", "hair", "hairColor", "expression", "eye", "armor", "helmet", "visor", "shoulder", "weaponSkin", "armorVariant"];
 const FIELDS = Object.keys(DEFAULT_CHARACTER);
 /** Saved looks: storage key, how many, and the appearance fields they keep. */
 const LOOKS_KEY = "cc_saved_looks";
 const MAX_LOOKS = 5;
-const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voiceIndex", "backstoryIndex", "loadoutIndex", "weaponFinishes", "customSkins"].includes(k));
+const LOOK_FIELDS = FIELDS.filter((k) => !["name", "voice", "backstory", "loadout", "weaponFinishes", "customSkins"].includes(k));
 const NAME_RE = /^[A-Za-z0-9 _.'-]+$/;
-const FACE_KEYS = new Set(["skinToneIndex", "hairIndex", "eyeIndex"]);
+const FACE_KEYS = new Set(["skinTone", "hair", "hairColor", "expression", "eye"]);
+/** The head-and-shoulders crop of preset and saved-look thumbnails. */
+const THUMB_VIEW = [-22, -106, 44, 44];
+/**
+ * Fields a preset or look thumbnail draws at their defaults: the class kit,
+ * origin insignia and rifle sit on the body below its crop. Thumbnails are
+ * keyed on what they draw (thumbFigure), so picking a class or a finish
+ * redraws none of them.
+ */
+const THUMB_DEFAULTS = ["loadout", "backstory", "weaponSkin"];
 /** Camera toggle order (the C key cycles through them). */
 const CAMERAS = ["full", "bust", "face"];
+/**
+ * Sections whose pieces are small on the whole figure: editing one (focus
+ * in it, or a pick) moves the stage to this camera, and leaving it moves
+ * back, unless the player has picked a camera this visit (frameSection).
+ */
+const CLOSE_UP = { eye: "face", expression: "face", hair: "face", hairColor: "face", "acc.eyes": "face", "acc.face": "face" };
 
 /** A library badge worn at the given places. */
 const presetBadge = (id, placements) => ({ ...structuredClone(byId(BADGE_PRESETS, id).badge), placements });
-const gear = (items) => ({ ...DEFAULT_ACCESSORIES, ...items });
+/** A preset's gear: every slot but the face ones, which a preset leaves as worn. */
+const gear = (items) => ({ ...Object.fromEntries(Object.entries(DEFAULT_ACCESSORIES).filter(([slot]) => !FACE_SLOTS.includes(slot))), ...items });
 
+// Presets set no body, hair colour, eyewear or face item: those are the
+// player's own picks, and wearing a preset keeps them (applyPreset spreads
+// over the current look).
 const PRESETS = [
-  { name: "Regulation", ch: { colorIndex: 0, skinToneIndex: 0, hairIndex: 1, eyeIndex: 1, armorIndex: 0, helmetIndex: 0, visorIndex: 0, shoulderIndex: 1, weaponSkinIndex: 0,
+  { name: "Regulation", ch: { color: "chrono_teal", skinTone: "warm_light", hair: "short", eye: "blue", armor: "standard", helmet: "standard", visor: "standard", shoulder: "pads", weaponSkin: "default",
     badge: presetBadge("p_clock", ["chest", "shoulder"]), accessories: gear({ waist: "belt", neck: "tags" }) } },
-  { name: "Juggernaut", ch: { colorIndex: 2, skinToneIndex: 2, hairIndex: 2, eyeIndex: 4, armorIndex: 2, helmetIndex: 3, visorIndex: 4, shoulderIndex: 3, weaponSkinIndex: 3,
+  { name: "Juggernaut", ch: { color: "paradox_red", skinTone: "deep_brown", hair: "coil", eye: "red", armor: "heavy", helmet: "mohawk", visor: "glow", shoulder: "pauldrons", weaponSkin: "ember",
     badge: presetBadge("p_skull", ["chest"]), accessories: gear({ back: "backpack", legs: "kneepads" }) } },
-  { name: "Ghost", ch: { colorIndex: 3, skinToneIndex: 3, hairIndex: 0, eyeIndex: 3, armorIndex: 3, helmetIndex: 2, visorIndex: 2, shoulderIndex: 0, weaponSkinIndex: 1,
+  { name: "Ghost", ch: { color: "void_purple", skinTone: "cool_fair", hair: "buzz", eye: "violet", armor: "stealth", helmet: "angular", visor: "fullface", shoulder: "none", weaponSkin: "carbon",
     badge: presetBadge("p_eye", ["chest"]), accessories: gear({ helmet: "nvg", waist: "holster" }) } },
-  { name: "Engineer", ch: { colorIndex: 4, skinToneIndex: 4, hairIndex: 3, eyeIndex: 0, armorIndex: 4, helmetIndex: 1, visorIndex: 3, shoulderIndex: 4, weaponSkinIndex: 2,
+  { name: "Engineer", ch: { color: "solar_gold", skinTone: "olive", hair: "braid", eye: "amber", armor: "tech", helmet: "wide", visor: "split", shoulder: "armored", weaponSkin: "chrome",
     badge: presetBadge("p_bolt", ["chest", "forearm"]), accessories: gear({ arms: "screen", waist: "belt" }) } },
   // Full looks: each of these only reads right with its own helmet and
   // pauldrons, so the preset is how a player gets the intended silhouette.
-  { name: "Howitzer", ch: { colorIndex: 7, skinToneIndex: 1, hairIndex: 0, eyeIndex: 2, armorIndex: 5, helmetIndex: 5, visorIndex: 1, shoulderIndex: 7, weaponSkinIndex: 3,
+  { name: "Howitzer", ch: { color: "rust_orange", skinTone: "golden", hair: "buzz", eye: "green", armor: "howitzer", helmet: "ordnance", visor: "slit", shoulder: "ordnance", weaponSkin: "ember",
     badge: presetBadge("p_skull", ["chest", "shoulder"]), accessories: gear({ back: "backpack", neck: "bandolier" }) } },
-  { name: "Breaker", ch: { colorIndex: 6, skinToneIndex: 2, hairIndex: 1, eyeIndex: 1, armorIndex: 6, helmetIndex: 6, visorIndex: 1, shoulderIndex: 5, weaponSkinIndex: 5,
+  { name: "Breaker", ch: { color: "neon_green", skinTone: "deep_brown", hair: "short", eye: "blue", armor: "trencher", helmet: "bucket", visor: "slit", shoulder: "slab", weaponSkin: "toxic",
     badge: presetBadge("p_star", ["chest"]), accessories: gear({ legs: "shins", arms: "gauntlets" }) } },
-  { name: "Reliquary", ch: { colorIndex: 2, skinToneIndex: 3, hairIndex: 0, eyeIndex: 4, armorIndex: 7, helmetIndex: 7, visorIndex: 2, shoulderIndex: 6, weaponSkinIndex: 1,
+  { name: "Reliquary", ch: { color: "paradox_red", skinTone: "cool_fair", hair: "buzz", eye: "red", armor: "reliquary", helmet: "crusader", visor: "fullface", shoulder: "dome", weaponSkin: "carbon",
     badge: presetBadge("p_shield", ["chest", "helmet"]), accessories: gear({ back: "cloak", helmet: "plume" }) } },
-  { name: "Pathfinder", ch: { colorIndex: 5, skinToneIndex: 0, hairIndex: 2, eyeIndex: 3, armorIndex: 8, helmetIndex: 8, visorIndex: 2, shoulderIndex: 8, weaponSkinIndex: 2,
+  { name: "Pathfinder", ch: { color: "arctic_white", skinTone: "warm_light", hair: "coil", eye: "violet", armor: "pathfinder", helmet: "sealed", visor: "fullface", shoulder: "layered", weaponSkin: "chrome",
     badge: presetBadge("p_rift", ["chest"]), accessories: gear({ back: "antenna", neck: "scarf" }) } },
 ];
 
@@ -128,6 +145,8 @@ const TURN_DEPTH = { back: -9, cape: -6, head: 1 };
 
 /** Whole-figure crop for frame tiles (the cape and boots inside the frame). */
 const FRAME_VIEW = [-46, -100, 92, 162];
+/** Set tiles: the same figure from the helmet to the shins, so two rows of sets leave the Frame grid in view. */
+const SET_VIEW = [-46, -100, 92, 116];
 
 const CATEGORIES = [
   {
@@ -136,19 +155,22 @@ const CATEGORIES = [
     short: "Agent",
     sections: [
       { type: "name", title: "Callsign" },
-      { key: "bodyIndex", title: "Body", data: BODY_TYPES, kind: "bodyFrame" },
-      { key: "backstoryIndex", title: "Origin", data: BACKSTORIES, kind: "origin" },
-      { key: "voiceIndex", title: "Voice", data: VOICE_PROFILES, kind: "voice" },
+      { key: "body", title: "Body", data: BODY_TYPES, kind: "bodyFrame" },
+      { key: "backstory", title: "Origin", data: BACKSTORIES, kind: "origin" },
+      { key: "voice", title: "Voice", data: VOICE_PROFILES, kind: "voice" },
     ],
   },
   {
     id: "suit",
     label: "Suit",
     sections: [
-      { key: "frameIndex", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame" },
-      { key: "armorIndex", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
-      { key: "camoIndex", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
-      { key: "shoulderIndex", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso" },
+      // A designed theme's frame, helmet and shoulders in one pick (src/systems/wardrobe-sets.js).
+      { type: "sets", title: "Sets" },
+      // Frame, helmet and shoulder grids run theme by theme under captions, in theme order.
+      { key: "frame", title: "Frame", data: BODY_FRAMES, kind: "bodyFrame", groupBy: "theme" },
+      { key: "armor", title: "Armor", data: ARMOR_STYLES, kind: "torso" },
+      { key: "camo", title: "Under-suit", data: CAMO_STYLES, kind: "camo" },
+      { key: "shoulder", title: "Shoulders", data: SHOULDER_STYLES, kind: "torso", groupBy: "theme" },
     ],
   },
   {
@@ -156,8 +178,8 @@ const CATEGORIES = [
     label: "Helmet",
     camera: "bust",
     sections: [
-      { key: "helmetIndex", title: "Helmet", data: HELMET_STYLES, kind: "head" },
-      { key: "visorIndex", title: "Visor", data: VISOR_STYLES, kind: "head" },
+      { key: "helmet", title: "Helmet", data: HELMET_STYLES, kind: "head", groupBy: "theme" },
+      { key: "visor", title: "Visor", data: VISOR_STYLES, kind: "head" },
     ],
   },
   {
@@ -168,16 +190,22 @@ const CATEGORIES = [
     camera: "face",
     bareHead: true,
     sections: [
-      { key: "skinToneIndex", title: "Skin", data: SKIN_TONES, kind: "skin" },
-      { key: "eyeIndex", title: "Eyes", data: EYE_COLORS, kind: "eye" },
-      { key: "hairIndex", title: "Hair", data: HAIR_STYLES, kind: "hair" },
+      { key: "skinTone", title: "Skin", data: SKIN_TONES, kind: "skin" },
+      { key: "eye", title: "Eyes", data: EYE_COLORS, kind: "eye" },
+      // Each tile is the face close-up wearing that expression, as the helmet
+      // worn shows it: on the bare face, or lit on the LED mask.
+      { key: "expression", title: "Expression", data: EXPRESSIONS, kind: "expression" },
+      { key: "hair", title: "Hair", data: HAIR_STYLES, kind: "hair" },
+      // Under the cuts: each swatch shows the colour on the cut worn
+      // (refreshContent), so Natural and Chrono Charged read true.
+      { key: "hairColor", title: "Hair color", data: HAIR_COLORS, kind: "hairColor" },
     ],
   },
   {
     id: "gear",
     label: "Gear",
     sections: [
-      { key: "capeIndex", title: "Cape", data: CAPE_STYLES, kind: "bodyFrame" },
+      { key: "cape", title: "Cape", data: CAPE_STYLES, kind: "bodyFrame" },
       ...ACCESSORY_SLOTS.map(({ id, name }) => ({ key: `acc.${id}`, title: name, data: ACCESSORIES[id], kind: "gear", yaw: id === "back" ? 0.75 : 0 })),
     ],
   },
@@ -204,7 +232,7 @@ const CATEGORIES = [
     id: "colors",
     label: "Colors",
     short: "Color",
-    sections: [{ key: "colorIndex", title: "Palette", data: CHARACTER_COLORS, kind: "palette" }],
+    sections: [{ key: "color", title: "Palette", data: CHARACTER_COLORS, kind: "palette" }],
   },
   {
     id: "loadout",
@@ -212,7 +240,7 @@ const CATEGORIES = [
     short: "Kit",
     pose: "hero",
     sections: [
-      { key: "loadoutIndex", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
+      { key: "loadout", title: "Class", data: LOADOUT_CLASSES, kind: "class" },
       // Per-weapon finishes and the finish maker (src/data/weapon-skins.js).
       { type: "armory", title: "Weapon finishes" },
     ],
@@ -223,41 +251,103 @@ const allSections = (c) => (c.modes ? Object.values(c.modes).flat() : c.sections
 // Badge and gear sections (virtual keys) can omit `data`: their table comes from character-fields.
 for (const c of CATEGORIES) for (const s of allSections(c)) if (s.key && !s.data) s.data = tableFor(s.key);
 const GROUP_NAMES = { classic: "Classic", faction: "Factions", rank: "Ranks", act: "Act emblems", earned: "Earned" };
+const THEME_NAMES = Object.fromEntries(WARDROBE_THEMES.map((t) => [t.id, t.name]));
+const THEME_SHORT = Object.fromEntries(WARDROBE_THEMES.map((t) => [t.id, t.short]));
+/** A group's caption: a badge set's name, or a wardrobe theme's. */
+const groupName = (by, g) => (by === "theme" ? THEME_NAMES[g] : GROUP_NAMES[g]) || g;
 
 /** Field equality for flat indices and the nested badge / accessory records. */
 const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const TIER = ["", "I", "II", "III"];
+const TIER = ["", "I", "II", "III", "IV", "V"];
 
 /** Notes under a section's grid, shown by refreshContent when they apply. */
 const SECTION_NOTES = {
   "badge.metal": `<p class="snote" data-note="auto-metal" hidden>Auto finish takes its metal from the armour. Pick a finish below to use your own.</p>`,
   // Text filled in too: both depend on what else is worn.
-  visorIndex: `<p class="snote" data-note="no-visor" hidden></p>`,
-  shoulderIndex: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
+  visor: `<p class="snote" data-note="no-visor" hidden></p>`,
+  shoulder: `<p class="snote" data-note="frame-shoulders" hidden></p>`,
+  // Eyes and face: the helmet worn may hide the face or leave the slot no room.
+  ...Object.fromEntries(FACE_SLOTS.map((slot) => [`acc.${slot}`, `<p class="snote" data-note="face-slot" data-slot="${slot}" hidden></p>`])),
+  // The expression: the helmet worn may hide or cover the mouth, or light it.
+  expression: `<p class="snote" data-note="mouth" hidden></p>`,
 };
 
-/** Why the frame overrides the shoulder pick (its FRAME_SHAPE flags), or "". */
+/**
+ * A stored look as the appearance fields it restores. Looks are stamped with
+ * the cc_character version they were written in; one saved before the look
+ * moved to ids holds table positions and goes through the same migration as
+ * the character save. Any id its table no longer knows reads as the default.
+ * A field the look does not hold is left out, so wearing it keeps the
+ * current pick: a look saved before hair colour existed keeps the hair
+ * colour the player has now, as one saved before body types keeps the body.
+ * Accessories go slot by slot the same way: a look saved before the eyes
+ * and face slots keeps the eyewear and face items worn now (wearLook).
+ */
+function readLook(raw) {
+  const m = migrateCharacterSave(raw);
+  const look = {};
+  for (const k of LOOK_FIELDS) {
+    if (!(k in m)) continue; // not saved with this look: the current pick stays
+    look[k] = k in LOOK_TABLES ? pieceOf(m, k).id : m[k];
+  }
+  if (look.accessories) {
+    const held = normalizeAccessories(look.accessories);
+    look.accessories = Object.fromEntries(ACCESSORY_SLOTS.filter(({ id }) => id in look.accessories).map(({ id }) => [id, held[id]]));
+  }
+  return look;
+}
+
+// A preview is a hovered tile: a grid position under a table key, or the
+// armour variant chip (0 standard, 1 variant), which is a plain number.
+const previewChanges = (ch, p) => (p.key === "armorVariant" ? { armorVariant: p.value } : withIndex(ch, p.key, p.value));
+const previewedValue = (ch, key) => (key === "armorVariant" ? ch.armorVariant | 0 : getIndex(ch, key));
+
+const STAT_SLOTS = new Set(GEAR_SLOTS.map(([key]) => key));
+
+/**
+ * A gear tile's perk line (bonusText: "Looks only" for a piece with no
+ * stats), or null for a tile that is not gear: a body type, a hair cut, an
+ * origin (which says its own perk), or an accessory slot's "None".
+ */
+function gearPerk(key, item) {
+  const acc = key.startsWith("acc.");
+  if (!STAT_SLOTS.has(key) && !acc) return null;
+  if (acc && item.id === "none") return null;
+  return bonusText(item.bonuses);
+}
+
+/** Why the frame overrides the shoulder pick (it hides shoulders, or wears its own right one), or "". */
 function shoulderNote(ch) {
-  const frame = BODY_FRAMES[ch.frameIndex | 0] || BODY_FRAMES[0];
-  const shape = FRAME_SHAPE[frame.id] || {};
-  if (shape.noShoulders) return `${frame.name} wears no pauldrons: this pick shows on another frame.`;
-  if (shape.bareRight) return `${frame.name} keeps the right shoulder bare: this pick fits the left.`;
+  const frame = pieceOf(ch, "frame");
+  if (frameHides(frame.id, "shoulders")) return `${frame.name} wears no pauldrons: this pick and its perk apply on another frame.`;
+  const right = frameShape(frame.id).rightShoulder;
+  if (right === "none") return `${frame.name} leaves the right shoulder bare: this pick fits the left.`;
+  if (right) return `${frame.name} wears its own ${pieceOf({ shoulder: right }, "shoulder").name} on the right shoulder: this pick fits the left.`;
   return "";
 }
 
-/** Stat lines for a loadout, mirroring Game.applyLoadoutBonuses. */
-function classStats(cls) {
-  const b = cls.bonuses || {};
-  const chrono = { phantom: 120, enforcer: 80 }[cls.id] ?? 100;
-  return [
-    { label: "Health", value: b.maxHealth ?? 100, base: 100, max: 150 },
-    { label: "Speed", value: 3.5 + (b.moveSpeed ?? 0), base: 3.5, max: 4.5, fmt: (v) => v.toFixed(1) },
-    { label: "Fire rate", value: 1 / (b.fireRateMultiplier ?? 1), base: 1, max: 1.25, fmt: (v) => `${Math.round(v * 100)}%` },
-    { label: "Stamina", value: b.maxStamina ?? 100, base: 100, max: 150 },
-    { label: "Chrono", value: chrono, base: 100, max: 130 },
-    { label: "Damage", value: cls.id === "enforcer" ? 1.15 : 1, base: 1, max: 1.25, fmt: (v) => `${Math.round(v * 100)}%` },
-  ];
+/** Why an eyes or face pick does not show under the helmet worn, or "". */
+function faceSlotNote(ch, slot) {
+  const helmet = pieceOf(ch, "helmet");
+  const block = faceSlotBlock(helmet.id, slot);
+  if (block === "hidden") return `Hidden under the ${helmet.name}: this pick and its perk apply with an open helmet.`;
+  if (block === "room") return `No room under the ${helmet.name}: this pick and its perk apply with another helmet.`;
+  return "";
+}
+
+/**
+ * What the helmet worn does with the expression, or "": hides it (a closed
+ * helmet), covers it (the brim's bandana), or lights it (the LED mask).
+ * `muted` when the pick is kept but not drawn.
+ */
+function mouthNote(ch) {
+  const helmet = pieceOf(ch, "helmet");
+  const block = mouthBlock(helmet.id);
+  if (block === "hidden") return { text: `Hidden under the ${helmet.name}: this pick shows with an open helmet.`, muted: true };
+  if (block === "covered") return { text: `Covered by the ${helmet.name}: this pick shows with another helmet.`, muted: true };
+  if (helmetMouth(helmet.id) === "led") return { text: `The ${helmet.name} lights this pick in pixels.`, muted: false };
+  return { text: "", muted: false };
 }
 
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -336,7 +426,10 @@ svg { display: block; }
   box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.42), inset 5px 0 0 var(--cc-cyan), inset 0 0 0 2px rgba(34, 230, 255, 0.6), inset 0 0 26px rgba(34, 230, 255, 0.14); }
 .plate:active { background: var(--cc-steel); }
 
-.root { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity var(--cc-dur-base) var(--cc-ease);
+/* clip, not hidden: the floor and the figure reach past the frame, and a
+   hidden overflow is still scrollable, so scrolling a tile into view would
+   scroll the whole creator and push the tab strip off the screen. */
+.root { position: absolute; inset: 0; overflow: clip; opacity: 0; transition: opacity var(--cc-dur-base) var(--cc-ease);
   background:
     radial-gradient(ellipse 70% 55% at 32% 30%, rgba(34, 230, 255, 0.07), transparent 70%),
     radial-gradient(ellipse at 36% 36%, #0d1826 0%, #05070d 70%, #020306 100%); }
@@ -501,7 +594,7 @@ svg { display: block; }
   transition: transform var(--cc-dur-slow) var(--cc-ease); }
 .panel > .frame { position: absolute; inset: 0; }
 .handle { display: none; }
-.tabs { position: relative; display: grid; grid-template-columns: auto repeat(${CATEGORIES.length}, 1fr) auto; align-items: center; gap: 4px; padding: 14px 14px 10px 22px; }
+.tabs { position: relative; z-index: 1; display: grid; grid-template-columns: auto repeat(${CATEGORIES.length}, 1fr) auto; align-items: center; gap: 4px; padding: 14px 14px 10px 22px; }
 .tabkey { margin: 0 2px; }
 .tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 2px 10px; color: var(--cc-text-dim); background: transparent;
   font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.5px; text-transform: uppercase; outline: none;
@@ -518,7 +611,12 @@ svg { display: block; }
 .tab:focus-visible, :host(.kbd) .tab:focus { box-shadow: inset 0 0 0 2px var(--cc-cyan); }
 .tabs::after { content: ""; position: absolute; left: 22px; right: 14px; bottom: 0; height: 1px; background: var(--cc-hairline); }
 
-.content { position: relative; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 16px 18px 22px; scrollbar-width: thin; scrollbar-color: #2e3f51 transparent; overscroll-behavior: contain; }
+/* The tile list is clipped by its own clip-path, not only by its overflow. Under the
+   panel's drop-shadow filter Chromium hit-tests a positioned or clip-pathed tile
+   scrolled out of the list as if the overflow clip were not there: hidden from view,
+   it still took clicks meant for the tabs above it. A clip-path clips hits as well as
+   paint, for every tile however it is positioned. The tab strip sits a layer up too. */
+.content { position: relative; flex: 1; clip-path: inset(0); overflow-y: auto; overflow-x: hidden; padding: 4px 16px 18px 22px; scrollbar-width: thin; scrollbar-color: #2e3f51 transparent; overscroll-behavior: contain; }
 .content::-webkit-scrollbar { width: 8px; }
 .content::-webkit-scrollbar-thumb { background: #2e3f51; border: 1px solid var(--cc-ink); }
 .content.swap { animation: swapIn var(--cc-dur-base) var(--cc-ease); }
@@ -548,13 +646,31 @@ svg { display: block; }
 .arm-save[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .section { margin-top: 18px; }
 .grid { display: grid; gap: 8px; }
-.grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.grid.torso, .grid.head, .grid.hair, .grid.expression { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .grid.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .grid.camo { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 .grid.camo .thumb svg { width: 100%; height: 100%; display: block; }
 /* Camo is the reward: locked swatches keep their colour. */
 .grid.camo .locked .thumb svg { filter: none; opacity: 0.85; }
 .grid.bodyFrame .thumb { aspect-ratio: 92 / 162; }
+/* Sets: the set on the player, shins up; a corner lock (with a count past one) and an owned line when pieces are locked. */
+.grid.sets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid.sets .thumb { aspect-ratio: 92 / 116; }
+.settile .sown { padding: 0 2px 2px; font: 600 var(--cc-type-micro)/1 var(--cc-font); letter-spacing: 0.5px; color: var(--cc-text-dim); text-transform: uppercase; }
+.settile .setlock { width: auto; min-width: 17px; padding: 0 3px; gap: 2px; grid-auto-flow: column; }
+.settile .setlock b { font: 800 9px/1 var(--cc-font); }
+.settile .setlock[hidden] { display: none; }
+/* A rule can earn a piece of every set: its names share the row with the rule instead of squeezing it. */
+.setlocks .lockrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+/* Theme groups: one set of columns; Field Issue's run spans it, each designed theme's piece takes a cell under its caption.
+   Each group is a caption row over a tile row (subgrid), so captions and tiles line up across a row whatever wraps. */
+.groups.theme { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.groups.theme.bodyFrame { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.groups.theme .group { display: grid; grid-template-rows: subgrid; grid-row: span 2; min-width: 0; }
+.groups.theme .group + .group { margin-top: 0; }
+.groups.theme .group.wide { grid-column: 1 / -1; }
+.groups.theme .gcap { justify-self: start; align-self: end; max-width: 100%; margin: 6px 0 0; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.groups.theme .group:not(.wide) .grid { grid-template-columns: minmax(0, 1fr); align-self: start; }
 .grid.badgePreset, .grid.symbol { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
 .grid.frame { grid-template-columns: repeat(6, 1fr); }
 .grid.finish, .grid.gear { grid-template-columns: repeat(5, 1fr); }
@@ -563,6 +679,7 @@ svg { display: block; }
 .grid.enamel { grid-template-columns: repeat(6, 1fr); }
 .grid.metal { grid-template-columns: repeat(4, 1fr); }
 .grid.eye, .grid.skin { grid-template-columns: repeat(6, 1fr); }
+.grid.hairColor { grid-template-columns: repeat(9, 1fr); gap: 6px; }
 .grid.palette { grid-template-columns: repeat(2, 1fr); }
 .grid.rifle { grid-template-columns: repeat(3, 1fr); }
 .grid.origin, .grid.voice, .grid.class { grid-template-columns: 1fr; }
@@ -573,7 +690,7 @@ svg { display: block; }
 .opt:hover, .opt:focus-visible, :host(.kbd) .opt:focus { box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.42), inset 0 0 0 2px rgba(34, 230, 255, 0.6), inset 0 0 22px rgba(34, 230, 255, 0.14); }
 .opt.card:hover, .opt.card:focus-visible, :host(.kbd) .opt.card:focus { box-shadow: inset 0 1px 0 rgba(185, 210, 232, 0.42), inset 5px 0 0 var(--cc-cyan), inset 0 0 0 2px rgba(34, 230, 255, 0.6), inset 0 0 26px rgba(34, 230, 255, 0.14); }
 .opt:focus-visible, :host(.kbd) .opt:focus { box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px var(--cc-cyan), inset 0 0 22px rgba(34, 230, 255, 0.25) !important; }
-.opt[aria-checked="true"] { background: linear-gradient(180deg, rgba(34, 230, 255, 0.16), rgba(34, 230, 255, 0) 70%), var(--cc-steel-hi); color: #fff;
+.opt[aria-checked="true"], .opt[aria-pressed="true"] { background: linear-gradient(180deg, rgba(34, 230, 255, 0.16), rgba(34, 230, 255, 0) 70%), var(--cc-steel-hi); color: #fff;
   box-shadow: inset 0 1px 0 rgba(185, 240, 255, 0.45), inset 0 0 0 2px var(--cc-cyan), inset 0 0 20px rgba(34, 230, 255, 0.16); }
 .opt.card[aria-checked="true"] { box-shadow: inset 0 1px 0 rgba(185, 240, 255, 0.45), inset 5px 0 0 var(--cc-cyan), inset 0 0 0 2px var(--cc-cyan), inset 0 0 26px rgba(34, 230, 255, 0.16); }
 /* Brackets on the square corners of the chosen plate (mode-btn::before). */
@@ -583,15 +700,15 @@ svg { display: block; }
     linear-gradient(var(--cc-cyan), var(--cc-cyan)) right top / 2px 10px no-repeat,
     linear-gradient(var(--cc-cyan), var(--cc-cyan)) left bottom / 10px 2px no-repeat,
     linear-gradient(var(--cc-cyan), var(--cc-cyan)) left bottom / 2px 10px no-repeat; }
-.opt[aria-checked="true"]::before, .opt:hover::before { opacity: 1; }
+.opt[aria-checked="true"]::before, .opt[aria-pressed="true"]::before, .opt:hover::before { opacity: 1; }
 .opt .tick { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; padding: 2px; color: var(--cc-caption-cyan-text); background: var(--cc-caption-cyan);
   clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%); opacity: 0; transform: scale(0.6); transition: opacity var(--cc-dur-fast), transform var(--cc-dur-fast) var(--cc-ease); z-index: 3; }
 .opt .tick svg { stroke-width: 3.2; }
-.opt[aria-checked="true"] .tick { opacity: 1; transform: none; }
+.opt[aria-checked="true"] .tick, .opt[aria-pressed="true"] .tick { opacity: 1; transform: none; }
 .thumb { position: relative; aspect-ratio: 1; background: radial-gradient(circle at 45% 38%, #1a2a3e, #050910 78%); box-shadow: inset 0 0 0 1px var(--cc-ink), inset 0 2px 0 rgba(0, 0, 0, 0.55); overflow: hidden; }
 .thumb svg { width: 100%; height: 100%; }
 .oname { font: 700 var(--cc-type-label)/1.1 var(--cc-font); letter-spacing: 0.6px; text-transform: uppercase; color: inherit; padding: 0 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.rifle .oname, .grid.gear .oname,
+.grid.torso .oname, .grid.head .oname, .grid.hair .oname, .grid.expression .oname, .grid.rifle .oname, .grid.gear .oname,
 .grid.badgePreset .oname, .grid.symbol .oname, .grid.frame .oname, .grid.finish .oname { min-height: 2.2em; letter-spacing: 0.2px; }
 .card .oname { font-size: var(--cc-type-row); letter-spacing: var(--cc-track-row); }
 .tier { display: flex; gap: 2px; padding: 0 2px 2px; align-items: center; font: 700 var(--cc-type-micro)/1 var(--cc-font); color: var(--cc-text-dim); letter-spacing: 1px; white-space: nowrap; }
@@ -602,6 +719,11 @@ svg { display: block; }
 .grid.eye .swatch, .grid.skin .swatch { width: min(34px, 100%); flex: none; }
 .grid.eye .swatch { background: radial-gradient(circle, #fff 0 12%, var(--c) 26%, color-mix(in srgb, var(--c) 30%, #000) 70%); box-shadow: 0 0 0 var(--cc-ink-outline) var(--cc-ink), 0 0 12px color-mix(in srgb, var(--c) 60%, transparent); }
 .grid.eye .oname, .grid.skin .oname, .grid.enamel .oname { display: none; }
+/* Hair colour: a lock of hair, lit from the top left. Chrono Charged glows. */
+.grid.hairColor .opt { padding: 5px 2px; align-items: center; --cc-chamfer: 6px; }
+.grid.hairColor .swatch { width: min(26px, 100%); flex: none; background: linear-gradient(150deg, color-mix(in srgb, var(--c) 55%, #fff) 0 14%, var(--c) 40%, color-mix(in srgb, var(--c) 40%, #000) 100%); }
+.grid.hairColor .swatch.energy { box-shadow: 0 0 0 var(--cc-ink-outline) var(--cc-ink), 0 0 10px color-mix(in srgb, var(--c) 70%, transparent); }
+.grid.hairColor .oname { display: none; }
 .grid.enamel .opt, .grid.metal .opt { padding: 7px 4px; align-items: center; --cc-chamfer: 7px; min-height: 44px; }
 .grid.enamel .swatch, .grid.metal .swatch { width: min(34px, 100%); flex: none; }
 /* Enamel: a glossy cabochon of the colour. */
@@ -617,9 +739,20 @@ svg { display: block; }
 .thumb.empty { display: grid; place-items: center; }
 .thumb.empty svg { width: 34%; height: 34%; fill: none; stroke: var(--cc-text-faint); stroke-width: 1.6; stroke-linecap: round; }
 .gperk { padding: 0 2px 2px; font: 700 var(--cc-type-micro)/1.15 var(--cc-font); letter-spacing: 0.4px; color: var(--cc-cyan); text-transform: uppercase; }
+.gperk.looks { font-weight: 600; color: var(--cc-text-faint); }
 .section h3 .cur.locked { color: var(--cc-amber); }
 .snote { margin: 8px 0 0; font: 500 var(--cc-type-label)/1.35 var(--cc-font); color: var(--cc-text-dim); }
 .snote[hidden] { display: none; }
+/* Paint colour row under a worn tintable item (War Paint): swatches, then a custom colour. */
+.tintrow { margin-top: 10px; }
+.tintrow[hidden] { display: none; }
+.tintrow h4 { display: flex; justify-content: space-between; margin: 0 0 6px; font: 700 var(--cc-type-label)/1 var(--cc-font); letter-spacing: 1.2px; text-transform: uppercase; color: var(--cc-text-dim); }
+.tintrow .tname { color: var(--cc-text); }
+.tints { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.tints .tsw { min-height: 0; width: 36px; height: 36px; padding: 0; background: var(--c); --cc-chamfer: 6px; }
+.tints .tsw[aria-checked="true"] { box-shadow: 0 0 0 2px var(--cc-ink), 0 0 0 4px var(--accent); }
+.tints .tcustom input { width: 44px; height: 36px; }
+.tints .tcustom.on input { box-shadow: 0 0 0 2px var(--accent); }
 .section.muted .grid .opt:not(:hover):not(:focus) { opacity: 0.55; }
 .section.off .grid, .section.off .lockfold, .section.off h3 .cur { display: none; }
 .grid.rifle .thumb { aspect-ratio: 2.4; }
@@ -831,7 +964,7 @@ button:focus-visible { outline: none; }
   .figure-wrap { bottom: 16%; height: 66%; }
   .pedestal { bottom: 12%; width: 70%; }
   .toast { bottom: 58px; }
-  .grid.torso, .grid.head, .grid.hair { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+  .grid.torso, .grid.head, .grid.hair, .grid.expression, .groups.theme.torso, .groups.theme.head { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   .opt { min-height: 44px; }
   .hero-well { grid-template-columns: 96px 1fr; gap: 12px; padding: 6px 12px 6px 6px; }
   .hero-art { width: 96px; height: 96px; }
@@ -974,6 +1107,7 @@ const REALISTIC_STYLE = `
 :host([realistic]) .tier i { background: rgba(228, 230, 225, 0.14); box-shadow: none; }
 :host([realistic]) .tier i.on { background: var(--r-text); }
 :host([realistic]) .swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 -3px 5px rgba(0, 0, 0, 0.3); }
+:host([realistic]) .grid.hairColor .swatch.energy { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 6px color-mix(in srgb, var(--c) 35%, transparent); }
 :host([realistic]) .grid.eye .swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 6px color-mix(in srgb, var(--c) 35%, transparent); }
 :host([realistic]) .pal { background: rgba(0, 0, 0, 0.45); padding: 1px; gap: 1px; }
 :host([realistic]) .bar { height: 4px; background: rgba(228, 230, 225, 0.1); box-shadow: none; }
@@ -994,6 +1128,7 @@ const REALISTIC_STYLE = `
 :host([realistic]) .hero-name { font-weight: 600; letter-spacing: 0.08em; color: var(--r-text); text-shadow: none; }
 :host([realistic]) .hero-kicker, :host([realistic]) .vlabel { font-weight: 600; letter-spacing: 0.24em; }
 :host([realistic]) .hero-finish, :host([realistic]) .gperk { color: var(--r-accent); font-weight: 600; }
+:host([realistic]) .gperk.looks { color: var(--cc-text-faint); }
 :host([realistic]) .modes { background: rgba(14, 16, 18, 0.6); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
 :host([realistic]) .chip { font-weight: 600; letter-spacing: 0.14em; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--r-line); border-radius: 2px; box-shadow: none; }
 :host([realistic]) .chip:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--r-line-hi); }
@@ -1206,6 +1341,8 @@ class AgentShowroom extends HTMLElement {
     this._yawRestore = null;
     this.poseChoice = "idle";
     this.cameraChoice = "full";
+    this.cameraPicked = false;
+    this._cameraRestore = null;
     this.setAttribute("camera", "full");
     this.view = AGENT_VIEW.full.slice();
     this._viewTween = null;
@@ -1244,7 +1381,6 @@ class AgentShowroom extends HTMLElement {
     }
     this.toggleAttribute("realistic", real);
     this._stageKey = null;
-    this._presetsBuilt = false;
     return true;
   }
 
@@ -1332,6 +1468,11 @@ class AgentShowroom extends HTMLElement {
     root.addEventListener("input", (e) => {
       if (e.target?.name === "callsign") this.onName(e.target);
       else if (e.target?.dataset?.skinColor || e.target?.name === "skinName") this.onSkinInput(e.target);
+      else if (e.target?.dataset?.tintInput) this.chooseTint(e.target.dataset.tintInput, e.target.value, true);
+    });
+    // The colour input's change event ends a drag: the next colour is a new edit.
+    root.addEventListener("change", (e) => {
+      if (e.target?.dataset?.tintInput) this._tintLive = null;
     });
 
     // Stage drag to turn.
@@ -1390,8 +1531,10 @@ class AgentShowroom extends HTMLElement {
     if (t.dataset.armWeapon != null) return this.setArmoryWeapon(Number(t.dataset.armWeapon));
     if (t.dataset.finish) return this.chooseFinish(t.dataset.finish);
     if (t.dataset.skinPattern) return this.setSkinPattern(t.dataset.skinPattern);
+    if (t.dataset.tint) return this.chooseTint(t.dataset.tint, t.dataset.hex);
     if (t.dataset.variant != null) return this.chooseVariant(Number(t.dataset.variant), t);
     if (t.dataset.idx != null) return this.choose(t.dataset.key, Number(t.dataset.idx), t);
+    if (t.dataset.set) return this.chooseSet(t.dataset.set, t);
     if (t.dataset.look != null) return this.wearLook(Number(t.dataset.look));
     if (t.dataset.act === "look-save") return this.saveLook();
     if (t.dataset.act === "more-presets") {
@@ -1445,6 +1588,29 @@ class AgentShowroom extends HTMLElement {
     if (p && this.classList.contains("kbd")) this.setPreview(on ? { key: p.key, value: p.value } : null);
     const sec = e.target.closest?.(".section");
     this.previewSection = on && sec ? sec.dataset.key || null : null;
+    // Focus arriving anywhere frames (or unframes) the stage for what it edits.
+    if (on) this.frameSection(this.previewSection);
+    // And may take the helmet off or put it back (stagePeek): a no-op when not.
+    this.renderStage();
+  }
+
+  /**
+   * Move the stage in on a small piece while its section is being edited
+   * (CLOSE_UP), and back to the camera it had once focus moves on. A camera
+   * the player picked this visit always wins: nothing moves it then.
+   */
+  frameSection(key) {
+    const cam = CLOSE_UP[key];
+    if (!cam) {
+      if (this._cameraRestore == null) return;
+      const back = this._cameraRestore;
+      this._cameraRestore = null;
+      if (!this.cameraPicked && back !== this.cameraChoice) this.setCamera(back);
+      return;
+    }
+    if (this.cameraPicked) return;
+    this._cameraRestore ??= this.cameraChoice;
+    if (cam !== this.cameraChoice) this.setCamera(cam);
   }
 
   // ── Keys (routed from the game's dispatch) ──────────────
@@ -1597,7 +1763,7 @@ class AgentShowroom extends HTMLElement {
 
   effective() {
     const ch = this.pick(this.character);
-    if (this.preview) Object.assign(ch, withIndex(ch, this.preview.key, this.preview.value));
+    if (this.preview) Object.assign(ch, previewChanges(ch, this.preview));
     return ch;
   }
 
@@ -1605,7 +1771,7 @@ class AgentShowroom extends HTMLElement {
     const same = p && this.preview && p.key === this.preview.key && p.value === this.preview.value;
     if (same || (!p && !this.preview && this._yawRestore == null)) return;
     if (p) this.turnFor(p.key);
-    if (p && getIndex(this.character, p.key) === p.value) p = null;
+    if (p && previewedValue(this.character, p.key) === p.value) p = null;
     clearTimeout(this._previewClear);
     if (!p) {
       // Short grace so sliding between tiles doesn't flash the committed look.
@@ -1638,7 +1804,7 @@ class AgentShowroom extends HTMLElement {
     const sec = this.sectionFor(key);
     const item = sec?.data?.[idx];
     if (!item) return;
-    const st = unlockState(key, idx, this.unlockCtx());
+    const st = unlockState(key, item.id, this.unlockCtx());
     if (!st.unlocked) {
       el?.classList.remove("shake");
       void el?.offsetWidth;
@@ -1648,11 +1814,15 @@ class AgentShowroom extends HTMLElement {
       return;
     }
     this.turnFor(key);
-    if (getIndex(this.character, key) === idx) {
+    // A tap picks without focusing on some browsers (Safari): frame here too,
+    // and stage the section as focus would (an expression on the LED mask).
+    this.previewSection = key;
+    this.frameSection(key);
+    if (getId(this.character, key) === item.id) {
       this.preview = null;
       return;
     }
-    const changes = withIndex(this.character, key, idx);
+    const changes = withId(this.character, key, item.id);
     // A preset is one unlock but carries a whole badge: a dropped one can hold
     // a symbol or finish the agent has not earned. Strip those now rather than
     // saving a look that sanitizeLocked silently rewrites on the next load.
@@ -1668,6 +1838,11 @@ class AgentShowroom extends HTMLElement {
     this.el.save.classList.remove("ready");
     const ch = this.character;
     const prev = this.pick(ch);
+    // One rule for paint colours: the colours kept are the colours drawn
+    // (wornTints), whatever the change (a pick, a look, a preset, a roll).
+    if ("accessories" in changes || "accessoryTints" in changes) {
+      changes = { ...changes, accessoryTints: wornTints(changes.accessoryTints ?? ch.accessoryTints, changes.accessories ?? ch.accessories) };
+    }
     if (!Object.keys(changes).some((k) => !sameValue(ch[k], changes[k]))) return false;
     this.undoStack.push(prev);
     if (this.undoStack.length > 60) this.undoStack.shift();
@@ -1702,19 +1877,19 @@ class AgentShowroom extends HTMLElement {
   chooseVariant(v, el) {
     const ch = this.character;
     if (v) {
-      const st = variantState(ch.armorIndex | 0, this.unlockCtx());
+      const st = variantState(getId(ch, "armor"), this.unlockCtx());
       if (!st.unlocked) {
         el?.classList.remove("shake");
         void el?.offsetWidth;
         el?.classList.add("shake");
-        this.toast(`${ARMOR_STYLES[ch.armorIndex | 0].variant.name} locked · ${st.hint}`);
+        this.toast(`${pieceOf(ch, "armor").variant.name} locked · ${st.hint}`);
         this.sfx("menuNav");
         return;
       }
     }
     if (!this.commit({ armorVariant: v })) return;
     this.sfx("menuSelect");
-    const a = ARMOR_STYLES[ch.armorIndex | 0];
+    const a = pieceOf(ch, "armor");
     this.announce(`Armour: ${v ? a.variant.name : "Standard"}`);
   }
 
@@ -1741,37 +1916,43 @@ class AgentShowroom extends HTMLElement {
 
   randomize() {
     const r = (n) => Math.floor(Math.random() * n);
+    const any = (table) => table[r(table.length)].id;
     const next = {
-      colorIndex: r(CHARACTER_COLORS.length),
-      skinToneIndex: r(SKIN_TONES.length),
-      hairIndex: r(HAIR_STYLES.length),
-      eyeIndex: r(EYE_COLORS.length),
-      armorIndex: r(ARMOR_STYLES.length),
-      helmetIndex: r(HELMET_STYLES.length),
-      visorIndex: r(VISOR_STYLES.length),
-      shoulderIndex: r(SHOULDER_STYLES.length),
-      weaponSkinIndex: r(WEAPON_SKINS.length),
+      color: any(CHARACTER_COLORS),
+      skinTone: any(SKIN_TONES),
+      hair: any(HAIR_STYLES),
+      // Mostly natural; a dye now and then.
+      hairColor: Math.random() < 0.6 ? "natural" : any(HAIR_COLORS),
+      // At rest about half the time.
+      expression: Math.random() < 0.5 ? "default" : any(EXPRESSIONS),
+      eye: any(EYE_COLORS),
+      armor: any(ARMOR_STYLES),
+      helmet: any(HELMET_STYLES),
+      visor: any(VISOR_STYLES),
+      shoulder: any(SHOULDER_STYLES),
+      weaponSkin: any(WEAPON_SKINS),
     };
     // Keep it tasteful: Ghost plating reads best with dark optics and finishes,
     // synthetic skin with cool eyes.
-    if (ARMOR_STYLES[next.armorIndex].id === "stealth") {
-      if (Math.random() < 0.6) next.visorIndex = Math.random() < 0.5 ? 1 : 2;
-      if (Math.random() < 0.6) next.weaponSkinIndex = 1;
+    if (next.armor === "stealth") {
+      if (Math.random() < 0.6) next.visor = Math.random() < 0.5 ? "slit" : "fullface";
+      if (Math.random() < 0.6) next.weaponSkin = "carbon";
     }
-    if (SKIN_TONES[next.skinToneIndex].id === "synthetic" && Math.random() < 0.7) next.eyeIndex = Math.random() < 0.5 ? 5 : 1;
+    if (next.skinTone === "synthetic" && Math.random() < 0.7) next.eye = Math.random() < 0.5 ? "silver" : "blue";
     // Only what the agent has earned: re-roll locked picks from the unlocked set.
-    // Badge and gear keys are id-based virtual fields, rolled separately below.
+    // Badge and gear keys are virtual fields, rolled separately below.
     const ctx = this.unlockCtx();
-    const unlocked = (key, table) => table.map((_, i) => i).filter((i) => unlockState(key, i, ctx).unlocked);
+    const unlocked = (key, table) => table.filter((e) => unlockState(key, e.id, ctx).unlocked).map((e) => e.id);
     for (const key of Object.keys(LOCKABLE)) {
-      if (LOCKABLE[key].byId) continue;
+      if (LOCKABLE[key].virtual) continue;
       const open = unlocked(key, LOCKABLE[key].table);
-      if (key === "loadoutIndex") next.loadoutIndex = open[r(open.length)] ?? this.character.loadoutIndex;
-      else if (!open.includes(next[key])) next[key] = open[r(open.length)] ?? 0;
+      if (key === "loadout") next.loadout = open.length ? open[r(open.length)] : this.character.loadout;
+      else if (!open.includes(next[key])) next[key] = open.length ? open[r(open.length)] : DEFAULT_CHARACTER[key];
     }
-    const roll = (key, table, skip = -1) => {
-      const open = unlocked(key, table).filter((i) => i !== skip);
-      return table[open.length ? open[r(open.length)] : 0].id;
+    // An earned id from the table, never `skip`; the table's first when none is.
+    const roll = (key, table, skip = null) => {
+      const open = unlocked(key, table).filter((id) => id !== skip);
+      return open.length ? open[r(open.length)] : table[0].id;
     };
     // Most agents wear the badge on the chest; bare suits stay rare.
     next.badge = {
@@ -1779,9 +1960,9 @@ class AgentShowroom extends HTMLElement {
       finish: "auto",
       placements: Math.random() < 0.85 ? ["chest"] : [],
     };
-    // Half the slots stay empty; the rest take an earned item ("none" is index 0).
+    // Half the slots stay empty; the rest take an earned item.
     next.accessories = Object.fromEntries(
-      ACCESSORY_SLOTS.map(({ id }) => [id, Math.random() < 0.5 ? "none" : roll(`acc.${id}`, ACCESSORIES[id], 0)]),
+      ACCESSORY_SLOTS.map(({ id }) => [id, Math.random() < 0.5 ? "none" : roll(`acc.${id}`, ACCESSORIES[id], "none")]),
     );
     next.armorVariant = 0;
     this.commit(next);
@@ -1803,14 +1984,39 @@ class AgentShowroom extends HTMLElement {
       ...Object.entries(accessories).filter(([, id]) => id !== "none").map(([slot, id]) => [`acc.${slot}`, id]),
     ];
     const picks = [
-      ...Object.entries(flat).filter(([key]) => LOCKABLE[key] && !LOCKABLE[key].byId),
-      ...byIdPicks.map(([key, id]) => [key, indexOfId(LOCKABLE[key].table, id)]),
+      ...Object.keys(flat).filter((key) => LOCKABLE[key] && !LOCKABLE[key].virtual).map((key) => [key, flat[key]]),
+      ...byIdPicks,
     ];
-    for (const [key, idx] of picks) {
-      const st = unlockState(key, idx, ctx);
+    for (const [key, id] of picks) {
+      const st = unlockState(key, id, ctx);
       if (!st.unlocked) return st;
     }
     return null;
+  }
+
+  /**
+   * The changes wearing preset `i` makes to the current look: the preset's
+   * fields, the face slots as worn. Shared by applyPreset and its thumbnail.
+   */
+  presetChanges(i) {
+    const p = PRESETS[i];
+    // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
+    const armorVariant = pieceOf(p.ch, "armor") === pieceOf(this.character, "armor") ? this.character.armorVariant : 0;
+    const next = { ...cloneLook(p.ch), armorVariant };
+    next.accessories = { ...this.character.accessories, ...next.accessories };
+    return next;
+  }
+
+  /**
+   * The agent a preset or look thumbnail shows: `changes` over the current
+   * look, paint colours kept as commit keeps them (wornTints). A field the
+   * changes do not hold (hair colour, body, eyewear, face) shows as worn,
+   * as wearing it leaves it.
+   */
+  wornWith(changes) {
+    const ch = { ...cloneLook(this.character), ...cloneLook(changes) };
+    ch.accessoryTints = wornTints(changes.accessoryTints ?? this.character.accessoryTints, ch.accessories);
+    return ch;
   }
 
   applyPreset(i) {
@@ -1822,9 +2028,8 @@ class AgentShowroom extends HTMLElement {
       this.sfx("menuNav");
       return;
     }
-    // An armour variant belongs to its armour, so it only survives when the preset keeps that armour.
-    const armorVariant = p.ch.armorIndex === this.character.armorIndex ? this.character.armorVariant : 0;
-    const next = { ...cloneLook(p.ch), armorVariant };
+    this.frameSection(null);
+    const next = this.presetChanges(i);
     // Belt and braces: anything the agent has not earned falls back instead of equipping.
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
@@ -1952,6 +2157,7 @@ class AgentShowroom extends HTMLElement {
     this.restoreYaw();
     const cat = CATEGORIES[next];
     // Categories frame the stage for what they edit; manual toggles still win after.
+    this._cameraRestore = null;
     this.setCamera(cat.camera || "full");
     this.setPose(cat.pose || "idle");
     if (changed) this.sfx("menuNav");
@@ -1973,6 +2179,10 @@ class AgentShowroom extends HTMLElement {
   }
 
   setCamera(mode, user = false) {
+    if (user) {
+      this.cameraPicked = true;
+      this._cameraRestore = null;
+    }
     this.cameraChoice = mode;
     this.setAttribute("camera", mode);
     this.shadowRoot.querySelectorAll("[data-camera]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.camera === mode)));
@@ -2096,7 +2306,9 @@ class AgentShowroom extends HTMLElement {
     }
     const svg = this.el.figure.querySelector("svg");
     if (!svg) return;
-    const set = (sel, tf) => svg.querySelector(sel)?.setAttribute("transform", tf);
+    // A layer can come in more than one group (the head's hair below the jaw
+    // turns with the head but is drawn under the body's collar).
+    const set = (sel, tf) => svg.querySelectorAll(sel).forEach((g) => g.setAttribute("transform", tf));
     // Every layer turns by the same angle: the same squash, and a slide set by
     // how far behind (or ahead of) the body it sits. Slides picked per layer
     // (the head leading, the cape swinging wide) read as cut-outs coming apart.
@@ -2137,7 +2349,7 @@ class AgentShowroom extends HTMLElement {
 
   renderAll(rebuildContent = true, swapDir = 0) {
     if (!this.isOpen) return;
-    const pal = CHARACTER_COLORS[this.character.colorIndex] || CHARACTER_COLORS[0];
+    const pal = pieceOf(this.character, "color");
     this.style.setProperty("--accent", pal.accent);
     this.style.setProperty("--primary", pal.primary);
     this.el.tabs.forEach((t, i) => {
@@ -2158,20 +2370,23 @@ class AgentShowroom extends HTMLElement {
     const ch = this.effective();
     this.el.callsign.textContent = ch.name || "Agent";
     this.el.callsign.dataset.text = ch.name || "Agent";
-    const cls = LOADOUT_CLASSES[ch.loadoutIndex] || LOADOUT_CLASSES[0];
-    const org = BACKSTORIES[ch.backstoryIndex || 0];
-    const armor = ARMOR_STYLES[ch.armorIndex] || ARMOR_STYLES[0];
+    const cls = pieceOf(ch, "loadout");
+    const org = pieceOf(ch, "backstory");
+    const armor = pieceOf(ch, "armor");
     this.el.sub.innerHTML = `<b>${esc(cls.name)}</b> · ${esc(org.name)} · ${esc(armor.name)}`;
-    const pal = CHARACTER_COLORS[ch.colorIndex] || CHARACTER_COLORS[0];
+    const pal = pieceOf(ch, "color");
     this.style.setProperty("--accent", pal.accent);
   }
 
   stagePeek(ch) {
-    if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
-    const helm = HELMET_STYLES[ch.helmetIndex]?.id;
-    if (OPEN_HELMETS.has(helm)) return false;
-    // Face edits show the face even under a closed helmet.
+    const helm = pieceOf(ch, "helmet").id;
     const key = this.preview?.key || this.previewSection;
+    // An expression on the LED mask shows in its pixels, so the stage keeps
+    // the mask on while one is picked (unless the player took the helmet off).
+    if (!this.helmetOff && key === "expression" && helmetMouth(helm) === "led") return false;
+    if (this.helmetOff || CATEGORIES[this.category]?.bareHead) return true;
+    if (FACE_HELMETS.has(helm)) return false;
+    // Face edits show the face even under a closed helmet.
     return FACE_KEYS.has(key);
   }
 
@@ -2202,12 +2417,28 @@ class AgentShowroom extends HTMLElement {
     this.applyYaw();
   }
 
+  /** What a preset or look thumbnail draws: `ch` with THUMB_DEFAULTS at their defaults. */
+  thumbFigure(ch) {
+    const out = { ...ch };
+    for (const k of THUMB_DEFAULTS) out[k] = DEFAULT_CHARACTER[k];
+    return out;
+  }
+
+  /** Redraw thumbnail `el` with figure `ch` only when what it shows changed; true when it redrew. */
+  paintThumb(el, ch, idPrefix) {
+    const sig = lookKey(ch) + (this._real ? "|r" : "");
+    if (el.dataset.sig === sig) return false;
+    el.dataset.sig = sig;
+    el.querySelector(":scope > svg")?.remove();
+    el.insertAdjacentHTML("afterbegin", buildAgentSvg(ch, { view: THUMB_VIEW, idPrefix, lighting: "flat", realistic: this._real }));
+    return true;
+  }
+
   renderPresets() {
     this.el.presets.querySelectorAll(".preset[data-preset]").forEach((btn, i) => {
-      if (!this._presetsBuilt) {
-        const ch = { ...cloneLook(DEFAULT_CHARACTER), ...cloneLook(PRESETS[i].ch) };
-        btn.querySelector(".pthumb").innerHTML = buildAgentSvg(ch, { view: [-22, -106, 44, 44], idPrefix: `ps${i}-`, lighting: "flat", realistic: this._real });
-      }
+      // The preset as it would be worn now: it keeps the player's own hair
+      // colour, body, eyewear and face, so the thumbnail redraws with them.
+      this.paintThumb(btn.querySelector(".pthumb"), this.thumbFigure(this.wornWith(this.presetChanges(i))), `ps${i}-`);
       const lock = this.presetLock(i);
       btn.classList.toggle("locked", !!lock);
       btn.hidden = !!lock && !this.showLockedPresets;
@@ -2221,7 +2452,6 @@ class AgentShowroom extends HTMLElement {
       req.hidden = !lock;
       if (lock) req.innerHTML = `<span>${esc(lock.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(lock.pct * 100)}%"></i></span>`;
     });
-    this._presetsBuilt = true;
     const lockedN = PRESETS.filter((_, i) => this.presetLock(i)).length;
     const more = this.el.presets.querySelector(".more-presets");
     more.textContent = lockedN ? (this.showLockedPresets ? "Hide locked presets" : `+ ${lockedN} more to earn`) : "";
@@ -2242,7 +2472,7 @@ class AgentShowroom extends HTMLElement {
   get looks() {
     try {
       const v = JSON.parse(localStorage.getItem(LOOKS_KEY) || "[]");
-      return Array.isArray(v) ? v.slice(0, MAX_LOOKS) : [];
+      return Array.isArray(v) ? v.slice(0, MAX_LOOKS).map((l) => ({ ...l, look: readLook(l?.look) })) : [];
     } catch (_) {
       return [];
     }
@@ -2250,24 +2480,31 @@ class AgentShowroom extends HTMLElement {
 
   set looks(list) {
     try {
-      localStorage.setItem(LOOKS_KEY, JSON.stringify(list.slice(0, MAX_LOOKS)));
+      const stored = list.slice(0, MAX_LOOKS).map((l) => ({ ...l, look: { ...l.look, version: CHARACTER_SAVE_VERSION } }));
+      localStorage.setItem(LOOKS_KEY, JSON.stringify(stored));
     } catch (_) {}
   }
 
   renderLooks() {
     const box = this.el.presets.querySelector(".looks");
     const list = this.looks;
-    const sig = JSON.stringify(list) + (this._real ? "r" : "");
-    if (box.dataset.sig === sig) return;
-    box.dataset.sig = sig;
-    box.innerHTML =
-      list
-        .map(
-          (l, i) =>
-            `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb">${buildAgentSvg({ ...cloneLook(DEFAULT_CHARACTER), ...l.look }, { view: [-22, -106, 44, 44], idPrefix: `lk${i}-`, lighting: "flat", realistic: this._real })}</span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
-        )
-        .join("") +
-      (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
+    // The buttons are rebuilt only when the list itself changes, so focus on
+    // one survives every other edit.
+    const sig = JSON.stringify(list);
+    if (box.dataset.sig !== sig) {
+      box.dataset.sig = sig;
+      box.innerHTML =
+        list
+          .map(
+            (l, i) =>
+              `<div class="look"><button class="preset" data-look="${i}" aria-label="Wear ${esc(l.name)}"><span class="pthumb"></span><span class="ptext"><span class="pname">${esc(l.name)}</span></span></button><span class="del" role="button" data-look-del="${i}" title="Delete this look">×</span></div>`,
+          )
+          .join("") +
+        (list.length < MAX_LOOKS ? `<button class="save-look" data-act="look-save" tabindex="-1">+ Save current look</button>` : "");
+    }
+    // Each look as it would be worn now (wearLook): fields it was not saved
+    // with show as worn, so the thumbnails follow the current look too.
+    box.querySelectorAll(".look .pthumb").forEach((el, i) => this.paintThumb(el, this.thumbFigure(this.wornWith(this.lookChanges(list[i]))), `lk${i}-`));
   }
 
   saveLook() {
@@ -2275,18 +2512,30 @@ class AgentShowroom extends HTMLElement {
     if (list.length >= MAX_LOOKS) return this.toast(`${MAX_LOOKS} looks max: delete one first`);
     const ch = this.character;
     const look = Object.fromEntries(LOOK_FIELDS.map((k) => [k, ch[k]]));
-    const armor = ARMOR_STYLES[ch.armorIndex | 0]?.name || "Look";
-    const color = CHARACTER_COLORS[ch.colorIndex | 0]?.name || "";
+    const armor = pieceOf(ch, "armor").name;
+    const color = pieceOf(ch, "color").name;
     this.looks = [...list, { name: `${armor} · ${color}`.slice(0, 28), look: cloneLook(look) }];
     this.renderLooks();
     this.sfx("menuConfirm");
     this.toast("Look saved");
   }
 
+  /**
+   * The changes wearing look `l` makes: slots the look was not saved with
+   * keep what is worn (readLook); its paint colours, or the ones worn now,
+   * count only for the items drawn (commit keeps the colours by wornTints).
+   */
+  lookChanges(l) {
+    const next = cloneLook(l.look);
+    if (next.accessories) next.accessories = { ...this.character.accessories, ...next.accessories };
+    return next;
+  }
+
   wearLook(i) {
     const l = this.looks[i];
     if (!l) return;
-    const next = cloneLook(l.look);
+    this.frameSection(null);
+    const next = this.lookChanges(l);
     Object.assign(next, sanitizeLocked({ ...this.character, ...next }, this.unlockCtx()));
     this.commit(next);
     this.sfx("menuConfirm");
@@ -2312,12 +2561,13 @@ class AgentShowroom extends HTMLElement {
       const cur = sec.querySelector(".cur");
       if (!s || !cur) return;
       const previewing = this.preview?.key === s.key;
-      const idx = previewing ? this.preview.value : getIndex(this.character, s.key);
-      const st = previewing && LOCKABLE[s.key] ? unlockState(s.key, idx, this.unlockCtx()) : null;
+      // A preview is a grid position; the worn piece is read by id.
+      const item = previewing ? s.data[this.preview.value] : s.data.find((e) => e.id === getId(this.character, s.key));
+      const st = previewing && item && LOCKABLE[s.key] ? unlockState(s.key, item.id, this.unlockCtx()) : null;
       const locked = !!st && !st.unlocked;
       const ch = previewing ? this.effective() : this.character;
-      const variant = s.key === "armorIndex" && ch.armorVariant ? ` · ${ARMOR_STYLES[idx]?.variant?.name || ""}` : "";
-      cur.textContent = `${s.data[idx]?.name || ""}${variant}${locked ? ` · ${st.hint}` : ""}`;
+      const variant = s.key === "armor" && ch.armorVariant ? ` · ${item?.variant?.name || ""}` : "";
+      cur.textContent = `${item?.name || ""}${variant}${locked ? ` · ${st.hint}` : ""}`;
       cur.classList.toggle("preview", previewing && !locked);
       cur.classList.toggle("locked", locked);
     });
@@ -2348,6 +2598,7 @@ class AgentShowroom extends HTMLElement {
         <p class="err ${msg ? "" : "ok"}" id="callsign-err">${esc(msg || "Letters, numbers, space . _ ' -")}</p></div>`;
     }
     if (s.type === "badgeHero") return this.badgeHeroHtml();
+    if (s.type === "sets") return this.setsHtml(s);
     if (s.type === "armory") return this.armoryHtml(s);
     if (s.type === "placement") {
       const on = this.character.badge.placements;
@@ -2367,17 +2618,178 @@ class AgentShowroom extends HTMLElement {
         if (!groups.has(g)) groups.set(g, []);
         groups.get(g).push([item, i]);
       });
-      body = `<div class="groups" role="radiogroup" aria-label="${s.title}">${[...groups]
-        .map(([g, entries]) => `<div class="group"><span class="gcap caption steel">${esc(GROUP_NAMES[g] || g)}</span>${grid(entries)}</div>`)
+      // Theme groups share one set of columns: Field Issue's run spans the
+      // panel, each designed theme's piece takes a cell under its caption.
+      const theme = s.groupBy === "theme";
+      body = `<div class="groups${theme ? ` theme ${s.kind}` : ""}" role="radiogroup" aria-label="${s.title}">${[...groups]
+        .map(([g, entries]) => {
+          // A one-tile cell captions with the theme's short name; the full one is its title.
+          const wide = !theme || entries.length > 1;
+          const cap = wide ? groupName(s.groupBy, g) : THEME_SHORT[g];
+          return `<div class="group${theme && entries.length > 1 ? " wide" : ""}" data-group="${esc(g)}"><span class="gcap caption steel" title="${esc(groupName(s.groupBy, g))}">${esc(cap)}</span>${grid(entries)}</div>`;
+        })
         .join("")}</div>`;
     } else {
       body = grid(s.data.map((item, i) => [item, i]), ` role="radiogroup" aria-label="${s.title}"`);
     }
-    const variant = s.key === "armorIndex" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
-    const note = SECTION_NOTES[s.key] || "";
-    // Grouped grids carry their unlock rule on each tile instead of a long list of rows.
-    const locks = s.groupBy ? "" : this.lockInfoHtml(s);
+    const variant = s.key === "armor" ? `<div class="variant" role="radiogroup" aria-label="Armour variant">${this.variantHtml()}</div>` : "";
+    const note = (SECTION_NOTES[s.key] || "") + (s.kind === "gear" ? this.tintRowHtml(s.key.slice(4)) : "");
+    // Badge sets carry their unlock rule on each tile instead of a long list of rows.
+    const locks = s.groupBy && s.groupBy !== "theme" ? "" : this.lockInfoHtml(s);
     return `<div class="section" data-key="${s.key}"><h3><span>${s.title}</span><span class="cur"></span></h3>${extra}${body}${variant}${note}${locks}</div>`;
+  }
+
+  /**
+   * The Sets row: one tile per designed theme (SET_THEMES), the agent in its
+   * full set. refreshSets draws the figures, marks the set worn, badges a
+   * tile with how many of its pieces are locked, and keeps the section's
+   * "How to unlock" fold (the lockInfoHtml pattern) listing what earns them.
+   */
+  setsHtml(s) {
+    const tiles = SET_THEMES.map(
+      (t) =>
+        `<button class="opt plate settile" data-set="${t.id}" aria-pressed="false" tabindex="-1"><span class="tick" aria-hidden="true">${I.check}</span>` +
+        `<span class="lockbadge setlock" aria-hidden="true" hidden>${I.lock}<b></b></span><span class="thumb" data-set-thumb></span>` +
+        `<span class="oname">${esc(t.name)}</span><span class="sown"></span></button>`,
+    ).join("");
+    return `<div class="section" data-section="sets"><h3><span>${s.title}</span><span class="cur set-cur"></span></h3><div class="grid sets" role="group" aria-label="${s.title}">${tiles}</div><div class="setlocks"></div></div>`;
+  }
+
+  /** Each piece of a set with its unlock state. */
+  setState(themeId) {
+    const ctx = this.unlockCtx();
+    return setPieces(themeId).map((p) => ({ ...p, st: unlockState(p.field, p.id, ctx) }));
+  }
+
+  /** The Sets section's fold: every locked set piece, one row per rule that earns them, with progress. */
+  setLockInfoHtml() {
+    const rows = new Map();
+    for (const t of SET_THEMES) {
+      for (const p of this.setState(t.id)) {
+        if (p.st.unlocked) continue;
+        const row = rows.get(p.st.hint) || { st: p.st, names: [] };
+        row.names.push(p.name);
+        rows.set(p.st.hint, row);
+      }
+    }
+    if (!rows.size) return "";
+    const html = [...rows.values()]
+      .map(({ st, names }) => `<div class="lockrow"><span class="lock caption amber">${I.lock}${esc(names.join(", "))}</span><span>${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></div>`)
+      .join("");
+    const n = [...rows.values()].reduce((k, r) => k + r.names.length, 0);
+    return `<details class="lockfold"><summary><span class="lock caption amber">${I.lock}How to unlock · ${n}</span></summary><div class="lockinfo">${html}</div></details>`;
+  }
+
+  /**
+   * Wear a theme's set: the pieces owned go on in one undo step; locked ones
+   * are skipped (equipSet never equips them) and the toast names them.
+   */
+  chooseSet(themeId, el) {
+    const theme = SET_THEMES.find((t) => t.id === themeId);
+    if (!theme) return;
+    // A tap may not move focus (Safari): leave a close-up for the whole figure here.
+    this.frameSection(null);
+    const { changes, skipped } = equipSet(this.character, themeId, this.unlockCtx());
+    const names = skipped.map((p) => pieceOf({ [p.field]: p.id }, p.field).name);
+    if (!Object.keys(changes).length) {
+      el?.classList.remove("shake");
+      void el?.offsetWidth;
+      el?.classList.add("shake");
+      this.toast(`${theme.name} set locked · ${skipped[0].hint}`);
+      this.sfx("menuNav");
+      return;
+    }
+    const skip = skipped.length ? ` · ${names.join(", ")} locked, skipped` : "";
+    if (!this.commit(changes)) {
+      this.toast(`${theme.name} set already worn${skip}`);
+      this.sfx("menuNav");
+      return;
+    }
+    this.sfx("menuSelect");
+    this.flashStage();
+    const msg = `${theme.name} set on${skip}`;
+    this.toast(msg);
+    this.announce(msg);
+  }
+
+  /** Sets row: figures, the worn mark, the lock badge and count, and the unlock fold. */
+  refreshSets(sig) {
+    const ch = this.character;
+    let worn = "";
+    this.shadowRoot.querySelectorAll(".content .settile").forEach((tile) => {
+      const id = tile.dataset.set;
+      const theme = SET_THEMES.find((t) => t.id === id);
+      const on = wearsSet(ch, id);
+      if (on) worn = theme.name;
+      tile.setAttribute("aria-pressed", String(on));
+      const thumb = tile.querySelector("[data-set-thumb]");
+      if (thumb.dataset.sig !== sig) {
+        thumb.dataset.sig = sig;
+        const look = { ...ch, ...Object.fromEntries(setPieces(id).map((p) => [p.field, p.id])) };
+        thumb.innerHTML = buildAgentSvg(look, { view: SET_VIEW, idPrefix: `st${this._thumbSeq++}-`, lighting: "flat", realistic: this._real });
+      }
+      const pieces = this.setState(id);
+      const locked = pieces.filter((p) => !p.st.unlocked);
+      const owned = pieces.length - locked.length;
+      tile.classList.toggle("locked", owned === 0);
+      const badge = tile.querySelector(".setlock");
+      badge.hidden = !locked.length;
+      badge.querySelector("b").textContent = locked.length > 1 ? String(locked.length) : "";
+      tile.querySelector(".sown").textContent = `${owned}/${pieces.length} owned`;
+      const why = locked.map((p) => `${p.name} locked: ${p.st.hint}`).join(". ");
+      tile.setAttribute("aria-label", `Wear the ${theme.name} set${on ? ", worn" : ""}. ${owned} of ${pieces.length} pieces owned${why ? `. ${owned ? "Skips" : "Every piece is locked"}: ${why}` : ""}`);
+      tile.title = locked.length ? `${theme.name}: ${locked.map((p) => `${p.name} (${p.st.hint})`).join(", ")}` : theme.name;
+    });
+    const cur = this.shadowRoot.querySelector(".content .set-cur");
+    if (cur) cur.textContent = worn;
+    const fold = this.shadowRoot.querySelector(".content .setlocks");
+    if (fold) {
+      const html = this.setLockInfoHtml();
+      if (fold.dataset.html !== html) {
+        fold.dataset.html = html;
+        fold.innerHTML = html;
+      }
+    }
+  }
+
+  /**
+   * The colour row under a slot's picks, for an item that takes a colour of
+   * its own (War Paint): the paint swatches and a custom colour input, the
+   * finish maker's control. Shown by refreshContent while such an item is
+   * worn; empty for a slot with none.
+   */
+  tintRowHtml(slot) {
+    if (!ACCESSORIES[slot]?.some((i) => i.tint)) return "";
+    const swatches = PAINT_SWATCHES.map(
+      (p) => `<button class="chip tsw" role="radio" aria-checked="false" data-tint="${slot}" data-hex="${p.hex}" aria-label="${esc(p.name)}" title="${esc(p.name)}" tabindex="-1" style="--c:${p.hex}"></button>`,
+    ).join("");
+    return `<div class="tintrow" data-tint-slot="${slot}" hidden>
+      <h4><span class="tlabel"></span><span class="tname"></span></h4>
+      <div class="tints" role="radiogroup">${swatches}<label class="arm-color tcustom"><input type="color" data-tint-input="${slot}" value="#000000"><span>Custom</span></label></div>
+    </div>`;
+  }
+
+  /**
+   * Paint the item worn in `slot` in `hex`. Dragging in the colour input
+   * (`live`) is one edit: the first change goes on the undo stack, the rest
+   * of the drag repaints in place until the input's change event ends it.
+   */
+  chooseTint(slot, hex, live = false) {
+    this.frameSection(`acc.${slot}`);
+    const changes = withTint(this.character, slot, hex);
+    if (live && this._tintLive === slot) {
+      Object.assign(this.character, changes);
+      this.renderAll(false);
+      return;
+    }
+    // A drag is one edit from its first step that changes something.
+    const changed = this.commit(changes);
+    this._tintLive = live && changed ? slot : null;
+    if (!changed) return;
+    this.sfx("menuSelect");
+    const item = accessoryItem(slot, this.character.accessories[slot]);
+    const named = PAINT_SWATCHES.find((p) => p.hex === tintFor(this.character, slot));
+    this.announce(`${item.name} ${item.tint.label.toLowerCase()}: ${named ? named.name : "custom colour"}`);
   }
 
   // ── Weapon finishes (src/data/weapon-skins.js) ─────────────────────────────
@@ -2386,7 +2798,7 @@ class AgentShowroom extends HTMLElement {
 
   armoryHtml(s) {
     const ch = this.character;
-    this.armoryWeapon ??= LOADOUT_CLASSES[ch.loadoutIndex]?.startWeapons?.[0] ?? 0;
+    this.armoryWeapon ??= pieceOf(ch, "loadout").startWeapons?.[0] ?? 0;
     this.skinDraft ??= { name: "", primary: "#c8102e", secondary: "#1a1a1a", energy: "#ffd23a", pattern: "camo" };
     const weapons = WEAPONS.map(
       (w) => `<button class="chip arm-w${w.id === this.armoryWeapon ? " on" : ""}" data-arm-weapon="${w.id}" aria-pressed="${w.id === this.armoryWeapon}" tabindex="-1">${esc(w.name)}</button>`,
@@ -2474,8 +2886,7 @@ class AgentShowroom extends HTMLElement {
     this.skinPreviewing = false;
     const changes = { weaponFinishes: { ...ch.weaponFinishes, [wid]: id } };
     // The agent carries the Phase Rifle in the showroom: keep that finish in step.
-    const legacy = WEAPON_SKINS.findIndex((s) => s.id === id);
-    if (wid === 2 && legacy >= 0) changes.weaponSkinIndex = legacy;
+    if (wid === 2 && WEAPON_SKINS.some((s) => s.id === id)) changes.weaponSkin = id;
     this.commit(changes);
     this.sfx("menuSelect");
     this.announce(`${WEAPONS[wid].name}: ${f.name}`);
@@ -2591,9 +3002,9 @@ class AgentShowroom extends HTMLElement {
   /** Standard / variant choice under the armour grid. */
   variantHtml() {
     const ch = this.character;
-    const v = ARMOR_STYLES[ch.armorIndex | 0]?.variant;
+    const v = pieceOf(ch, "armor").variant;
     if (!v) return "";
-    const st = variantState(ch.armorIndex | 0, this.unlockCtx());
+    const st = variantState(getId(ch, "armor"), this.unlockCtx());
     const lock = st.unlocked
       ? `<span class="vdesc">${esc(v.desc)}</span>`
       : `<span class="vlock"><span class="lock caption amber">${I.lock}${esc(st.hint)}</span><span class="bar" aria-hidden="true"><i style="--w:${Math.round(st.pct * 100)}%"></i></span></span>`;
@@ -2610,8 +3021,8 @@ class AgentShowroom extends HTMLElement {
     if (!LOCKABLE[s.key] || s.kind === "class") return "";
     const ctx = this.unlockCtx();
     const rows = new Map();
-    s.data.forEach((item, i) => {
-      const st = unlockState(s.key, i, ctx);
+    s.data.forEach((item) => {
+      const st = unlockState(s.key, item.id, ctx);
       if (st.unlocked) return;
       const row = rows.get(st.hint) || { st, names: [] };
       row.names.push(item.name);
@@ -2626,12 +3037,15 @@ class AgentShowroom extends HTMLElement {
   }
 
   optionHtml(s, item, i) {
-    const st = LOCKABLE[s.key] ? unlockState(s.key, i, this.unlockCtx()) : null;
+    const st = LOCKABLE[s.key] ? unlockState(s.key, item.id, this.unlockCtx()) : null;
     const locked = !!st && !st.unlocked;
     const attrs = `class="opt plate${s.kind === "origin" || s.kind === "voice" || s.kind === "class" ? " card" : ""}${locked ? " locked" : ""}" role="radio" aria-checked="false" data-key="${s.key}" data-idx="${i}" tabindex="-1"`;
-    const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${item.perk ? `. Perk: ${item.perk}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
+    const gperk = gearPerk(s.key, item);
+    const perkText = gperk ?? item.perk;
+    const label = `${item.name}${item.desc ? `. ${item.desc}` : ""}${perkText ? `. Perk: ${perkText}` : ""}${locked ? `. Locked: ${st.hint}` : ""}`;
+    const perk = gperk ? `<span class="gperk${item.bonuses ? "" : " looks"}">${esc(gperk)}</span>` : "";
     const tick = `<span class="tick" aria-hidden="true">${I.check}</span>`;
-    const tier = item.tier ? `<span class="tier" aria-hidden="true">${[1, 2, 3].map((t) => `<i class="${t <= item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
+    const tier = item.tier ? `<span class="tier" aria-hidden="true">${TIER.slice(1).map((_, i) => `<i class="${i < item.tier ? "on" : ""}"></i>`).join("")}&nbsp;${TIER[item.tier]}</span>` : "";
     // Locked badge and gear tiles: amber lock corner, rule in the tooltip, progress along the foot.
     const lockAttr = locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : "";
     const lockMark = locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : "";
@@ -2654,11 +3068,15 @@ class AgentShowroom extends HTMLElement {
           item.id === "none"
             ? `<span class="thumb empty" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="m7 17 10-10"/></svg></span>`
             : `<span class="thumb" data-thumb="gear" data-slot="${s.key.slice(4)}"></span>`;
-        const perk = item.perk ? `<span class="gperk">${esc(item.perk)}</span>` : "";
         return `<button ${attrs} aria-label="${esc(label)}"${lockAttr}>${tick}${lockMark}${thumb}<span class="oname">${esc(item.name)}</span>${tier}${perk}${prog}</button>`;
       }
       case "eye":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="--c:${item.color}"></span><span class="oname">${esc(item.name)}</span></button>`;
+      case "hairColor": {
+        // The colour itself is filled in by refreshContent: it depends on the cut and palette.
+        const kind = item.energy ? " energy" : item.dye ? " dye" : "";
+        return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch hc${kind}" data-hair-swatch></span><span class="oname">${esc(item.name)}</span></button>`;
+      }
       case "skin":
         return `<button ${attrs} aria-label="${esc(label)}" title="${esc(item.name)}"><span class="swatch" style="background:radial-gradient(circle at 35% 30%, ${item.color}, ${item.shadow})"></span><span class="oname">${esc(item.name)}</span></button>`;
       case "camo": {
@@ -2692,7 +3110,7 @@ class AgentShowroom extends HTMLElement {
       case "rifle":
         return `<button ${attrs} aria-label="${esc(label)}">${tick}<span class="thumb" data-thumb="rifle"></span><span class="oname">${esc(item.name)}</span></button>`;
       default:
-        return `<button ${attrs} aria-label="${esc(label)}"${locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : ""}>${tick}${locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : ""}<span class="thumb" data-thumb="${s.kind}"></span><span class="oname">${esc(item.name)}</span>${tier}</button>`;
+        return `<button ${attrs} aria-label="${esc(label)}"${locked ? ` aria-disabled="true" title="${esc(st.hint)}"` : ""}>${tick}${locked ? `<span class="lockbadge" aria-hidden="true">${I.lock}</span>` : ""}<span class="thumb" data-thumb="${s.kind}"></span><span class="oname">${esc(item.name)}</span>${tier}${perk}</button>`;
     }
   }
 
@@ -2705,6 +3123,8 @@ class AgentShowroom extends HTMLElement {
       const key = opt.dataset.key;
       const idx = Number(opt.dataset.idx);
       opt.setAttribute("aria-checked", String(getIndex(ch, key) === idx));
+      const hairSwatch = opt.querySelector("[data-hair-swatch]");
+      if (hairSwatch) hairSwatch.style.setProperty("--c", hairOf({ ...ch, ...withIndex(ch, key, idx) }).color);
       const thumb = opt.querySelector(".thumb[data-thumb]");
       if (!thumb || (!force && thumb.dataset.sig === sig)) return;
       thumb.dataset.sig = sig;
@@ -2717,6 +3137,10 @@ class AgentShowroom extends HTMLElement {
         case "hair":
           thumb.innerHTML = buildAgentSvg(variant, { headOnly: true, peek: true, idPrefix: id, realistic });
           break;
+        case "expression":
+          // The face, brows to chin, bare unless the helmet lights the mouth (the LED mask).
+          thumb.innerHTML = buildAgentSvg(variant, { view: MOUTH_VIEW, idPrefix: id, lighting: "flat", realistic, peek: helmetMouth(ch.helmet) !== "led" });
+          break;
         case "torso":
           thumb.innerHTML = buildAgentSvg(variant, { view: AGENT_VIEW.torso, idPrefix: id, lighting: "flat", realistic });
           break;
@@ -2727,9 +3151,12 @@ class AgentShowroom extends HTMLElement {
         case "rifle":
           thumb.innerHTML = buildRifleSvg(variant, { idPrefix: id, realistic });
           break;
-        case "gear":
-          thumb.innerHTML = buildAgentSvg(variant, { view: GEAR_VIEW[thumb.dataset.slot], idPrefix: id, lighting: "flat", realistic });
+        case "gear": {
+          // Eyes and face tiles show the bare head, so the item reads whatever the helmet.
+          const peek = FACE_SLOTS.includes(thumb.dataset.slot);
+          thumb.innerHTML = buildAgentSvg(variant, { view: GEAR_VIEW[thumb.dataset.slot], idPrefix: id, lighting: "flat", realistic, peek });
           break;
+        }
         case "badge": {
           const t = resolveTreatment(ch);
           thumb.innerHTML = `<svg viewBox="-54 -54 108 108">${renderBadge(variant.badge, { treatment: t, detail: "low" })}</svg>`;
@@ -2740,6 +3167,7 @@ class AgentShowroom extends HTMLElement {
         default:
       }
     });
+    this.refreshSets(sig);
     const autoMetal = this.shadowRoot.querySelector('.content [data-note="auto-metal"]');
     if (autoMetal) {
       autoMetal.hidden = ch.badge.finish !== "auto";
@@ -2749,10 +3177,39 @@ class AgentShowroom extends HTMLElement {
     // under them every tile would look the same, and the perk doesn't count.
     const noVisor = this.shadowRoot.querySelector('.content [data-note="no-visor"]');
     if (noVisor) {
-      const off = !takesVisor(ch.helmetIndex);
+      const off = !takesVisor(ch.helmet);
       noVisor.hidden = !off;
-      noVisor.textContent = off ? `The ${HELMET_STYLES[ch.helmetIndex | 0].name} has no visor, so this pick and its perk don't apply.` : "";
+      noVisor.textContent = off ? `The ${pieceOf(ch, "helmet").name} has no visor, so this pick and its perk don't apply.` : "";
       noVisor.closest(".section").classList.toggle("off", off);
+    }
+    // The colour row under a worn item that takes one (War Paint).
+    this.shadowRoot.querySelectorAll(".content .tintrow").forEach((row) => {
+      const slot = row.dataset.tintSlot;
+      const tint = accessoryItem(slot, ch.accessories?.[slot])?.tint;
+      row.hidden = !tint;
+      if (!tint) return;
+      const hex = tintFor(ch, slot);
+      const named = PAINT_SWATCHES.find((p) => p.hex === hex);
+      row.querySelector(".tlabel").textContent = `${tint.label} colour`;
+      row.querySelector(".tname").textContent = named ? named.name : "Custom";
+      row.querySelector(".tints").setAttribute("aria-label", `${tint.label} colour`);
+      row.querySelectorAll(".tsw").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.hex === hex)));
+      const input = row.querySelector("input[type=color]");
+      input.closest(".tcustom").classList.toggle("on", !named);
+      if (this.shadowRoot.activeElement !== input) input.value = hex;
+    });
+    // Eyes and face picks under a helmet that hides them: kept, not drawn.
+    this.shadowRoot.querySelectorAll('.content [data-note="face-slot"]').forEach((note) => {
+      note.textContent = faceSlotNote(ch, note.dataset.slot);
+      note.hidden = !note.textContent;
+      note.closest(".section").classList.toggle("muted", !note.hidden);
+    });
+    const mouth = this.shadowRoot.querySelector('.content [data-note="mouth"]');
+    if (mouth) {
+      const note = mouthNote(ch);
+      mouth.textContent = note.text;
+      mouth.hidden = !note.text;
+      mouth.closest(".section").classList.toggle("muted", note.muted);
     }
     const frameNote = this.shadowRoot.querySelector('.content [data-note="frame-shoulders"]');
     if (frameNote) {

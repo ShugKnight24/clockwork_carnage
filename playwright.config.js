@@ -54,7 +54,9 @@ export default defineConfig({
   webServer: {
     command: `npx vite --port ${PORT} --strictPort`,
     port: PORT,
-    reuseExistingServer: true,
+    // Opt-in only: a server already on the port may be another app or another
+    // checkout, and the specs would pass or fail against the wrong code.
+    reuseExistingServer: process.env.CC_REUSE_SERVER === "1",
     timeout: 10_000,
   },
   projects: [

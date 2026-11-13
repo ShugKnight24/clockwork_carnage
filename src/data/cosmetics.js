@@ -1,7 +1,9 @@
 // ── Character Creator ────────────────────────────────────
 
 import { DEFAULT_BADGE } from "./badges.js";
-import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, accessoryItem } from "./accessories.js";
+import { ACCESSORY_SLOTS, DEFAULT_ACCESSORIES, FACE_SLOTS, accessoryItem } from "./accessories.js";
+import { RETIRED_PIECES } from "./retired-pieces.js";
+import { themeTable, frameHides, helmetSeats, helmetFaceSlots } from "./wardrobe-themes/index.js";
 
 export const CHARACTER_COLORS = [
   {
@@ -156,6 +158,51 @@ export const HAIR_STYLES = [
   { id: "ponytail", name: "Ponytail", desc: "Pulled back tight", color: "#6b3a1c" },
 ];
 
+/**
+ * Hair colour, picked apart from the cut (agent-rig.js hairOf). "natural"
+ * keeps the cut's own colour; a natural shade colours the brows with it; a
+ * dye (`dye: true`) leaves the brows the cut's natural colour; Chrono Charged
+ * (`energy: true`) takes the suit's energy colour. Never locked.
+ */
+export const HAIR_COLORS = Object.freeze([
+  { id: "natural", name: "Natural", color: null },
+  { id: "jet", name: "Jet Black", color: "#0e0b0a" },
+  { id: "brown", name: "Dark Brown", color: "#3a2416" },
+  { id: "chestnut", name: "Chestnut", color: "#6b3a1c" },
+  { id: "auburn", name: "Auburn", color: "#8a3218" },
+  { id: "copper", name: "Copper", color: "#b85a24" },
+  { id: "honey", name: "Honey Blonde", color: "#c9a25a" },
+  { id: "platinum", name: "Platinum", color: "#e8dcc0" },
+  { id: "silver", name: "Silver", color: "#a8b0b8" },
+  { id: "snow", name: "Snow White", color: "#eef4ff" },
+  { id: "crimson", name: "Crimson", color: "#b01e3c", dye: true },
+  { id: "pink", name: "Hot Pink", color: "#e8408c", dye: true },
+  { id: "violet", name: "Violet", color: "#7a3ad0", dye: true },
+  { id: "electric", name: "Electric Blue", color: "#2a7cff", dye: true },
+  { id: "teal", name: "Teal", color: "#1aa8a0", dye: true },
+  { id: "toxic", name: "Toxic Green", color: "#5ad02a", dye: true },
+  { id: "sunset", name: "Sunset Orange", color: "#ff7a2a", dye: true },
+  { id: "chrono", name: "Chrono Charged", color: null, dye: true, energy: true },
+].map((e) => Object.freeze(e)));
+
+/**
+ * The mouth's expression: one pick for every face (src/rendering/svg-art/
+ * expressions.js). A bare face draws it as a mouth, in each build's own lips;
+ * the LED mask lights it in pixels. "default" is the mouth every face wore
+ * before the pick. A helmet that covers the mouth draws none of it
+ * (helmetMouth in src/data/wardrobe-themes/index.js). Never locked.
+ */
+export const EXPRESSIONS = Object.freeze([
+  { id: "default", name: "Default", desc: "The set of the mouth at rest" },
+  { id: "smile", name: "Smile", desc: "Lips closed, corners up" },
+  { id: "grin", name: "Grin", desc: "Ear to ear, teeth showing" },
+  { id: "smirk", name: "Smirk", desc: "One corner up, the other unimpressed" },
+  { id: "grim", name: "Grim", desc: "Flat and set" },
+  { id: "frown", name: "Frown", desc: "Corners down" },
+  { id: "shout", name: "Shout", desc: "Wide open, mid battle cry" },
+  { id: "shocked", name: "Shocked", desc: "A small round O" },
+].map((e) => Object.freeze(e)));
+
 export const EYE_COLORS = [
   { id: "amber", name: "Amber", color: "#ffcc66" },
   { id: "blue", name: "Blue", color: "#66bbff" },
@@ -166,17 +213,12 @@ export const EYE_COLORS = [
 ];
 
 /**
- * Body frames: the silhouette the suit is built on (src/rendering/svg-art/frames.js).
- * Any armour style can be worn on any frame. Appended, never inserted.
+ * Body frames: the silhouette the suit is built on, from the wardrobe themes
+ * (src/data/wardrobe-themes/), in theme order. Any armour style can be worn
+ * on any frame. Theme frames are earned by their tier (TIER_UNLOCKS); the
+ * stock frames carry none and are always open.
  */
-export const BODY_FRAMES = [
-  { id: "standard", name: "Field", desc: "The suit as issued: balanced, familiar" },
-  { id: "strider", name: "Strider", desc: "Lean under-suit, modular kit, a jump-kit behind the shoulders" },
-  { id: "vanguard", name: "Vanguard", desc: "Sleek sculpted plate, panel lines and glowing seams" },
-  { id: "operator", name: "Operator", desc: "Soft kit: fabric sleeves and trousers, chest rig, elbow pads" },
-  { id: "wraith", name: "Wraith", desc: "Hooded long coat, wrapped forearms and shins" },
-  { id: "breacher", name: "Breacher", desc: "Ballistic chest plate, riot vambrace, grenade belt, heavy boots" },
-];
+export const BODY_FRAMES = themeTable("frames");
 
 /**
  * Under-suit camouflage (the fabric between the plates). `base` and `blobs`
@@ -265,7 +307,7 @@ export const ARMOR_STYLES = [
     name: "Engineer",
     desc: "Utility-integrated hardsuit",
     tier: 3,
-    bonuses: { maxChronoEnergyAdd: 25, maxHealthAdd: 10 },
+    bonuses: { maxChronoEnergyAdd: 25, regenAdd: 0.2 },
     badgeTreatment: { finish: "stencil", metal: "steel" },
     variant: { id: "engineer_foreman", name: "Foreman", desc: "Hazard stripes and tool scars", trim: "#e0a030", wear: 0.6, badgeTreatment: { finish: "stencil", metal: "brass" }, unlock: { type: "achievement", id: "droneHunter", label: "Earn Drone Hunter" } },
   },
@@ -307,58 +349,38 @@ export const ARMOR_STYLES = [
   },
 ];
 
-export const HELMET_STYLES = [
-  { id: "standard", name: "Standard Dome", desc: "Regulation sphere shell", tier: 1 },
-  { id: "wide", name: "Bastion", desc: "Wide reinforced dome", tier: 2, bonuses: { maxHealthAdd: 10 } },
-  { id: "angular", name: "Angular", desc: "Faceted tactical shell", tier: 2, bonuses: { armorAdd: 3 } },
-  { id: "mohawk", name: "Centurion", desc: "Crested ridge crown", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 2 } },
-  { id: "crested", name: "Vanguard", desc: "Forward combat fin", tier: 3, bonuses: { maxStaminaAdd: 20, moveSpeedAdd: 0.1 } },
-  { id: "ordnance", name: "Ordnance", desc: "Faceted gunner's helm with targeting spine", tier: 3, bonuses: { armorAdd: 4, maxHealthAdd: 8 } },
-  { id: "bucket", name: "Bucket", desc: "Low riveted dome, sunk into the collar", tier: 3, bonuses: { maxHealthAdd: 18 } },
-  { id: "crusader", name: "Crusader", desc: "Beaked cast helm, rivet crown", tier: 3, bonuses: { armorAdd: 5, maxChronoEnergyAdd: 8 } },
-  { id: "sealed", name: "Sealed", desc: "One-piece shell, no seams", tier: 2, bonuses: { maxStaminaAdd: 12, moveSpeedAdd: 0.08 } },
-  // Appended, never inserted: saves store the index.
-  // `visor: false`: the head has no visor to fit, so the pick is neither drawn
-  // nor counted (see takesVisor).
-  {
-    id: "reaper", name: "Reaper", desc: "Skull-print balaclava, comms headset, field scarf", tier: 3, visor: false,
-    unlock: { type: "achievement", id: "centurion", label: "Earn Centurion" },
-  },
-  { id: "pilot", name: "Pilot", desc: "Tri-lens optics, sealed jaw", tier: 2, bonuses: { maxStaminaAdd: 10 } },
-  { id: "bandana", name: "Do-Rag", desc: "Tied head wrap, face to the wind", tier: 1, visor: false },
-];
+/**
+ * Helmets, from the wardrobe themes (src/data/wardrobe-themes/), in theme
+ * order. `face: true` marks an open helmet (FACE_HELMETS); `visor: false` a
+ * head with no visor to fit (takesVisor).
+ */
+export const HELMET_STYLES = themeTable("helmets");
 
-/** Whether the helmet at this index wears the visor pick (HELMET_STYLES[].visor). */
-export function takesVisor(helmetIndex) {
-  return (HELMET_STYLES[helmetIndex || 0] || HELMET_STYLES[0]).visor !== false;
+/** Whether this helmet wears the visor pick (HELMET_STYLES[].visor). */
+export function takesVisor(helmetId) {
+  return pieceIn(HELMET_STYLES, "helmet", helmetId).visor !== false;
 }
 
 export const VISOR_STYLES = [
   { id: "standard", name: "Wide Visor", desc: "Full lower-arc optics", tier: 1 },
-  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2, bonuses: { maxChronoEnergyAdd: 10 } },
+  { id: "slit", name: "Slit", desc: "Narrow tactical band", tier: 2, bonuses: { armorAdd: 2 } },
   { id: "fullface", name: "Blackout", desc: "Full-face mirrored shell", tier: 3, bonuses: { armorAdd: 4, maxChronoEnergyAdd: 10 } },
-  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { maxStaminaAdd: 10 } },
+  { id: "split", name: "Dual Lens", desc: "Twin segmented optics", tier: 2, bonuses: { fireRateAdd: 0.03 } },
   { id: "glow", name: "Beacon", desc: "High-lumen emitter strip", tier: 3, bonuses: { maxChronoEnergyAdd: 25 } },
   { id: "goldwrap", name: "Gold Wrap", desc: "Wraparound tinted dome visor", tier: 2, bonuses: { maxChronoEnergyAdd: 6 } },
 ];
 
-export const SHOULDER_STYLES = [
-  { id: "none", name: "Bare", desc: "No additional plating", tier: 1 },
-  { id: "pads", name: "Combat Pads", desc: "Standard oval shoulder pads", tier: 1 },
-  { id: "spikes", name: "Jagged", desc: "Aggressive spiked guards", tier: 2, bonuses: { armorAdd: 3 } },
-  { id: "pauldrons", name: "Pauldrons", desc: "Heavy trapezoidal plates", tier: 3, bonuses: { maxHealthAdd: 15, armorAdd: 4 } },
-  { id: "armored", name: "Bulwark", desc: "Angular armored blocks", tier: 3, bonuses: { armorAdd: 8, moveSpeedAdd: -0.1 } },
-  { id: "slab", name: "Slab", desc: "Oversized rounded shoulder slabs", tier: 3, bonuses: { maxHealthAdd: 18, armorAdd: 4, moveSpeedAdd: -0.12 } },
-  { id: "dome", name: "Domed", desc: "Deep crusader half-shells with a raised rim", tier: 3, bonuses: { armorAdd: 9, moveSpeedAdd: -0.08 } },
-  { id: "ordnance", name: "Launcher", desc: "Vented ordnance housing on a rail", tier: 3, bonuses: { armorAdd: 6, maxHealthAdd: 10, moveSpeedAdd: -0.1 } },
-  { id: "layered", name: "Layered", desc: "Stepped overlapping plates", tier: 2, bonuses: { maxStaminaAdd: 14, moveSpeedAdd: 0.1 } },
-];
+/** Shoulder pieces, from the wardrobe themes (src/data/wardrobe-themes/), in theme order. */
+export const SHOULDER_STYLES = themeTable("shoulders");
 
 /**
- * Unlock rules for tiered gear (armor, helmet, visor, shoulders, and the
- * accessories in src/data/accessories.js). Tier 1 is standard issue. Spread
- * over the campaign: MK II with Act I, MK III with Act II, so each act still
- * has a wardrobe to earn. Rule shapes are evaluated in src/systems/unlocks.js.
+ * Unlock rules for tiered gear (armor, frame, helmet, visor, shoulders, and
+ * the accessories in src/data/accessories.js). Tier 1 is standard issue. Spread
+ * over the campaign, one tier an act: MK II with Act 1 up to MK V with Act 4,
+ * so each act still has a wardrobe to earn. The themes stagger over them, a
+ * set's helmet an act after its frame and shoulders, with the Exo-Frame last
+ * (src/data/wardrobe-themes/). Rule shapes are evaluated in
+ * src/systems/unlocks.js.
  */
 export const TIER_UNLOCKS = {
   2: {
@@ -377,7 +399,26 @@ export const TIER_UNLOCKS = {
       { type: "arenaRound", count: 15, label: "Survive arena round 15", unit: "rounds" },
     ],
   },
+  4: {
+    type: "anyOf",
+    label: "Clear Act 3 or survive arena round 20",
+    rules: [
+      { type: "campaignActs", count: 3, label: "Clear Act 3", unit: "acts" },
+      { type: "arenaRound", count: 20, label: "Survive arena round 20", unit: "rounds" },
+    ],
+  },
+  5: {
+    type: "anyOf",
+    label: "Clear Act 4 or survive arena round 25",
+    rules: [
+      { type: "campaignActs", count: 4, label: "Clear Act 4", unit: "acts" },
+      { type: "arenaRound", count: 25, label: "Survive arena round 25", unit: "rounds" },
+    ],
+  },
 };
+
+/** A gear tier's mark: MK II for tier 2, through MK V. */
+export const tierMark = (tier) => `MK ${["", "I", "II", "III", "IV", "V"][tier] ?? tier}`;
 
 export const BADGES = [
   { id: "none", name: "None", icon: null },
@@ -414,7 +455,7 @@ export const LOADOUT_CLASSES = [
     // Earned with the sidearms every agent starts with.
     unlock: { type: "weaponKills", weapons: [0, 6], count: 40, label: "Score 40 pistol kills", unit: "kills" },
     startWeapons: [0, 1],
-    bonuses: { fireRateMultiplier: 0.9 },
+    bonuses: { fireRateMultiplier: 1.1 },
   },
   {
     id: "enforcer",
@@ -510,34 +551,92 @@ export const VOICE_PROFILES = [
 ];
 
 /**
+ * The piece each look field starts on, and falls back to for an id the tables
+ * do not know. Named by id, never by position: a table's order is only how
+ * the creator lists it.
+ */
+export const DEFAULT_LOOK_IDS = Object.freeze({
+  color: "chrono_teal",
+  skinTone: "warm_light",
+  hair: "buzz",
+  hairColor: "natural",
+  expression: "default",
+  eye: "amber",
+  armor: "standard",
+  helmet: "standard",
+  visor: "standard",
+  shoulder: "none",
+  weaponSkin: "default",
+  loadout: "recruit",
+  backstory: "beat_cop",
+  voice: "rookie",
+  frame: "standard",
+  cape: "cape",
+  body: "masc",
+  camo: "none",
+});
+
+const ID_MAPS = new WeakMap();
+
+/** A table's entries by id, built once per table. */
+function idMap(table) {
+  let map = ID_MAPS.get(table);
+  if (!map) ID_MAPS.set(table, (map = new Map(table.map((e) => [e.id, e]))));
+  return map;
+}
+
+/**
+ * The entry a stored id names in a look table: the id itself, else the piece
+ * that replaced it (RETIRED_PIECES), else the field's default
+ * (DEFAULT_LOOK_IDS), so an id the tables do not know (a cut piece, a newer
+ * build's save) draws the default rather than nothing. Prefer
+ * `pieceOf(ch, field)` in src/core/character-fields.js; this is the same
+ * lookup for code that holds a table rather than a character.
+ * @param {object[]} table
+ * @param {string} field look field name, for the retired map and the default
+ * @param {unknown} id
+ */
+export function pieceIn(table, field, id) {
+  const map = idMap(table);
+  const found = typeof id === "string" ? map.get(id) ?? map.get(RETIRED_PIECES[field]?.[id]) : undefined;
+  if (found) return found;
+  const fallback = map.get(DEFAULT_LOOK_IDS[field]);
+  if (!fallback) throw new Error(`pieceIn: no default "${DEFAULT_LOOK_IDS[field]}" for look field "${field}"`);
+  return fallback;
+}
+
+/**
  * The starting look. `badge` and `accessories` are the shared singletons from
  * badges.js / accessories.js, so a spread of this record aliases them — build a
  * live, editable character with `cloneLook(DEFAULT_CHARACTER)` instead.
  */
 export const DEFAULT_CHARACTER = {
   name: "Agent",
-  colorIndex: 0,
-  skinToneIndex: 0,
-  hairIndex: 0,
-  eyeIndex: 0,
-  armorIndex: 0,
-  frameIndex: 0,
-  bodyIndex: 0,
-  camoIndex: 0,
-  capeIndex: 0,
-  helmetIndex: 0,
-  visorIndex: 0,
-  shoulderIndex: 0,
-  badgeIndex: 0,
-  weaponSkinIndex: 0,
+  color: DEFAULT_LOOK_IDS.color,
+  skinTone: DEFAULT_LOOK_IDS.skinTone,
+  hair: DEFAULT_LOOK_IDS.hair,
+  hairColor: DEFAULT_LOOK_IDS.hairColor,
+  expression: DEFAULT_LOOK_IDS.expression,
+  eye: DEFAULT_LOOK_IDS.eye,
+  armor: DEFAULT_LOOK_IDS.armor,
+  frame: DEFAULT_LOOK_IDS.frame,
+  body: DEFAULT_LOOK_IDS.body,
+  camo: DEFAULT_LOOK_IDS.camo,
+  cape: DEFAULT_LOOK_IDS.cape,
+  helmet: DEFAULT_LOOK_IDS.helmet,
+  visor: DEFAULT_LOOK_IDS.visor,
+  shoulder: DEFAULT_LOOK_IDS.shoulder,
+  weaponSkin: DEFAULT_LOOK_IDS.weaponSkin,
   // Per-weapon finishes and the player's own (src/data/weapon-skins.js).
   weaponFinishes: {},
   customSkins: [],
-  loadoutIndex: 0,
-  backstoryIndex: 0,
-  voiceIndex: 0,
+  loadout: DEFAULT_LOOK_IDS.loadout,
+  backstory: DEFAULT_LOOK_IDS.backstory,
+  voice: DEFAULT_LOOK_IDS.voice,
   badge: DEFAULT_BADGE,
   accessories: DEFAULT_ACCESSORIES,
+  // Colours picked for tintable accessories, by slot (src/data/accessories.js).
+  accessoryTints: {},
   armorVariant: 0,
 };
 
@@ -546,16 +645,40 @@ export const DEFAULT_CHARACTER = {
  * summed. Gear uses the same bonus vocabulary as origins (see BACKSTORIES).
  */
 export const GEAR_SLOTS = [
-  ["armorIndex", () => ARMOR_STYLES],
-  ["helmetIndex", () => HELMET_STYLES],
-  ["visorIndex", () => VISOR_STYLES],
-  ["shoulderIndex", () => SHOULDER_STYLES],
+  ["armor", () => ARMOR_STYLES],
+  ["frame", () => BODY_FRAMES],
+  ["helmet", () => HELMET_STYLES],
+  ["visor", () => VISOR_STYLES],
+  ["shoulder", () => SHOULDER_STYLES],
 ];
 
 /**
- * Total stat bonuses from everything a character is wearing. Additive, and
- * recomputed from the character each run — nothing about gear is persisted on
- * the player.
+ * Whether the pick in a gear slot counts toward the character's stats: only
+ * what the figure draws does, so a pick kept but not worn gives nothing.
+ * That rules out shoulders on a frame that hides them (its `hides`), a visor
+ * under a helmet that has none (takesVisor), helmet gear on a seat the helmet
+ * refuses (helmetSeats), and an eyes or face item the helmet has no room for
+ * or covers (helmetFaceSlots). A frame hiding stock art (the kit, collar,
+ * hips, cape or limb light) takes no pick off, so it takes no stat away.
+ * @param {object} character
+ * @param {string} key a GEAR_SLOTS field, or `acc.<slot>`
+ * @returns {boolean}
+ */
+export function gearPickCounts(character, key) {
+  const helmet = pieceIn(HELMET_STYLES, "helmet", character?.helmet).id;
+  if (key === "visor") return takesVisor(helmet);
+  if (key === "shoulder") return !frameHides(pieceIn(BODY_FRAMES, "frame", character?.frame).id, "shoulders");
+  if (!key.startsWith("acc.")) return true;
+  const slot = key.slice(4);
+  if (FACE_SLOTS.includes(slot)) return helmetFaceSlots(helmet)[slot];
+  const seat = slot === "helmet" ? accessoryItem(slot, character?.accessories?.[slot])?.seat : null;
+  return !seat || helmetSeats(helmet)[seat];
+}
+
+/**
+ * Total stat bonuses from everything a character is wearing and the figure
+ * draws (gearPickCounts). Additive, and recomputed from the character each
+ * run — the player records only what it last applied (gear-sync.js).
  * @param {object} character
  * @returns {Record<string, number>}
  */
@@ -566,11 +689,12 @@ export function gearBonuses(character) {
     if (!bonuses) return;
     for (const [stat, value] of Object.entries(bonuses)) out[stat] = (out[stat] || 0) + value;
   };
-  for (const [key, table] of GEAR_SLOTS) {
-    if (key === "visorIndex" && !takesVisor(character.helmetIndex)) continue;
-    add(table()[character[key] || 0]?.bonuses);
+  for (const [field, table] of GEAR_SLOTS) {
+    if (gearPickCounts(character, field)) add(pieceIn(table(), field, character[field]).bonuses);
   }
   const acc = character.accessories || {};
-  for (const { id } of ACCESSORY_SLOTS) add(accessoryItem(id, acc[id])?.bonuses);
+  for (const { id: slot } of ACCESSORY_SLOTS) {
+    if (gearPickCounts(character, `acc.${slot}`)) add(accessoryItem(slot, acc[slot])?.bonuses);
+  }
   return out;
 }

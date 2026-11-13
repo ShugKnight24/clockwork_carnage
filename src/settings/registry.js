@@ -48,7 +48,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   showScore: true,
   touchSensitivity: 2.0,
   readingSpeed: 1, // 0=Slow, 1=Normal: Slow holds each dialogue line longer (aria-comms readingTime)
-  aimAssist: 2, // touch only: 0=Off, 1=Low, 2=Standard (src/systems/aim-assist.js)
+  aimAssist: 2, // touch and pad: 0=Off, 1=Low, 2=Standard (src/systems/aim-assist.js)
   gyroAim: 0, // 0=Off, 1=While aiming, 2=Always (src/systems/gyro-aim.js)
   gyroSensitivity: 2.0, // view degrees per degree the phone turns
   haptics: true,
@@ -856,7 +856,7 @@ export const SETTINGS_REGISTRY = [
   {
     key: "aimAssist",
     label: "Aim Assist",
-    desc: "Aim slows over a target and leans toward it as you steer. Through the sights it leans to the head.",
+    desc: "Controller and touch: aim slows over a target and leans toward it as you steer. Through the sights it leans to the head.",
     type: "enum",
     values: ["Off", "Low", "Standard"],
     colors: ["#888888", "#00ffcc", "#00ffcc"],
@@ -864,7 +864,7 @@ export const SETTINGS_REGISTRY = [
     max: 2,
     step: 1,
     wrap: true,
-    platform: "mobile",
+    platform: "all",
     height: { compact: 30, normal: 44 },
   },
   {

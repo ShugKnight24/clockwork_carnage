@@ -74,8 +74,8 @@ describe("agent badges", () => {
     expect(fallenCount(["chest", "shoulder", "forearm", "helmet"])).toBe(4);
   });
 
-  it("a legacy-shaped record (badgeIndex only) still draws", () => {
-    const ch = { ...DEFAULT_CHARACTER, badgeIndex: 3 };
+  it("a record with no badge still draws", () => {
+    const ch = { ...DEFAULT_CHARACTER };
     delete ch.badge;
     expect(() => buildAgentParts(ch)).not.toThrow();
   });
@@ -96,7 +96,7 @@ describe("armour variants", () => {
   it("heavy wear adds scratches", () => {
     const i = ARMOR_STYLES.findIndex((x) => x.variant.wear >= 0.8);
     const ch = cloneLook(DEFAULT_CHARACTER);
-    ch.armorIndex = i;
+    ch.armor = ARMOR_STYLES[i].id;
     ch.armorVariant = 1;
     expect(buildAgentParts(ch).body).toContain('class="ag-wear"');
   });
@@ -104,7 +104,7 @@ describe("armour variants", () => {
   it("low wear draws no scratches", () => {
     const i = ARMOR_STYLES.findIndex((x) => x.variant.wear < 0.3);
     const ch = cloneLook(DEFAULT_CHARACTER);
-    ch.armorIndex = i;
+    ch.armor = ARMOR_STYLES[i].id;
     ch.armorVariant = 1;
     expect(buildAgentParts(ch).body).not.toContain('class="ag-wear"');
   });

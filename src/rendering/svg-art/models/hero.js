@@ -391,53 +391,6 @@ export function armoredLeg({ hip, kn, an }, s, kw = 1) {
 }
 
 /**
- * Armored fist hanging or swinging at the end of a forearm. Local frame: origin at
- * the wrist, +y toward the knuckles; the thumb sits on the body side (-s).
- */
-function gauntlet(wr, el, s, side = false) {
-  const i = -s;
-  const X = (x) => f(i * x);
-  // Side-on (a relaxed hang): narrower across, a touch longer, so the hand
-  // reads turned toward the thigh rather than punching at the camera.
-  const k = side ? "scale(.82 1.1)" : "scale(1.12)";
-  return (
-    `<g transform="translate(${pt(...wr)}) rotate(${f(angle(el, wr))}) ${k} translate(0 -1)">` +
-    shape("M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z", "#23272c", 1) +
-    `<path d="M-4,-0.4 C-4.7,2.4 -4.9,5.6 -4.4,8.2 L4.4,8.2 C4.9,5.6 4.7,2.4 4,-0.4 Z" fill="url(#cyl)"/>` +
-    shape("M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z", "url(#steel)", 0.5) +
-    `<path d="M-3.2,0.8 C-3.5,2.8 -3.5,4.8 -3.2,6.6 L3.2,6.6 C3.5,4.8 3.5,2.8 3.2,0.8 Z" fill="url(#cyl)"/>` +
-    line("M-2.4,1.6 C-2.6,3 -2.6,4.4 -2.4,5.6", "#eaf4ff", 0.45, 0.6) +
-    // curled finger group with a lit knuckle ridge
-    shape("M-4.5,7.2 C-4.8,9.4 -4.2,11.4 -2.7,12.3 C-0.9,13 0.9,13 2.7,12.3 C4.2,11.4 4.8,9.4 4.5,7.2 C1.5,6.6 -1.5,6.6 -4.5,7.2 Z", "#23272c", 1) +
-    line("M-2.2,7.5 L-2.3,12.3 M0,7.3 L0,12.9 M2.2,7.5 L2.3,12.3", INK, 0.45, 0.8) +
-    line("M-4,7.8 C-1.4,7.2 1.4,7.2 4,7.8", "#eaf4ff", 0.45, 0.55) +
-    // thumb folded across the front of the fingers
-    shape(`M${X(3.6)},1.8 C${X(6)},3.4 ${X(6.1)},7.4 ${X(4.4)},10.4 C${X(3.6)},11.3 ${X(2.2)},11.1 ${X(2)},10 C${X(2.9)},7.8 ${X(3.1)},5.4 ${X(2.3)},3.4 Z`, "#23272c", 0.8) +
-    line(`M${X(4.6)},3.6 C${X(5.2)},5.6 ${X(5)},7.6 ${X(4.2)},9.4`, "#eaf4ff", 0.4, 0.5) +
-    `</g>`
-  );
-}
-/** Open gauntlet with splayed fingers (reaching). */
-function openHand(wr, el) {
-  const fingers = [-24, -8, 8, 22]
-    .map((a, i) => {
-      const len = [5.6, 6.6, 6.4, 5.2][i];
-      const x = -2.4 + i * 1.6;
-      const r = (a * Math.PI) / 180;
-      return part([x, 5], [x + Math.sin(r) * len, 5 + Math.cos(r) * len], 1.9, 1.5, { fill: "url(#steelDk)", hi: 0.3, rim: 0, ink: 0.6 });
-    })
-    .join("");
-  return (
-    `<g transform="translate(${pt(...wr)}) rotate(${f(angle(el, wr))})">` +
-    fingers +
-    part([4, 2], [7.2, 6.4], 2.2, 1.7, { fill: "url(#steelDk)", hi: 0.3, rim: 0, ink: 0.6 }) +
-    shape("M-3.8,-1 C-4,1.6 -4.2,4.4 -3.6,6 C-1.6,7 1.8,7 3.8,6 C4.2,4.4 4,1.6 3.8,-1 Z", "url(#steel)", 0.9) +
-    shape("M-3.9,-1.8 L3.9,-1.8 L3.7,0.4 L-3.7,0.4 Z", "#0a0f16", 0.5) +
-    `</g>`
-  );
-}
-
-/**
  * Arm joints from a pose entry. Forward kinematics by default: `rot` swings the upper
  * arm away from the body (degrees off vertical) and `bend` flexes the forearm back
  * toward the midline; `upper` / `fore` set segment lengths (shorter = foreshortened).
@@ -471,16 +424,10 @@ export const VAMBRACE = { channel: [0.3, 0.82], seam: 1.1, device: 0.62, deviceH
 export function armoredArm(arm, s, chrono, kw = 1) {
   const W = (p) => (kw === 1 ? p : scaleProf(p, kw));
   const { sh, el, wr } = armJoints(arm, s);
-  const hand = arm.hand ?? "fist";
   const up = heading(sh, el);
   const top = polar(sh, up, -4);
   const sleeve = muscleGeom(top, el, W(UPPER_ARM.out), W(UPPER_ARM.in), s).d + muscleGeom(el, wr, W(FOREARM.out), W(FOREARM.in), s).d;
-  const upA = angle(sh, el);
   const foA = angle(el, wr);
-  let delta = foA - upA;
-  delta -= 360 * Math.round(delta / 360);
-  const copA = upA + delta / 2;
-  const foreLen = dist(el, wr);
   const devAt = lerp(el, wr, VAMBRACE.device);
   let body =
     `<path d="${sleeve}" fill="#000" opacity=".55" filter="url(#ao)" transform="translate(${f(-s * 1.8)},1.6)"/>` +
@@ -509,8 +456,6 @@ export function armoredArm(arm, s, chrono, kw = 1) {
       `<rect x="-2.2" y="-1.7" width="4.4" height="3.4" rx=".4" fill="#0b6f80"/></g>`;
     glow += `<g transform="translate(${pt(...devAt)}) rotate(${f(foA)})">${energy(`<rect x="-1.9" y="-1.4" width="3.8" height="2.8" rx=".3"/>`)}</g>`;
   }
-  if (hand === "fist") body += gauntlet(wr, el, s, arm.fist === "side");
-  if (hand === "open") body += openHand(wr, el);
   return { body, glow };
 }
 
@@ -550,7 +495,12 @@ function PEC(s) {
   );
 }
 
-export function torso({ pecs = true } = {}) {
+/**
+ * The armoured torso: under-suit, abdomen lames, chest plate, belt and hip plates.
+ * `pecs` moulds the chest plate; `hips: false` leaves off the hip plates (a
+ * frame that covers them).
+ */
+export function torso({ pecs = true, hips = true } = {}) {
   const chest =
     "M-15,-65 C-8,-66.8 8,-66.8 15,-65 C18.4,-60 18.8,-53.6 17.4,-48.4 C16,-43.8 13,-40.8 10.2,-39.4 " +
     "C6,-38.6 3,-37.7 0,-36.6 C-3,-37.7 -6,-38.6 -10.2,-39.4 C-13,-40.8 -16,-43.8 -17.4,-48.4 C-18.8,-53.6 -18.4,-60 -15,-65 Z";
@@ -607,15 +557,17 @@ export function torso({ pecs = true } = {}) {
     line("M-12.6,-25.2 L-8.1,-24.9 M12.6,-25.2 L8.1,-24.9", INK, 0.4, 0.8) +
     `<rect x="-3.7" y="-27.7" width="7.4" height="5.4" rx=".9" fill="url(#steel)" stroke="${INK}" stroke-width=".6"/>` +
     `<rect x="-2.1" y="-26.3" width="4.2" height="2.6" rx=".4" fill="#0b6f80"/>` +
-    // hip plates
-    shape("M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z", "url(#steelDk)", 0.8) +
-    shape(tasset, "url(#steel)") +
-    `<path d="${tasset}" fill="url(#cyl)"/>` +
-    shape(mirror(tasset), "url(#steel)") +
-    line("M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8", "#eaf4ff", 0.5, 0.6) +
-    line("M-14.4,-17 L-6.2,-16", INK, 0.45, 0.55) +
-    line("M14.4,-17 L6.2,-16", INK, 0.45, 0.55) +
-    line("M15.4,-20.6 C15.8,-17 15.9,-14 15.6,-11.4", RIM, 0.6, 0.85)
+    (hips
+      ? // hip plates
+        shape("M-4.6,-22 L4.6,-22 L3.6,-14 L0,-11.6 L-3.6,-14 Z", "url(#steelDk)", 0.8) +
+        shape(tasset, "url(#steel)") +
+        `<path d="${tasset}" fill="url(#cyl)"/>` +
+        shape(mirror(tasset), "url(#steel)") +
+        line("M-13.8,-21.4 C-11,-21.2 -8,-21 -5.6,-20.8", "#eaf4ff", 0.5, 0.6) +
+        line("M-14.4,-17 L-6.2,-16", INK, 0.45, 0.55) +
+        line("M14.4,-17 L6.2,-16", INK, 0.45, 0.55) +
+        line("M15.4,-20.6 C15.8,-17 15.9,-14 15.6,-11.4", RIM, 0.6, 0.85)
+      : "")
   );
 }
 
@@ -688,6 +640,7 @@ export function armorRig(pose, { cape = standingCape(), mid = "", front = "", da
     shoulderAO +
     pauldron(-1, tilt[0]) +
     pauldron(1, tilt[1]) +
+    pose.arms.map((arm, i) => handOf(arm, i === 0 ? -1 : 1).body).join("") +
     front +
     gorget() +
     headScale(helm.body);
@@ -702,8 +655,8 @@ export const STAND = {
   arms: [
     // Square and symmetric: arms hang straight down beside the body, the
     // upper arm just clearing the lats, the forearm continuing the same line.
-    { sh: [-20, -59], rot: 5, bend: 5, fist: "side" },
-    { sh: [20, -59], rot: 5, bend: 5, fist: "side" },
+    { sh: [-20, -59], rot: 5, bend: 5, hand: "rest" },
+    { sh: [20, -59], rot: 5, bend: 5, hand: "rest" },
   ],
   // Feet level and shoulder-width apart, legs straight under the hips.
   legs: [
@@ -723,8 +676,8 @@ export const rifleToWorld = ([x, y]) => {
 // Low ready: both elbows by the ribs, forearms foreshortened toward the weapon.
 export const ARMED = {
   arms: [
-    { sh: [-20, -59], el: [-25.4, -35], wr: rifleToWorld([10.2, 9.8]), hand: "none" },
-    { sh: [20, -59], el: [27.6, -33], wr: rifleToWorld([46.4, 0]), hand: "none" },
+    { sh: [-20, -59], el: [-25.4, -35], wr: rifleToWorld([10.2, 9.8]), hand: "trigger" },
+    { sh: [20, -59], el: [27.6, -33], wr: rifleToWorld([46.4, 0]), hand: "support" },
   ],
   legs: [
     { hip: [-7.5, -19], kn: [-12.4, 18.6], an: [-16.6, 50] },
@@ -732,40 +685,7 @@ export const ARMED = {
   ],
 };
 
-/**
- * Armored fist closed round a grip that runs along +y in rifle space, centred at
- * (gx, gy). `w` is the side the wrist sits on; fingers wrap to the other side and
- * the thumb hooks over the top. `index` lays the trigger finger along the guard.
- */
-function gripFist(gx, gy, w, index) {
-  const X = (x) => f(gx + w * x);
-  const Y = (y) => f(gy + y);
-  const P = (x, y) => `${X(x)},${Y(y)}`;
-  const fingers = [-3.3, -1.1, 1.1, 3.3]
-    .map(
-      (y, i) =>
-        shape(
-          `M${P(1.6, y - 1.15)} L${P(-2.8 + i * 0.3, y - 1.15)} C${P(-4.4 + i * 0.3, y - 1.1)} ${P(-4.4 + i * 0.3, y + 1.1)} ${P(-2.8 + i * 0.3, y + 1.15)} L${P(1.6, y + 1.15)} Z`,
-          "url(#steelDk)",
-          0.55,
-        ) + line(`M${P(-3.2 + i * 0.3, y - 0.6)} C${P(-3.8 + i * 0.3, y - 0.2)} ${P(-3.8 + i * 0.3, y + 0.3)} ${P(-3.4 + i * 0.3, y + 0.6)}`, "#eaf4ff", 0.35, 0.5),
-    )
-    .join("");
-  return (
-    // back of the hand on the wrist side
-    shape(`M${P(0.6, -5)} C${P(3.4, -5.8)} ${P(6.6, -4.8)} ${P(7, -2.4)} L${P(7, 2.8)} C${P(6.6, 5)} ${P(3.4, 5.8)} ${P(0.6, 4.8)} Z`, "url(#steel)", 0.9) +
-    line(`M${P(2.2, -3.8)} C${P(4, -4.2)} ${P(5.6, -3.6)} ${P(6, -2.2)}`, "#eaf4ff", 0.45, 0.6) +
-    line(`M${P(1.6, -4.4)} L${P(1.6, 4.4)}`, INK, 0.5, 0.6) +
-    fingers +
-    // thumb over the top of the grip
-    shape(`M${P(4.4, -4.4)} C${P(3, -7.4)} ${P(-1.4, -7.8)} ${P(-3.6, -6.2)} C${P(-3.8, -5.2)} ${P(-3, -4.8)} ${P(-2.2, -5)} C${P(-0.6, -5.6)} ${P(1.4, -5.2)} ${P(2.4, -3.8)} Z`, "url(#steel)", 0.7) +
-    (index
-      ? shape(`M${P(-1.6, -4.6)} L${P(-7.4, -4.4)} C${P(-8.6, -4.2)} ${P(-8.6, -2.6)} ${P(-7.4, -2.6)} L${P(-1.6, -2.6)} Z`, "url(#steelDk)", 0.6)
-      : "")
-  );
-}
-
-/** Chrono rifle in its own frame (butt at 0,0, muzzle along +x); hands drawn separately. */
+/** Chrono rifle in its own frame (butt at 0,0, muzzle along +x); the hands on it are the arms' own (handOf). */
 export function chronoRifle() {
   const tf = `transform="translate(${pt(...RIFLE_AT)}) rotate(${RIFLE_ROT})"`;
   const body =
@@ -799,8 +719,6 @@ export function chronoRifle() {
     shape("M88.4,1 L95.6,0.8 L95.6,2 L88.4,3 Z", "url(#steelDk)", 0.6) +
     line("M48,3.4 L80,2.6", RIM, 0.55, 0.7) +
     `</g>`;
-  // trigger hand on the pistol grip, support hand wrapped under the foregrip
-  const hands = `<g ${tf}>${gripFist(16.8, 9, -1, true)}${gripFist(43.8, 8.4, 1, false)}</g>`;
   const glow =
     `<g ${tf}>` +
     energy(
@@ -811,12 +729,383 @@ export function chronoRifle() {
     `<circle cx="95" cy="-0.2" r="4.6" fill="#00e5ff" filter="url(#bloom)" opacity=".8"/>` +
     `<circle cx="95" cy="-0.2" r="1.5" fill="#e8ffff"/>` +
     `</g>`;
-  return { body, hands, glow };
+  return { body, glow };
+}
+
+// ---------------------------------------------------------------------------
+// Hands
+// ---------------------------------------------------------------------------
+//
+// One hand, posed by its arm and dressed by a glove. The arm's pose entry
+// names the pose (`hand`); handGeom builds its geometry: the back of the
+// hand, the palm where it shows, four fingers and a thumb (each a digit along
+// its joints) and the wrist a glove's cuff sits on. A glove paints that
+// geometry in its own materials: STEEL_GLOVE below, and the wardrobe themes'
+// gloves (../wardrobe-themes/index.js says what a glove painter is given).
+// handOf puts the two together and places the hand on the figure.
+
+const unit = (a, b) => {
+  const l = dist(a, b) || 1;
+  return [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+};
+const off = (p, v, k) => [p[0] + v[0] * k, p[1] + v[1] * k];
+const centroid = (pts) => [0, 1].map((i) => pts.reduce((s, p) => s + p[i], 0) / pts.length);
+
+/** A closed smooth outline through points (Catmull-Rom, wrapping round). */
+function loop(pts) {
+  const n = pts.length;
+  let d = `M${pt(...pts[0])}`;
+  for (let i = 0; i < n; i++) {
+    const [p0, p1, p2, p3] = [pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n], pts[(i + 2) % n]];
+    d += `C${pt(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)} ${pt(p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)} ${pt(...p2)}`;
+  }
+  return d + "Z";
+}
+
+/** Unit normals of a chain of joints, each square to the chain's run through that joint. */
+function normals(J) {
+  const n = J.length;
+  return J.map((_, i) => {
+    const [x, y] = unit(J[Math.max(0, i - 1)], J[Math.min(n - 1, i + 1)]);
+    return [-y, x];
+  });
+}
+
+/**
+ * Outline of a chain of joints J, W[i] wide at each: both sides smoothed
+ * through the joints, the end rounded (`cap`) or cut square, and the base cut
+ * square where it tucks under the back of the hand or rounded (`base`) where
+ * it lies over it (the thumb's root).
+ */
+function chainOutline(J, W, cap = true, base = false) {
+  const N = normals(J);
+  const L = J.map((p, i) => off(p, N[i], W[i] / 2));
+  const R = J.map((p, i) => off(p, N[i], -W[i] / 2));
+  const n = J.length - 1;
+  const t = unit(J[n - 1], J[n]);
+  const k = W[n] * 0.66;
+  const end = cap ? `C${pt(...off(L[n], t, k))} ${pt(...off(R[n], t, k))} ${pt(...R[n])}` : `L${pt(...R[n])}`;
+  const t0 = unit(J[1], J[0]);
+  const k0 = W[0] * 0.66;
+  const root = base ? `C${pt(...off(R[0], t0, k0))} ${pt(...off(L[0], t0, k0))} ${pt(...L[0])}` : "";
+  return `M${pt(...L[0])}` + through(L) + end + through([...R].reverse()) + root + "Z";
+}
+
+/** A digit's joints and widths from `a` to `b` along it (lengths from its base), the ends interpolated. */
+function subChain(F, a, b) {
+  const J = [];
+  const W = [];
+  const push = (p, w) => {
+    if (J.length && dist(J[J.length - 1], p) < 0.05) return;
+    J.push(p);
+    W.push(w);
+  };
+  let s0 = 0;
+  for (let i = 1; i < F.J.length; i++) {
+    const s1 = s0 + dist(F.J[i - 1], F.J[i]);
+    const at = (s) => {
+      const t = clamp((s - s0) / (s1 - s0 || 1), 0, 1);
+      return [lerp(F.J[i - 1], F.J[i], t), F.W[i - 1] + (F.W[i] - F.W[i - 1]) * t];
+    };
+    if (!J.length && a < s1) push(...at(Math.max(a, s0)));
+    if (J.length) {
+      if (b <= s1) {
+        push(...at(b));
+        break;
+      }
+      push(F.J[i], F.W[i]);
+    }
+    s0 = s1;
+  }
+  return { J, W };
+}
+
+/** Where a digit is `s` along it: the point, its run and normal, and its width. */
+function digitAt(F, s) {
+  const { J, W } = subChain(F, Math.max(0, s - 0.05), Math.min(F.len, s + 0.05));
+  const t = unit(J[0], J[J.length - 1]);
+  return { p: lerp(J[0], J[J.length - 1], 0.5), t, n: [-t[1], t[0]], w: (W[0] + W[W.length - 1]) / 2 };
+}
+
+/**
+ * A digit (a finger or the thumb) along its joints J, W[i] wide at each, in a
+ * hand turned `rot` degrees on screen. `len` is its length, `knuckles` the
+ * lengths of its bending joints from its base, `lit` the side (1 or -1, the
+ * normals' sense) that faces the key light, up and to the left. `base`
+ * rounds its root, for a digit drawn over the back of the hand.
+ */
+function digitOf(J, W, rot, base = false) {
+  const S = J.map((_, i) => J.slice(1, i + 1).reduce((s, p, k) => s + dist(J[k], p), 0));
+  const [nx, ny] = normals(J)[Math.floor(J.length / 2)];
+  const r = (rot * Math.PI) / 180;
+  const lit = (nx * Math.cos(r) - ny * Math.sin(r)) * -0.6 + (nx * Math.sin(r) + ny * Math.cos(r)) * -0.8 >= 0 ? 1 : -1;
+  return { J, W, len: S[S.length - 1], knuckles: S.slice(1, -1), lit, d: chainOutline(J, W, true, base) };
+}
+
+/**
+ * What a glove painter draws a hand with (K, beside the rig's kit). Lengths
+ * along a digit run from its base, which sits under the back of the hand.
+ */
+export const HAND_KIT = Object.freeze({
+  /** A digit in one material: inked, its lit edge picked out, a crease across each knuckle. */
+  digit(F, fill, { ink = 0.6, hi = "#eaf4ff", hiOp = 0.45, crease = INK, creaseOp = 0.5 } = {}) {
+    let out = shape(F.d, fill, ink);
+    if (hi) out += line(HAND_KIT.along(F, F.len * 0.12, F.len * 0.8, 0.5), hi, f(Math.max(0.35, F.W[0] * 0.16)), hiOp);
+    if (crease) for (const s of F.knuckles) out += line(HAND_KIT.across(F, s, 0.3), crease, 0.4, creaseOp);
+    return out;
+  },
+  /** The digit's outline from `a` to `b` along it, `inset` in from its sides, the far end square or rounded (`cap`). */
+  span(F, a, b, { inset = 0, cap = false } = {}) {
+    const { J, W } = subChain(F, a, b);
+    return chainOutline(J, W.map((w) => Math.max(0.2, w - 2 * inset)), cap);
+  },
+  /** A line across the digit at `at` along it, `inset` in from its sides, bowed a little toward the tip. */
+  across(F, at, inset = 0) {
+    const { p, t, n, w } = digitAt(F, at);
+    const h = Math.max(0.1, w / 2 - inset);
+    return `M${pt(...off(p, n, h))}Q${pt(...off(p, t, w * 0.2))} ${pt(...off(p, n, -h))}`;
+  },
+  /** A line along the digit from `a` to `b`, `side` of the way from its spine to its lit edge (negative: the shaded edge). */
+  along(F, a, b, side = 0) {
+    const { J, W } = subChain(F, a, b);
+    const N = normals(J);
+    const P = J.map((p, i) => off(p, N[i], (F.lit * side * W[i]) / 2));
+    return `M${pt(...P[0])}` + through(P);
+  },
+});
+
+// Hand poses. Coordinates are the hand's own: on an arm (rest, open) the
+// origin is the wrist and +y runs down the hand, drawn for a hand whose thumb
+// is on -x and mirrored to put it on the body's side; on the rifle (trigger,
+// support) they are the rifle's frame (chronoRifle), so the hand closes on
+// its grips. Each digit is [joints, widths]; `back` outlines the back of the
+// hand, `knuckles` are the heads of its four knuckles (index first),
+// `toWrist` the way back from them and `wrist` the two sides of the wrist
+// (thumb side first); `plate`, where given, places the plate over the back of
+// the hand (else it spans from the wrist to the knuckles); `order` stacks the
+// parts, back to front.
+const HAND_POSES = {
+  // Hanging at the side, palm to the thigh, seen three-quarter from the
+  // front: the back of the hand turned out, the fingers curling in toward
+  // the thigh, each tip tucked a little further, the thumb forward over them.
+  rest: {
+    back: [[-2.7, -0.6], [-3.1, 2.2], [-3, 5], [-2.4, 6.6], [-0.7, 7], [1.1, 6.7], [2.6, 5.9], [3.5, 3.8], [3.3, 1.2], [2.9, -0.6]],
+    knuckles: [[-2.3, 6.4], [-0.6, 6.7], [1.1, 6.3], [2.6, 5.5]],
+    toWrist: [0, -1],
+    palm: [[-2.4, 1.6], [-4, 4.2], [-4.4, 8.4], [-4, 11.4], [-2.6, 11], [-2.4, 6.4]],
+    fingers: [
+      [[[-2.4, 5.4], [-2.7, 9], [-3.6, 11.1], [-4.5, 11.5]], [2.3, 2.1, 1.9, 1.7]],
+      [[[-0.6, 5.6], [-0.7, 9.8], [-1.8, 12.1], [-2.9, 12.5]], [2.3, 2.1, 1.9, 1.7]],
+      [[[1.1, 5.3], [1.2, 9.4], [0.3, 11.6], [-0.8, 12.1]], [2.2, 2, 1.8, 1.6]],
+      [[[2.7, 4.8], [2.9, 8.2], [2.2, 10.2], [1.2, 10.8]], [2, 1.8, 1.6, 1.4]],
+    ],
+    thumb: [[[-2, 1.2], [-3.5, 4.2], [-4.3, 7], [-3.9, 9.6]], [3.4, 2.7, 2.3, 2]],
+    wrist: [[-2.7, -0.6], [2.9, -0.6]],
+    order: ["palm", "fingers", "back", "thumb"],
+  },
+  // Lying open on the floor (the fallen agent's free hand): fingers out and
+  // a little apart, the thumb spread.
+  open: {
+    back: [[-3.2, -0.6], [-3.6, 2.6], [-3.3, 5.6], [-2.4, 7], [-0.6, 7.3], [1.2, 7], [2.8, 6.2], [3.8, 4], [3.6, 1.2], [3.2, -0.6]],
+    knuckles: [[-2.3, 6.5], [-0.6, 6.8], [1.1, 6.5], [2.6, 5.8]],
+    toWrist: [0, -1],
+    palm: null,
+    fingers: [
+      [[[-2.4, 5.6], [-3, 9.8], [-3.4, 12.6], [-3.6, 14.4]], [2.3, 2.1, 1.9, 1.7]],
+      [[[-0.7, 5.8], [-0.8, 10.4], [-0.9, 13.2], [-0.9, 15.2]], [2.3, 2.1, 1.9, 1.7]],
+      [[[1, 5.6], [1.4, 10], [1.7, 12.6], [1.9, 14.4]], [2.2, 2, 1.8, 1.6]],
+      [[[2.6, 5], [3.3, 8.8], [3.8, 11], [4.1, 12.6]], [2, 1.8, 1.6, 1.4]],
+    ],
+    thumb: [[[-2.8, 2], [-5, 4.6], [-6.6, 7], [-7.4, 8.8]], [3, 2.6, 2.3, 2]],
+    wrist: [[-3.2, -0.6], [3.2, -0.6]],
+    order: ["fingers", "thumb", "back"],
+  },
+  // Closed on the pistol grip, seen from the rifle's near side: the back of
+  // the hand over the grip, three fingers round its front, the trigger
+  // finger laid straight along the frame over the guard, the thumb over the
+  // top of the grip.
+  trigger: {
+    rifle: true,
+    back: [[8.9, 7.1], [12.4, 5.5], [15.4, 5], [17, 5.4], [17.6, 7.2], [17.6, 9.6], [17.2, 11.6], [16.4, 12.9], [14.4, 13.4], [11.5, 12.5], [10, 9.8]],
+    knuckles: [[16.6, 6.1], [16.9, 8.1], [16.7, 10.1], [16.1, 11.9]],
+    toWrist: [-1, 0.1],
+    palm: null,
+    fingers: [
+      [[[15.8, 6], [19.4, 5.2], [22.6, 4.7], [25, 4.8]], [2.4, 2.1, 1.9, 1.7]],
+      [[[15.8, 8.1], [20.4, 8.4], [21.5, 9.3]], [2.5, 2.4, 2.2]],
+      [[[15.6, 10.1], [20, 10.4], [20.9, 11.3]], [2.4, 2.3, 2.1]],
+      [[[15.2, 12], [19.2, 12.4], [19.9, 13.2]], [2.1, 2, 1.8]],
+    ],
+    thumb: [[[11.6, 7.4], [13.6, 5], [16.2, 3.8], [18.6, 3.7]], [3.2, 2.7, 2.3, 2]],
+    wrist: [[8.9, 7.1], [11.5, 12.5]],
+    order: ["thumb", "fingers", "back"],
+  },
+  // Round the foregrip from the muzzle side: the back of the hand edge-on
+  // in front of it, the fingers across its near face, their tips curling
+  // round its back edge, the thumb along the top.
+  support: {
+    rifle: true,
+    back: [[44.2, -0.2], [48.6, -0.4], [49.8, 3.4], [49.6, 7.4], [48.8, 11.2], [47.4, 12.8], [45.8, 12], [45.4, 6]],
+    knuckles: [[47.6, 4.8], [47.7, 7], [47.4, 9.2], [47, 11.2]],
+    toWrist: [1, 0],
+    // Edge-on, the back of the hand shows only between the wrist and the
+    // knuckles' edge: its plate sits there, not across the fingers.
+    plate: [[45.8, 0.6], [48.8, 0.4], [49.4, 3.6], [47.4, 4]],
+    palm: null,
+    fingers: [
+      [[[48, 4.8], [43.4, 5], [41.4, 5.8]], [2.4, 2.3, 2]],
+      [[[48, 7], [43, 7.2], [41, 8]], [2.4, 2.3, 2]],
+      [[[47.8, 9.2], [43.2, 9.4], [41.3, 10.2]], [2.3, 2.2, 1.9]],
+      [[[47.4, 11.2], [43.8, 11.4], [42.2, 12.1]], [2, 1.9, 1.7]],
+    ],
+    thumb: [[[46.4, 1.4], [44, 2.2], [41.6, 2.8], [40, 3.4]], [3, 2.6, 2.3, 2]],
+    wrist: [[44.2, -0.2], [48.6, -0.4]],
+    order: ["thumb", "fingers", "back"],
+  },
+};
+
+/** The names of the hand poses an arm's pose entry may give (`hand`), besides "none". */
+export const HAND_POSE_NAMES = Object.freeze(Object.keys(HAND_POSES));
+
+/** A world point in the rifle's frame (chronoRifle): rifleToWorld undone. */
+const toRifle = ([x, y]) => {
+  const r = (RIFLE_ROT * Math.PI) / 180;
+  const [dx, dy] = [x - RIFLE_AT[0], y - RIFLE_AT[1]];
+  return [dx * Math.cos(r) + dy * Math.sin(r), -dx * Math.sin(r) + dy * Math.cos(r)];
+};
+
+/**
+ * The geometry of an arm's hand, for a glove to paint (null for `hand:
+ * "none"`). `kw` is the build's arm thickness, which the hand follows;
+ * `shape` the glove's ({ width, finger }: a broader hand, thicker digits).
+ * The parts, in the hand's own coordinates (`tf` places them on the figure):
+ *   back    { d, panel, guard, ridge, knuckles, wrist, toWrist } — the back
+ *           of the hand's outline, a plate over its bones, a band across its
+ *           knuckles and the line along their crest, the knuckles (index
+ *           first), the wrist's two sides (thumb side first) and the way
+ *           from the knuckles to the wrist
+ *   palm    { d } where the palm shows, else null
+ *   fingers [index, middle, ring, little], thumb — digits (see digitOf)
+ *   wrist   the forearm's width at the wrist, which a cuff wraps
+ *   cuffTf  turns the hand's coordinates into the cuff's (origin the wrist,
+ *           +y down the forearm into the hand); "" where they are the same
+ *   out     the side (1 or -1, along the cuff's x) away from the body
+ *   pose, order (see HAND_POSES), rot (the hand's turn on screen, degrees)
+ */
+export function handGeom(arm, s, kw = 1, { width = 1, finger = 1 } = {}) {
+  const w = kw * width;
+  const fw = kw * finger;
+  const pose = arm.hand ?? "rest";
+  if (pose === "none") return null;
+  const P = HAND_POSES[pose];
+  if (!P) throw new Error(`handGeom: no hand pose "${pose}"`);
+  const { el, wr } = armJoints(arm, s);
+  let tf, cuffTf, rot, X, B;
+  if (P.rifle) {
+    // On the rifle, in its frame; the cuff still turns with the forearm.
+    const [e, r] = [toRifle(el), toRifle(wr)];
+    tf = `translate(${pt(...RIFLE_AT)}) rotate(${RIFLE_ROT})`;
+    cuffTf = `translate(${pt(...r)}) rotate(${f(angle(e, r))})`;
+    rot = RIFLE_ROT;
+    // The fingers stay closed on the grip; the back of the hand grows about its middle.
+    const c = centroid(P.back);
+    X = (p) => p;
+    B = (p) => [c[0] + (p[0] - c[0]) * w, c[1] + (p[1] - c[1]) * w];
+  } else {
+    rot = angle(el, wr);
+    tf = `translate(${pt(...wr)}) rotate(${f(rot)})`;
+    cuffTf = "";
+    // Drawn with the thumb on -x: mirrored for the left arm, so the thumb is always on the body's side.
+    X = (p) => [s * w * p[0], p[1]];
+    B = X;
+  }
+  const digit = ([J, W], base = false) => digitOf(J.map(X), W.map((v) => v * fw), rot, base);
+  const back = P.back.map(B);
+  const knuckles = P.knuckles.map(B);
+  const tw = P.rifle ? P.toWrist : [s * P.toWrist[0], P.toWrist[1]];
+  const [w0, w1] = P.wrist.map(B);
+  // A plate over the bones of the back of the hand, narrow at the wrist and
+  // spreading to the knuckles.
+  const plate = P.plate ? P.plate.map(B) : [lerp(w0, knuckles[0], 0.24), lerp(w1, knuckles[3], 0.24), lerp(w1, knuckles[3], 0.74), lerp(w0, knuckles[0], 0.74)];
+  const pc = centroid(plate);
+  // A band across the knuckles, reaching a little past the outer two.
+  const ends = [off(knuckles[0], unit(knuckles[1], knuckles[0]), 0.9), off(knuckles[3], unit(knuckles[2], knuckles[3]), 0.9)];
+  const ridge = [ends[0], ...knuckles.slice(1, 3), ends[1]].map((p) => off(p, tw, -0.5));
+  const guard = loop([...ridge, ...[...ridge].reverse().map((p) => off(p, tw, 1.9))]);
+  return {
+    pose,
+    order: P.order,
+    rot,
+    tf,
+    cuffTf,
+    out: P.rifle ? 1 : s,
+    wrist: (FOREARM.out[FOREARM.out.length - 1][1] + FOREARM.in[FOREARM.in.length - 1][1]) * kw,
+    back: {
+      d: loop(back),
+      panel: `M${plate.map((p) => pt(...lerp(pc, p, 0.82))).join(" L")} Z`,
+      guard,
+      ridge: `M${pt(...ridge[0])}` + through(ridge),
+      knuckles,
+      wrist: [w0, w1],
+      toWrist: tw,
+    },
+    palm: P.palm ? { d: loop(P.palm.map(X)) } : null,
+    fingers: P.fingers.map(digit),
+    // Where the thumb lies over the back of the hand its root shows, rounded.
+    thumb: digit(P.thumb, P.order.indexOf("thumb") > P.order.indexOf("back")),
+  };
+}
+
+/**
+ * The glove the suit is issued with: dark armoured fingers and palm, a steel
+ * plate over the back of the hand, a steel guard across the knuckles and a
+ * small plate over each finger below its first joint. Painted in the stock
+ * hero's colours, so the agent rig recolours it with the look's armour as it
+ * does the arm (the wardrobe's standard glove is this one).
+ */
+export const STEEL_GLOVE = Object.freeze({
+  paint(H, c, K) {
+    const DARK = "#23272c";
+    const plate = (F) => shape(K.span(F, Math.max(0.4, F.knuckles[0] - 2.4), F.knuckles[0] - 0.4, { inset: 0.3 }), "url(#steelDk)", 0.4);
+    return {
+      palm: H.palm ? shape(H.palm.d, "#121518", 0.6) : "",
+      back:
+        shape(H.back.d, DARK, 0.9) +
+        `<path d="${H.back.d}" fill="url(#cyl)"/>` +
+        shape(H.back.panel, "url(#steel)", 0.5) +
+        `<path d="${H.back.panel}" fill="url(#cyl)"/>` +
+        shape(H.back.guard, "url(#steel)", 0.6),
+      fingers: H.fingers.map((F) => K.digit(F, DARK) + plate(F)),
+      thumb: K.digit(H.thumb, DARK) + plate(H.thumb),
+    };
+  },
+});
+
+/**
+ * The hand at the end of an arm: posed by the arm's pose entry (`hand`:
+ * "rest", "open", "trigger", "support" or "none"), worn in `glove`, a glove's
+ * art `{ shape?: { width?, finger? }, paint(H, c, K) }` (see
+ * ../wardrobe-themes/index.js). The stock hero has no look (`c` null) and
+ * wears STEEL_GLOVE.
+ * @param {number} s the arm's side (-1 left, 1 right)
+ * @param {object} [K] the painter's kit (mix, uid, defs); HAND_KIT is added to it
+ * @param {number} [kw] the build's arm thickness, which the hand follows
+ * @returns {{ body: string, glow: string }} in rig coordinates
+ */
+export function handOf(arm, s, glove = STEEL_GLOVE, c = null, K = {}, kw = 1) {
+  const H = handGeom(arm, s, kw, glove.shape);
+  if (!H) return { body: "", glow: "" };
+  const p = glove.paint(H, c, { ...K, ...HAND_KIT });
+  const parts = { palm: p.palm || "", thumb: p.thumb, back: p.back, fingers: [...p.fingers].reverse().join("") };
+  const cuff = !p.cuff ? "" : H.cuffTf ? `<g transform="${H.cuffTf}">${p.cuff}</g>` : p.cuff;
+  // `ag-hand` marks each hand for the page and the tests, as the rig's other `ag-*` groups.
+  const body = `<g class="ag-hand" transform="${H.tf}">${H.order.map((key) => parts[key]).join("") + cuff}</g>`;
+  return { body, glow: p.glow ? `<g transform="${H.tf}">${p.glow}</g>` : "" };
 }
 
 function standingModel({ armed }) {
-  const rifle = armed ? chronoRifle() : { body: "", hands: "", glow: "" };
-  const rig = armorRig(armed ? ARMED : STAND, { mid: rifle.body, front: rifle.hands, chrono: !armed });
+  const rifle = armed ? chronoRifle() : { body: "", glow: "" };
+  const rig = armorRig(armed ? ARMED : STAND, { mid: rifle.body, chrono: !armed });
   return {
     box: armed ? [-48, -100, 132, 164] : [-48, -100, 96, 164],
     defs: ARMOR_DEFS,
@@ -841,7 +1130,7 @@ function standingModel({ armed }) {
 export const FALLEN = {
   arms: [
     { sh: [-20, -59], el: [3, -68], wr: [25, -62], hand: "open" },
-    { sh: [20, -59], el: [30, -38], wr: [31, -15] },
+    { sh: [20, -59], el: [30, -38], wr: [31, -15], hand: "rest" },
   ],
   legs: [
     { hip: [-7.5, -19], kn: [17, 3], an: [21, 33] },
@@ -925,8 +1214,10 @@ function fallenModel() {
   const headTf = `transform="translate(8,2)"`;
   const [upperArm, trappedArm] = [armoredArm(FALLEN.arms[0], -1, true), armoredArm(FALLEN.arms[1], 1, false)];
   const [upperLeg, lowerLeg] = [armoredLeg(FALLEN.legs[0], -1), armoredLeg(FALLEN.legs[1], 1)];
+  const [upperHand, trappedHand] = FALLEN.arms.map((arm, i) => handOf(arm, i === 0 ? -1 : 1).body);
   const body =
     trappedArm.body +
+    trappedHand +
     lowerLeg.body +
     upperLeg.body +
     torso() +
@@ -936,6 +1227,7 @@ function fallenModel() {
     `<g ${headTf}>${helm.body}</g>` +
     capeFlap() +
     upperArm.body +
+    upperHand +
     pauldron(-1, 14);
   const glow = lowerLeg.glow + upperLeg.glow + TORSO_GLOW + upperArm.glow;
   return {

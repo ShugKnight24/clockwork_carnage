@@ -6,14 +6,18 @@ import { isModernArt, isRealisticArt } from "../rendering/art-style.js";
  * @param {number} cx - center X
  * @param {number} cy - center Y
  * @param {number} type - crosshair index (0-5)
+ * @param {{hostile?: boolean}} [opts] an enemy the gun reaches is under it
+ *   (src/systems/reticle-target.js): the reticle draws HOSTILE red over a
+ *   dark edge, so it holds on a red or orange enemy. Reticles that are red
+ *   already close a ring round themselves instead; "None" stays.
  */
-export function drawCrosshair(ctx, cx, cy, type) {
+export function drawCrosshair(ctx, cx, cy, type, { hostile = false } = {}) {
   if (isRealisticArt()) {
-    drawCrosshairRealistic(ctx, cx, cy, type);
+    drawCrosshairRealistic(ctx, cx, cy, type, hostile);
     return;
   }
   if (isModernArt()) {
-    drawCrosshairModern(ctx, cx, cy, type);
+    drawCrosshairModern(ctx, cx, cy, type, hostile);
     return;
   }
   if (type === 0) {
@@ -26,9 +30,10 @@ export function drawCrosshair(ctx, cx, cy, type) {
     ctx.beginPath();
     ctx.arc(cx, cy, 6, 0, Math.PI * 2);
     ctx.fill();
+    if (hostile) hostileRing(ctx, cx, cy, 10);
   } else if (type === 1) {
     // Green Cross
-    ctx.strokeStyle = "rgba(0,255,200,0.7)";
+    ctx.strokeStyle = hostile ? HOSTILE : "rgba(0,255,200,0.7)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx - 10, cy);
@@ -39,8 +44,10 @@ export function drawCrosshair(ctx, cx, cy, type) {
     ctx.lineTo(cx, cy - 4);
     ctx.moveTo(cx, cy + 4);
     ctx.lineTo(cx, cy + 10);
+    if (hostile) hostileEdge(ctx, 1.5);
     ctx.stroke();
-    ctx.fillStyle = "rgba(0,255,200,0.9)";
+    if (hostile) hostileSquare(ctx, cx, cy, 2);
+    ctx.fillStyle = hostile ? HOSTILE : "rgba(0,255,200,0.9)";
     ctx.fillRect(cx - 1, cy - 1, 2, 2);
   } else if (type === 2) {
     // ACOG Scope
@@ -63,24 +70,65 @@ export function drawCrosshair(ctx, cx, cy, type) {
     ctx.beginPath();
     ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
     ctx.fill();
+    if (hostile) hostileRing(ctx, cx, cy, 23);
   } else if (type === 3) {
     // Circle
-    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.strokeStyle = hostile ? HOSTILE : "rgba(255,255,255,0.6)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+    if (hostile) hostileEdge(ctx, 1.5);
     ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    if (hostile) hostileSquare(ctx, cx, cy, 2);
+    ctx.fillStyle = hostile ? HOSTILE : "rgba(255,255,255,0.8)";
     ctx.fillRect(cx - 1, cy - 1, 2, 2);
   } else if (type === 4) {
     // Minimal
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.fillRect(cx - 1, cy - 1, 3, 3);
+    if (hostile) {
+      hostileSquare(ctx, cx + 0.5, cy + 0.5, 5);
+      ctx.fillStyle = HOSTILE;
+      ctx.fillRect(cx - 2, cy - 2, 5, 5);
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.fillRect(cx - 1, cy - 1, 3, 3);
+    }
   } else if (type === 5) {
     // None — very subtle center reference
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     ctx.fillRect(cx, cy, 1, 1);
   }
+}
+
+/** The reticle over an enemy the gun reaches. */
+export const HOSTILE = "#ff3b30";
+
+const HOSTILE_EDGE = "rgba(0,0,0,0.55)";
+
+/** Stroke the current path dark and wide, then leave the HOSTILE pen of `lw` loaded. */
+function hostileEdge(ctx, lw) {
+  ctx.strokeStyle = HOSTILE_EDGE;
+  ctx.lineWidth = lw + 2;
+  ctx.stroke();
+  ctx.strokeStyle = HOSTILE;
+  ctx.lineWidth = lw;
+}
+
+/** The dark edge under a `size` px square centred on (cx, cy). */
+function hostileSquare(ctx, cx, cy, size) {
+  ctx.fillStyle = HOSTILE_EDGE;
+  ctx.fillRect(cx - size / 2 - 1, cy - size / 2 - 1, size + 2, size + 2);
+}
+
+/** The hostile mark for a reticle that is red already: a ring round it. */
+function hostileRing(ctx, cx, cy, r) {
+  ctx.strokeStyle = HOSTILE_EDGE;
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = HOSTILE;
+  ctx.lineWidth = 1.75;
+  ctx.stroke();
 }
 
 const INK = "#04060b";
@@ -119,18 +167,23 @@ function ticks(ctx, cx, cy, inner, outer) {
 }
 
 /** Modern art style: same six reticles, inked so they read on any wall. */
-function drawCrosshairModern(ctx, cx, cy, type) {
+function drawCrosshairModern(ctx, cx, cy, type, hostile = false) {
   ctx.lineCap = "butt";
   if (type === 0) {
     inkDot(ctx, cx, cy, 3.5, "#ff2a4a");
     ctx.fillStyle = "rgba(255,220,225,0.95)";
     ctx.fillRect(cx - 0.75, cy - 0.75, 1.5, 1.5);
+    if (hostile) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+      inked(ctx, HOSTILE, 1.75);
+    }
   } else if (type === 1) {
     ticks(ctx, cx, cy, 4, 11);
-    inked(ctx, "#22e6ff", 1.75);
+    inked(ctx, hostile ? HOSTILE : "#22e6ff", 1.75);
     ctx.fillStyle = INK;
     ctx.fillRect(cx - 2, cy - 2, 4, 4);
-    ctx.fillStyle = "#b8f7ff";
+    ctx.fillStyle = hostile ? "#ffd2ce" : "#b8f7ff";
     ctx.fillRect(cx - 1, cy - 1, 2, 2);
   } else if (type === 2) {
     ctx.beginPath();
@@ -139,19 +192,26 @@ function drawCrosshairModern(ctx, cx, cy, type) {
     ticks(ctx, cx, cy, 6, 18);
     inked(ctx, "rgba(255,90,110,0.9)", 1.25);
     inkDot(ctx, cx, cy, 1.6, "#ff2a4a");
+    if (hostile) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 23, 0, Math.PI * 2);
+      inked(ctx, HOSTILE, 1.75);
+    }
   } else if (type === 3) {
     ctx.beginPath();
     ctx.arc(cx, cy, 12, 0, Math.PI * 2);
-    inked(ctx, "rgba(235,242,248,0.85)", 1.5);
+    inked(ctx, hostile ? HOSTILE : "rgba(235,242,248,0.85)", 1.5);
     ctx.fillStyle = INK;
     ctx.fillRect(cx - 2, cy - 2, 4, 4);
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = hostile ? HOSTILE : "#ffffff";
     ctx.fillRect(cx - 1, cy - 1, 2, 2);
   } else if (type === 4) {
+    // Hostile: a size up, so the red holds on a red hide.
+    const half = hostile ? 2.5 : 1.5;
     ctx.fillStyle = INK;
-    ctx.fillRect(cx - 2.5, cy - 2.5, 5, 5);
-    ctx.fillStyle = "rgba(255,255,255,0.95)";
-    ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+    ctx.fillRect(cx - half - 1, cy - half - 1, half * 2 + 2, half * 2 + 2);
+    ctx.fillStyle = hostile ? HOSTILE : "rgba(255,255,255,0.95)";
+    ctx.fillRect(cx - half, cy - half, half * 2, half * 2);
   } else if (type === 5) {
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     ctx.fillRect(cx, cy, 1, 1);
@@ -165,6 +225,8 @@ function drawCrosshairModern(ctx, cx, cy, type) {
 const R_LINE = "rgba(232,234,229,0.92)";
 const R_RED = "rgba(222,78,66,0.95)";
 const R_EDGE = "rgba(4,6,8,0.42)";
+// Under the hostile red: the faint edge lost it on a red-brown hide.
+const R_EDGE_HOT = "rgba(4,6,8,0.78)";
 
 /** Horizontal and vertical ticks from `inner` to `outer`, outline pass or line pass. */
 function realTicks(ctx, x, y, inner, outer, edge) {
@@ -183,10 +245,10 @@ function realTicks(ctx, x, y, inner, outer, edge) {
 }
 
 /** 1px ring with a 3px dark underlay. */
-function realRing(ctx, x, y, r, color) {
+function realRing(ctx, x, y, r, color, edge = R_EDGE) {
   ctx.beginPath();
   ctx.arc(x + 0.5, y + 0.5, r, 0, Math.PI * 2);
-  ctx.strokeStyle = R_EDGE;
+  ctx.strokeStyle = edge;
   ctx.lineWidth = 3;
   ctx.stroke();
   ctx.strokeStyle = color;
@@ -195,18 +257,20 @@ function realRing(ctx, x, y, r, color) {
 }
 
 /** Square centre dot of `size` px with a 1px dark border. */
-function realDot(ctx, x, y, size, color) {
+function realDot(ctx, x, y, size, color, edge = R_EDGE) {
   const o = (size - 1) >> 1;
-  ctx.fillStyle = R_EDGE;
+  ctx.fillStyle = edge;
   ctx.fillRect(x - o - 1, y - o - 1, size + 2, size + 2);
   ctx.fillStyle = color;
   ctx.fillRect(x - o, y - o, size, size);
 }
 
 /** Realistic art style: the same six reticles as thin optic markings. */
-function drawCrosshairRealistic(ctx, cx, cy, type) {
+function drawCrosshairRealistic(ctx, cx, cy, type, hostile = false) {
   const x = Math.round(cx);
   const y = Math.round(cy);
+  const line = hostile ? HOSTILE : R_LINE;
+  const edge = hostile ? R_EDGE_HOT : R_EDGE;
   if (type === 0) {
     // Red dot: a small emitter dot, no halo.
     ctx.beginPath();
@@ -217,12 +281,13 @@ function drawCrosshairRealistic(ctx, cx, cy, type) {
     ctx.arc(x + 0.5, y + 0.5, 1.7, 0, Math.PI * 2);
     ctx.fillStyle = R_RED;
     ctx.fill();
+    if (hostile) realRing(ctx, x, y, 7, HOSTILE, edge);
   } else if (type === 1) {
-    ctx.fillStyle = R_EDGE;
+    ctx.fillStyle = edge;
     realTicks(ctx, x, y, 4, 11, true);
-    ctx.fillStyle = R_LINE;
+    ctx.fillStyle = line;
     realTicks(ctx, x, y, 4, 11, false);
-    realDot(ctx, x, y, 1, R_LINE);
+    realDot(ctx, x, y, 1, line, edge);
   } else if (type === 2) {
     realRing(ctx, x, y, 18, R_RED);
     ctx.fillStyle = R_EDGE;
@@ -230,11 +295,12 @@ function drawCrosshairRealistic(ctx, cx, cy, type) {
     ctx.fillStyle = R_RED;
     realTicks(ctx, x, y, 6, 18, false);
     realDot(ctx, x, y, 2, R_RED);
+    if (hostile) realRing(ctx, x, y, 23, HOSTILE, edge);
   } else if (type === 3) {
-    realRing(ctx, x, y, 12, R_LINE);
-    realDot(ctx, x, y, 1, R_LINE);
+    realRing(ctx, x, y, 12, line, edge);
+    realDot(ctx, x, y, 1, line, edge);
   } else if (type === 4) {
-    realDot(ctx, x, y, 2, R_LINE);
+    realDot(ctx, x, y, hostile ? 4 : 2, line, edge);
   } else if (type === 5) {
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     ctx.fillRect(cx, cy, 1, 1);
@@ -249,12 +315,19 @@ function drawCrosshairRealistic(ctx, cx, cy, type) {
  * reads on a lit wall and in a dark corridor alike.
  * @param {number} alpha 0..1
  * @param {number} [scale] 1 at a 900 px tall view
+ * @param {{hostile?: boolean}} [opts] as drawCrosshair: the corners and the
+ *   reticle turn HOSTILE red over a darker edge (the legacy sight, red
+ *   already, rings its reticle instead).
  */
-export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1) {
+export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1, { hostile = false } = {}) {
   if (alpha <= 0.01) return;
   const k = Math.max(0.7, Math.min(2, scale));
-  const color = isModernArt() || isRealisticArt() ? "#7dfff0" : "#ff4a4a";
-  const glass = isModernArt() || isRealisticArt() ? "rgba(125,255,240," : "rgba(255,90,90,";
+  const tinted = isModernArt() || isRealisticArt();
+  const color = tinted ? "#7dfff0" : "#ff4a4a";
+  const mark = hostile && tinted ? HOSTILE : color;
+  // The red needs more dark under it than the cyan did to hold on an orange hide.
+  const under = hostile ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.6)";
+  const glass = tinted ? "rgba(125,255,240," : "rgba(255,90,90,";
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.lineCap = "round";
@@ -273,7 +346,7 @@ export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1) {
   ctx.lineWidth = 1;
   ctx.stroke();
   const c = 14 * k;
-  for (const [style, width] of [["rgba(0,0,0,0.55)", 3.5 * k], [color, 1.6 * k]]) {
+  for (const [style, width] of [[hostile ? under : "rgba(0,0,0,0.55)", 3.5 * k], [mark, 1.6 * k]]) {
     ctx.strokeStyle = style;
     ctx.lineWidth = width;
     ctx.beginPath();
@@ -295,7 +368,7 @@ export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1) {
   ctx.stroke();
   // The reticle: a ring, four ticks outside it, a dot.
   const ring = 9 * k;
-  for (const [style, width] of [["rgba(0,0,0,0.6)", 3.2 * k], [color, 1.4 * k]]) {
+  for (const [style, width] of [[under, 3.2 * k], [mark, 1.4 * k]]) {
     ctx.strokeStyle = style;
     ctx.lineWidth = width;
     ctx.beginPath();
@@ -306,30 +379,38 @@ export function drawAdsSight(ctx, cx, cy, alpha = 1, scale = 1) {
     }
     ctx.stroke();
   }
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  if (hostile && !tinted) hostileRing(ctx, cx, cy, ring + 12 * k);
+  ctx.fillStyle = under;
   ctx.beginPath();
   ctx.arc(cx, cy, 2.6 * k, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = color;
+  ctx.fillStyle = mark;
   ctx.beginPath();
   ctx.arc(cx, cy, 1.6 * k, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
+// Bracket pens, [style, width] for the edge then the colour, made once.
+const BRACKET_TINTED = [["rgba(0,0,0,0.45)", 3], ["rgba(125,255,240,0.75)", 1.4]];
+const BRACKET_LEGACY = [["rgba(0,0,0,0.45)", 3], ["rgba(255,90,90,0.75)", 1.4]];
+const BRACKET_HOSTILE_PENS = [["rgba(0,0,0,0.7)", 4], [HOSTILE, 2]];
+
 /**
  * The weapon's cone as four corner brackets round the reticle, `r` pixels
  * out: wide at the hip with a scattergun, closing in as the sights come up
  * (currentSpread in src/systems/aim.js). Every round lands inside it.
+ * `hostile` (as drawCrosshair) draws them HOSTILE red, bolder and darker-edged:
+ * the largest part of the reticle, so the clearest place to say it.
  */
-export function drawSpreadBrackets(ctx, cx, cy, r, alpha = 1) {
+export function drawSpreadBrackets(ctx, cx, cy, r, alpha = 1, hostile = false) {
   if (!(r >= 6) || alpha <= 0.01) return;
-  const color = isModernArt() || isRealisticArt() ? "rgba(125,255,240," : "rgba(255,90,90,";
+  const pens = isModernArt() || isRealisticArt() ? BRACKET_TINTED : BRACKET_LEGACY;
   const span = Math.min(0.42, 9 / r); // each bracket's half-angle, about 9 px of arc
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.lineCap = "round";
-  for (const [style, width] of [["rgba(0,0,0,0.45)", 3], [color + "0.75)", 1.4]]) {
+  for (const [style, width] of hostile ? BRACKET_HOSTILE_PENS : pens) {
     ctx.strokeStyle = style;
     ctx.lineWidth = width;
     ctx.beginPath();
@@ -348,9 +429,11 @@ export function drawSpreadBrackets(ctx, cx, cy, r, alpha = 1) {
  * blacked out, a dark rim and a glass tint, a duplex reticle with mil-dots,
  * and a glint that slides across the glass. `steady` (0…1, how settled the
  * breath is) draws as a ring under the lens that closes and brightens; a
- * shot (`kick`, 1 just fired … 0) flares the rim.
+ * shot (`kick`, 1 just fired … 0) flares the rim. `hostile` (as drawCrosshair)
+ * draws the fine wire and its mil-dots HOSTILE red and lights the aim point
+ * full.
  */
-export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, kick = 0 } = {}) {
+export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, kick = 0, hostile = false } = {}) {
   if (alpha <= 0.01) return;
   const comic = isModernArt() || isRealisticArt();
   const ink = comic ? "#0b1114" : "#000000";
@@ -360,10 +443,11 @@ export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, 
   const R = Math.min(w, h) * 0.44;
   ctx.save();
   ctx.globalAlpha *= alpha;
-  // The tube: black outside the lens.
+  // The tube: black outside the lens, past the edges, so a frame moved by a
+  // shot's kick (src/ui/hud-shared.js moveWithFrame) shows no gap.
   ctx.fillStyle = ink;
   ctx.beginPath();
-  ctx.rect(0, 0, w, h);
+  ctx.rect(-w, -h, w * 3, h * 3);
   ctx.arc(cx, cy, R, 0, Math.PI * 2, true);
   ctx.fill("evenodd");
   // The glass: a faint tint, and the rim darkening into the tube.
@@ -406,6 +490,7 @@ export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, 
   ctx.fillRect(cx + gap, cy - post / 2, R - gap, post);
   ctx.fillRect(cx - post / 2, cy + gap, post, R - gap);
   ctx.fillRect(cx - post / 2, cy - R, post, R - gap);
+  if (hostile) ctx.fillStyle = HOSTILE;
   ctx.fillRect(cx - gap, cy - 0.6, gap * 2, 1.2);
   ctx.fillRect(cx - 0.6, cy - gap, 1.2, gap * 2);
   // Mil-dots: across, and down for holdover.
@@ -422,10 +507,10 @@ export function drawScope(ctx, cx, cy, w, h, alpha = 1, { time = 0, steady = 0, 
   ctx.beginPath();
   ctx.arc(cx, cy, 3.4, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha *= 0.55 + 0.45 * steady;
-  ctx.fillStyle = hot;
+  if (!hostile) ctx.globalAlpha *= 0.55 + 0.45 * steady;
+  ctx.fillStyle = hostile ? HOSTILE : hot;
   ctx.beginPath();
-  ctx.arc(cx, cy, 2.1, 0, Math.PI * 2);
+  ctx.arc(cx, cy, hostile ? 2.6 : 2.1, 0, Math.PI * 2);
   ctx.fill();
   // Breath: an arc under the lens that closes as you hold still.
   ctx.globalAlpha = alpha * 0.85;

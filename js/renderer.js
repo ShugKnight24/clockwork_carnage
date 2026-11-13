@@ -181,6 +181,26 @@ export class Renderer {
     this.useWebGL = false;
     this._renderMode = renderMode;
     this._initGL(renderMode);
+    // How far the frame is moved this frame (src/rendering/render-pipeline.js
+    // frameOffset). The CPU floor and ceiling go down with putImageData,
+    // which ignores the context's transform, so they are placed by it here.
+    this.frameOffset = null;
+    // The sights' magnification this frame (aimZoom in src/systems/aim.js;
+    // render-pipeline.js sets it). The FOV narrows the view sideways; this
+    // scales it up and down by the same factor, so the zoom is drawn at full
+    // resolution in both axes (focalY).
+    this.viewZoom = 1;
+  }
+
+  /**
+   * Screen pixels a world unit spans vertically at depth 1: the canvas height,
+   * times the sights' magnification. Walls, the floor and ceiling, sprites,
+   * particles and _projectWorld all project heights with it. Sideways a unit
+   * spans `width / (2 · planeMul)`, and planeMul shrinks by the same
+   * magnification, so aimed in everything grows alike in both axes.
+   */
+  get focalY() {
+    return this.height * this.viewZoom;
   }
 
   /**
@@ -834,17 +854,18 @@ export class Renderer {
    * art, contact AO and emissive spill as the shader, at half vertical
    * resolution like the legacy loop.
    *
-   * A row `p` px from the horizon is floor `eye·h/p` away and ceiling
-   * `(CEILING_Z - eye)·h/p` away. With the eye halfway up the room those
-   * match, so one pass fills each floor row and the ceiling row mirrored
-   * across the horizon; from any other eye (standing is above halfway, a
-   * crouch below) they differ, and the ceiling gets a pass of its own.
+   * A row `p` px from the horizon is floor `eye·f/p` away and ceiling
+   * `(CEILING_Z - eye)·f/p` away, `f` the vertical focal length (focalY).
+   * With the eye halfway up the room those match, so one pass fills each
+   * floor row and the ceiling row mirrored across the horizon; from any other
+   * eye (standing is above halfway, a crouch below) they differ, and the
+   * ceiling gets a pass of its own.
    */
   _renderFloorCeilingModern(camX, camY, dirX, dirY, planeX, planeY, yShift, env, eye = 0.5) {
     const w = this.width;
     const h = this.height;
     const halfH = (h >> 1) + Math.round(yShift);
-    const projH = h >> 1;
+    const projH = (h >> 1) * this.viewZoom;
 
     if (
       !this._floorCeilBuffer ||
@@ -902,7 +923,19 @@ export class Renderer {
       for (; halfH - p >= 0; p += 2) this._deckRowModern(R, ceilK / p, -1, halfH - 1 - p);
     }
 
-    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+    this._putDeck();
+  }
+
+  /**
+   * Put the CPU floor/ceiling buffer down moved with the frame, as the walls
+   * and sprites drawn through the context's transform are. The shake's roll
+   * (up to ~0.012 rad in heavy shake, a few pixels at the screen edges) is not
+   * applied: putImageData cannot rotate, and the slide tilt never reached the
+   * deck either.
+   */
+  _putDeck() {
+    const off = this.frameOffset;
+    this.ctx.putImageData(this._floorCeilBuffer, Math.round(off?.x || 0), Math.round(off?.y || 0));
   }
 
   /**
@@ -1047,7 +1080,7 @@ export class Renderer {
       const z1 = zb[x];
       const nearX = z1 < z0 ? x : x - 1;
       const nearZ = z1 < z0 ? z1 : z0;
-      const lh = h / nearZ;
+      const lh = this.focalY / nearZ;
       const lw = lh > 900 ? 3 : lh > 260 ? 2 : 1;
       let t, b;
       if (Math.abs(z1 - z0) < 0.05 * nearZ + 0.02) {
@@ -1078,8 +1111,9 @@ export class Renderer {
     const h = this.height;
     const halfH = (h >> 1) + Math.round(yShift);
 
-    // Projection height for distance calc (unshifted for correct perspective)
-    const projH = h >> 1;
+    // Projection height for distance calc (unshifted for correct perspective),
+    // magnified with the sights (focalY).
+    const projH = (h >> 1) * this.viewZoom;
 
     if (
       !this._floorCeilBuffer ||
@@ -1089,7 +1123,6 @@ export class Renderer {
       this._floorCeilBuffer = this.ctx.createImageData(w, h);
       this._floorCeilBuf32 = new Uint32Array(this._floorCeilBuffer.data.buffer);
     }
-    const buf = this._floorCeilBuffer.data;
     // Uint32Array view for single 32-bit pixel writes (4× fewer stores)
     const buf32 = this._floorCeilBuf32;
     const floorTex = this._floorTexPixels;
@@ -1160,7 +1193,7 @@ export class Renderer {
       for (let x = 0; x < w; x++) buf32[hi + x] = fogPacked;
     }
 
-    this.ctx.putImageData(this._floorCeilBuffer, 0, 0);
+    this._putDeck();
   }
 
   /**
@@ -1316,6 +1349,7 @@ export class Renderer {
           menv,
           this.lights || [],
           eye,
+          this.viewZoom,
         );
         if (drawn) {
           // Walls join the floor in the GL canvas when they can (see
@@ -1367,6 +1401,7 @@ export class Renderer {
           actFog, fogMax,
           this.lights || [],
           eye,
+          this.viewZoom,
         );
         // Composite WebGL result onto Canvas2D
         this.glRenderer.blitTo(ctx);
@@ -1403,6 +1438,8 @@ export class Renderer {
     const planeX = -dirY * planeMul;
     const planeY = dirX * planeMul;
     const horizon = h / 2 + yShift;
+    // Vertical focal length: the canvas height, magnified with the sights.
+    const fh = this.focalY;
     const hits = this._colHits;
     this._ensureCoverBufs(w);
     const occN = this._occN;
@@ -1417,7 +1454,7 @@ export class Renderer {
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
 
-      castColumn(map, camX, camY, rayDirX, rayDirY, h, horizon, hits, eye);
+      castColumn(map, camX, camY, rayDirX, rayDirY, fh, horizon, hits, eye);
       const stepX = hits.stepX;
       const stepY = hits.stepY;
       const nHits = hits.n;
@@ -1441,7 +1478,7 @@ export class Renderer {
         // goes on up to the ceiling, `CEILING_Z - eye` above: a tall-art type
         // (glass onto a view) stretches its art over the whole height, the
         // rest keep their art's scale and show the upper band over it.
-        const lineHeight = (h / perpWallDist) | 0;
+        const lineHeight = (fh / perpWallDist) | 0;
         const fullDrawStart = (horizon - lineHeight * (1 - eye)) | 0;
         const fullDrawEnd = (horizon + lineHeight * eye) | 0;
         const full = heightFrac >= 1;
@@ -1590,7 +1627,7 @@ export class Renderer {
 
             // Glass onto the city: the view behind the pane goes down first.
             if (CITY_GLASS[wallType] && menv.cityView) {
-              drawCityView(glWalls || ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
+              drawCityView(glWalls || ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, fh, eye);
             }
 
             if (glWalls) {
@@ -1701,7 +1738,7 @@ export class Renderer {
             const srcY = Math.max(0, texPos);
             const srcH = Math.min(tex.height, (drawEnd - drawStart) * step);
             if (CITY_GLASS[wallType] && glazeLegacyGlass(art, wallType)) {
-              drawCityView(ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, h, eye);
+              drawCityView(ctx, x, drawStart, drawEnd, side, stepX, stepY, rayDirX, rayDirY, camX, camY, perpWallDist, horizon, fh, eye);
             }
             if (srcH > 0 && drawEnd > drawStart) {
               ctx.drawImage(
@@ -1800,7 +1837,7 @@ export class Renderer {
         // leaves the cell. That far edge is the silhouette behind it.
         let top = faceTop;
         if (heightFrac < eye) {
-          let capTop = (horizon + ((eye - heightFrac) * h) / hits.exit[hi]) | 0;
+          let capTop = (horizon + ((eye - heightFrac) * fh) / hits.exit[hi]) | 0;
           if (capTop < 0) capTop = 0;
           const capBot = faceTop < openBot ? faceTop : openBot;
           if (capBot > capTop) {
@@ -1831,12 +1868,15 @@ export class Renderer {
     }
     if (menv && !real) this._drawModernInk(w, h);
 
-    // Set FOV scale for prop minimum-size floors
-    setFovScale(fov);
+    // Set FOV scale for prop minimum-size floors: from the hip view's FOV,
+    // magnified with the sights like everything else.
+    setFovScale((Math.atan(planeMul * this.viewZoom) * 360) / Math.PI, this.viewZoom);
 
     // Sprites project around h/2; shift them with the walls and floor so props
     // and enemies stay planted on the ground while crouching or sliding.
-    const spriteShift = yShift | 0;
+    // Rounded as the floor's horizon row is (_renderFloorCeiling), so feet
+    // meet the deck on a fractional shift.
+    const spriteShift = Math.round(yShift);
     if (spriteShift) {
       ctx.save();
       ctx.translate(0, spriteShift);
@@ -1855,6 +1895,28 @@ export class Renderer {
     if (spriteShift) ctx.restore();
   }
 
+  /**
+   * renderSprites for a pass drawn after the scene (Chronos ghosts, an
+   * arrival stepping out): moved by the scene's shift as renderScene moves
+   * its own, with `_spriteShift` set so the screen's edges are measured in
+   * the same moved space. Without it, a view shifted down (looking down, or
+   * a scope magnifying about a reticle above the HUD bar) cut those sprites
+   * off that many rows below the top of the screen.
+   */
+  renderSpritesShifted(player, entities, time, planeMul, yShift, drawDistance) {
+    const ctx = this.ctx;
+    const shift = Math.round(yShift);
+    ctx.save();
+    if (shift) ctx.translate(0, shift);
+    this._spriteShift = shift;
+    try {
+      this.renderSprites(player, entities, time, planeMul, undefined, undefined, drawDistance);
+    } finally {
+      this._spriteShift = 0;
+      ctx.restore();
+    }
+  }
+
   renderParticles(player, particles, time, planeMul = 0.66, camX, camY, yShift = 0) {
     if (!particles || particles.length === 0) return;
     const ctx = this.ctx;
@@ -1869,8 +1931,9 @@ export class Renderer {
     // Share the scene's vertical shift, or motes hang in the air while the
     // world drops under a crouch.
     const halfH = h / 2 + yShift;
+    const fh = this.focalY;
     const real = isRealisticArt();
-    if (real) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
+    if (real) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, fh);
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
@@ -1893,9 +1956,9 @@ export class Renderer {
       )
         continue;
 
-      const size = Math.abs((h / transformY) * (p.size || 0.05)) | 0;
+      const size = Math.abs((fh / transformY) * (p.size || 0.05)) | 0;
       // p.z is height offset (0 = floor level, negative = up)
-      const screenY = (halfH + ((p.z || 0) - this._eyeDrop) * (h / transformY)) | 0;
+      const screenY = (halfH + ((p.z || 0) - this._eyeDrop) * (fh / transformY)) | 0;
       // Low cover in front hides motes below its top edge.
       if (screenY - yShift >= this.coverClipY(screenX, transformY)) continue;
       if (real && drawRealisticParticle(ctx, p, screenX, screenY, size, transformY)) continue;
@@ -1933,7 +1996,7 @@ export class Renderer {
     const ty = invDet * (-planeY * sx + planeX * sy);
     if (ty <= 0.1) return null;
     const screenX = (w / 2) * (1 + tx / ty);
-    const screenY = h / 2 + yShift + (zHeight - this._eyeDrop) * (h / ty);
+    const screenY = h / 2 + yShift + (zHeight - this._eyeDrop) * (this.focalY / ty);
     // baseY: the same point without the scene's vertical shift, the space the
     // low-cover records (coverClipY) are kept in.
     return { x: screenX, y: screenY, baseY: screenY - yShift, depth: ty };
@@ -1962,7 +2025,7 @@ export class Renderer {
       // Outer glow
       ctx.globalAlpha = 0.35 * t;
       ctx.strokeStyle = `rgba(${tr.color},1)`;
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 5 * this.viewZoom;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -1970,7 +2033,7 @@ export class Renderer {
       // Hot core
       ctx.globalAlpha = t;
       ctx.strokeStyle = `rgba(255,255,240,1)`;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.5 * this.viewZoom;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -1984,6 +2047,7 @@ export class Renderer {
     const ctx = this.ctx;
     const w = this.width;
     const h = this.height;
+    const fh = this.focalY;
     const dirX = Math.cos(player.angle);
     const dirY = Math.sin(player.angle);
     const planeX = -dirY * planeMul;
@@ -2004,7 +2068,7 @@ export class Renderer {
     this._facingCam.y = cy;
     // The stopped people's echo steps through the same camera (frozen-look.js).
     this._spritePlaneMul = planeMul;
-    if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, h);
+    if (isRealisticArt()) setFxCamera(dirX, dirY, planeX, planeY, cx, cy, w, fh);
     const maxDistSq = drawDistance ? drawDistance * drawDistance : Infinity;
 
     // Sort entities by distance from camera (pre-allocated arrays to avoid per-frame GC)
@@ -2038,14 +2102,14 @@ export class Renderer {
       if (transformY <= 0.1) continue;
 
       const spriteScreenX = ((w / 2) * (1 + transformX / transformY)) | 0;
-      const spriteHeight = (Math.abs(h / transformY)) | 0;
+      const spriteHeight = (Math.abs(fh / transformY)) | 0;
       const spriteWidth = spriteHeight;
 
       // Sprites are drawn about the standing eye line (h/2). From a lower eye
       // everything stands higher in the view, nearer things more so: the
       // whole sprite is drawn `eyeLift` px up, and its cuts by low cover are
       // measured in that lifted space (_clipBias).
-      const eyeLift = (this._eyeDrop * h) / transformY;
+      const eyeLift = (this._eyeDrop * fh) / transformY;
       this._clipBias = eyeLift;
       // The screen's edges, in the same space: renderScene draws this pass
       // moved by the view's shift (_spriteShift), so looking down by N px
@@ -2134,13 +2198,14 @@ export class Renderer {
    * around its feet in every art style: a fan the way its shield faces, its
    * two edges a little brighter, since past them your shots land. Brighter
    * while you stand in it (it is blocking you), dimmer once you are round it.
-   * Points project as the sprite's feet do (h/2 + h/2ty, lifted by the eye
+   * Points project as the sprite's feet do (h/2 + focalY/2ty, lifted by the eye
    * drop); the caller has already lifted the canvas by the enemy's own.
    */
   _drawShieldArc(ctx, e, cx, cy, dirX, dirY, planeX, planeY, depth, eyeLift, time) {
     if (e.dissolving || e.state === "dead" || e._phased || e._arriving || e.renderAlpha < 1) return;
     const w = this.width;
     const h = this.height;
+    const fh = this.focalY;
     const invDet = 1.0 / (planeX * dirY - dirX * planeY);
     const R = 0.95;
     const N = 12;
@@ -2158,7 +2223,7 @@ export class Renderer {
       const ty = invDet * (-planeY * sx + planeX * sy);
       if (ty <= 0.2) return;
       const px = (w / 2) * (1 + tx / ty);
-      const py = h / 2 + h / (2 * ty) - (this._eyeDrop * h) / ty + eyeLift;
+      const py = h / 2 + fh / (2 * ty) - (this._eyeDrop * fh) / ty + eyeLift;
       pts[i * 2] = px;
       pts[i * 2 + 1] = py;
       if (px < x0) x0 = px;
@@ -2190,7 +2255,7 @@ export class Renderer {
     ctx.moveTo(pts[0], pts[1]);
     for (let i = 1; i <= N; i++) ctx.lineTo(pts[i * 2], pts[i * 2 + 1]);
     ctx.strokeStyle = `rgba(150,205,255,${(0.55 * k).toFixed(3)})`;
-    ctx.lineWidth = Math.max(1, 3 / depth);
+    ctx.lineWidth = Math.max(1, (3 * this.viewZoom) / depth);
     ctx.stroke();
     // Its edges: where the flank starts.
     ctx.beginPath();
@@ -2199,7 +2264,7 @@ export class Renderer {
     ctx.moveTo(cxp, cyp);
     ctx.lineTo(pts[N * 2], pts[N * 2 + 1]);
     ctx.strokeStyle = `rgba(190,225,255,${(0.6 * k).toFixed(3)})`;
-    ctx.lineWidth = Math.max(1, 4 / depth);
+    ctx.lineWidth = Math.max(1, (4 * this.viewZoom) / depth);
     ctx.stroke();
     ctx.restore();
   }
@@ -2217,7 +2282,6 @@ export class Renderer {
     dist,
     time,
   ) {
-    const w = this.width;
     const h = this.height;
     const centerY = (h / 2) | 0;
 
@@ -2433,9 +2497,8 @@ export class Renderer {
     ctx.globalAlpha = alpha;
 
     // Death dissolve effect — fade out + scanline noise
-    let dissolveAlpha = 1;
     if (enemy.dissolving && enemy.dissolveTimer != null) {
-      dissolveAlpha = Math.max(0, enemy.dissolveTimer / 0.5);
+      const dissolveAlpha = Math.max(0, enemy.dissolveTimer / 0.5);
       ctx.globalAlpha = alpha * dissolveAlpha;
       // Shift hue toward white during dissolve
       if (dissolveAlpha < 0.5) {

@@ -203,3 +203,198 @@ describe("certification day", () => {
     expect(gradeTrial(combat, combat.par + RELOAD_CREDIT, 0.7, { reloads: 1 })).toBe("B");
   });
 });
+
+// The rig holds each bar at its part's reading only while that part runs.
+describe("the calibration's stamina bar", () => {
+  async function calibrating() {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const { RIG_AT } = await import("../../src/data/levels/rooms/rnd.js");
+    const player = { x: RIG_AT.x, y: RIG_AT.y, angle: 0, stamina: 0, maxStamina: 100, chronoEnergy: 0, maxChronoEnergy: 100 };
+    const game = { player, entities: [], keys: {}, deltaTime: 1 / 60, audio: { stopSpeech() {}, playSound() {} } };
+    const t = new TutorialSystem(game);
+    t.step = PROLOGUE_STEPS.findIndex((s) => s.id === "calibrate");
+    t.c = {};
+    for (const m of ["toStation", "place", "say", "flicker"]) t[m] = () => {};
+    t.logic.enter(t, game);
+    return { t, game, player, RIG_AT };
+  }
+
+  it("fills with the frame, and is the cadet's own once the frame is done", async () => {
+    const { t, game, player, RIG_AT } = await calibrating();
+    for (let i = 0; i < 60; i++) t.logic.update(t, game);
+    expect(player.stamina).toBeGreaterThan(30);
+    expect(player.stamina).toBeLessThan(70);
+    for (let i = 0; i < 90; i++) t.logic.update(t, game);
+    expect(t.c.part).toBe("eyes");
+    expect(player.stamina).toBe(100);
+
+    // Through the anchor, off the pad: what is spent stays spent.
+    t.c.part = "anchor";
+    player.x = RIG_AT.x + 3;
+    player.stamina = 12;
+    for (let i = 0; i < 30; i++) t.logic.update(t, game);
+    expect(player.stamina).toBe(12);
+  });
+});
+
+// The Supervisor's set routes are straight legs: each crosses only open floor
+// or a door the prologue opens before he walks it.
+describe("the Supervisor's routes", () => {
+  const OPENED = { enter: ["door1"], ahead: ["door1", "door2"] };
+
+  it("walk through no wall and no shut door", async () => {
+    const { TUTORIAL_MAP } = await import("../../src/data/levels/tutorial.js");
+    const block = systemSource.slice(systemSource.indexOf("const SUP_ROUTES"), systemSource.indexOf("const SUP_AT_LIFT"));
+    for (const [, name, legs] of block.matchAll(/^ {2}(\w+): (\[\[.*\]\]),$/gm)) {
+      if (name === "leave") continue; // into Lift B, whose doors open for him
+      const open = new Set((OPENED[name] || []).flatMap((d) => TUTORIAL_MAP.doors[d].map((c) => `${c.x},${c.y}`)));
+      const pts = JSON.parse(legs);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [[ax, ay], [bx, by]] = [pts[i], pts[i + 1]];
+        for (let s = 0; s <= 100; s++) {
+          const x = Math.floor(ax + ((bx - ax) * s) / 100);
+          const y = Math.floor(ay + ((by - ay) * s) / 100);
+          if (TUTORIAL_MAP.grid[y][x] !== 0) expect(open.has(`${x},${y}`), `${name} at (${x}, ${y})`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("opens the range door as he goes on ahead to it", () => {
+    const suitUp = systemSource.slice(systemSource.indexOf("  suitUp: {"), systemSource.indexOf("  boot: {"));
+    expect(suitUp.indexOf('openDoors(g, "door2")')).toBeGreaterThan(-1);
+    expect(suitUp.indexOf('openDoors(g, "door2")')).toBeLessThan(suitUp.indexOf('supWalk(g, "ahead")'));
+  });
+});
+
+describe("the cover drill", () => {
+  async function drilling() {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const player = { x: 43, y: 10.4, angle: 0, cover: null, isAiming: false };
+    const game = { player, entities: [], keys: {}, deltaTime: 1 / 60, time: 0, shotsFired: 0, coverStats: { tookCover: 0, peekKills: 0, blindFireKills: 0, coverDashes: 0, shotsBlocked: 0 }, audio: {} };
+    const t = new TutorialSystem(game);
+    t.step = PROLOGUE_STEPS.findIndex((s) => s.id === "coverDrill");
+    t.c = {};
+    for (const m of ["raiseCover", "say", "drillVolley"]) t[m] = () => {};
+    t._cover = [[0, 0], [0, 0], [0, 0], [0, 0]];
+    t.logic.enter(t, game);
+    const targets = () => game.entities.filter((e) => e._tutTag === "coverDrill" && e.health > 0).map((e) => `${e.x},${e.y}`);
+    const downAll = () => game.entities.forEach((e) => { if (e._tutTag === "coverDrill") e.health = 0; });
+    return { t, game, player, targets, downAll };
+  }
+
+  it("counts blind fire and peek kills in either order", async () => {
+    const { t, game, player } = await drilling();
+    // Hip shots before cover count for nothing.
+    game.shotsFired = 2;
+    t.logic.update(t, game);
+    game.coverStats.tookCover = 1;
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("fight");
+    expect(game.entities.some((e) => e._tutTag === "coverBlind" && e.health > 0)).toBe(true);
+    // Blind fire first, with no peek kills yet: it counts.
+    player.cover = {};
+    game.shotsFired = 5;
+    t.logic.update(t, game);
+    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 3/4");
+    game.shotsFired = 6;
+    t.logic.update(t, game);
+    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 4/4");
+    expect(t.c.stage).toBe("fight");
+    // Its target goes once it's done; the peek pair stays up.
+    expect(game.entities.some((e) => e._tutTag === "coverBlind" && e.health > 0)).toBe(false);
+    expect(game.entities.some((e) => e._tutTag === "coverDrill" && e.health > 0)).toBe(true);
+    game.coverStats.peekKills = 2;
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("dash");
+  });
+
+  it("takes a kill from cover with the sights down as blind fire", async () => {
+    const { t, game, player } = await drilling();
+    game.coverStats.peekKills = 2;
+    game.coverStats.tookCover = 1;
+    t.logic.update(t, game);
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("fight");
+    Object.assign(player, { cover: {}, weapons: [0], currentWeapon: 0 });
+    t.noteKill({});
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("dash");
+  });
+
+  it("stands its targets up somewhere new each time they go down", async () => {
+    const { t, game, targets, downAll } = await drilling();
+    game.coverStats.tookCover = 1;
+    t.logic.update(t, game);
+    const seen = [targets().join(" ")];
+    for (let i = 0; i < 3; i++) {
+      downAll();
+      t.logic.update(t, game);
+      seen.push(targets().join(" "));
+    }
+    for (let i = 1; i < seen.length; i++) expect(seen[i], `respawn ${i}`).not.toBe(seen[i - 1]);
+  });
+
+  it("stands them on open floor in sight of the first block", async () => {
+    const { TUTORIAL_MAP } = await import("../../src/data/levels/tutorial.js");
+    const { DRILL_COVER } = await import("../../src/data/levels/rooms/arena.js");
+    const block = systemSource.slice(systemSource.indexOf("const DRILL_TARGETS"), systemSource.indexOf("const DRILL_VOLLEY"));
+    const spots = [...block.matchAll(/\[(\d+\.5), (\d+\.5)\]/g)].map((m) => [+m[1], +m[2]]);
+    expect(spots.length).toBeGreaterThanOrEqual(6);
+    const from = DRILL_COVER.first;
+    for (const [x, y] of spots) {
+      expect(TUTORIAL_MAP.grid[Math.floor(y)][Math.floor(x)], `(${x}, ${y})`).toBe(0);
+      for (let s = 0; s <= 200; s++) {
+        const cx = Math.floor(from.x + ((x - from.x) * s) / 200);
+        const cy = Math.floor(from.y + ((y - from.y) * s) / 200);
+        expect(TUTORIAL_MAP.grid[cy][cx], `(${x}, ${y}) seen through (${cx}, ${cy})`).toBe(0);
+      }
+    }
+  });
+});
+
+// Timers are set on the step's clock, which starts again at every step.
+describe("the prologue's timers across a step change", () => {
+  it("still fire their delay after they were set, not on the old step's clock", async () => {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const t = new TutorialSystem({ player: { x: 0, y: 0 }, entities: [], keys: {}, audio: {} });
+    t.clock = 94;
+    t._timers.push({ at: t.clock + 0.6, fn: () => {} });
+    t._rebaseTimers();
+    t.clock = 0;
+    expect(t._timers[0].at).toBeCloseTo(0.6);
+  });
+});
+
+// Sent across the floor in sight, the Supervisor keeps to it: a shut door on
+// the way is opened, never walked through, and he never crosses a wall.
+describe("the Supervisor's walks", () => {
+  it("opens his office door on the way back from the range", async () => {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const { Npc } = await import("../../js/npc.js");
+    const { TUTORIAL_MAP } = await import("../../src/data/levels/tutorial.js");
+    const grid = TUTORIAL_MAP.grid.map((row) => row.slice());
+    // Every door shut, as before the trials open them.
+    for (const cells of Object.values(TUTORIAL_MAP.doors)) for (const d of cells) grid[d.y][d.x] = 5;
+    const map = { ...TUTORIAL_MAP, grid };
+    const player = { x: 38.5, y: 42.5 };
+    const sup = new Npc(37.5, 44.8, "supervisor", { name: "Supervisor Simon" });
+    const game = { map, player, entities: [sup], keys: {}, audio: {} };
+    const t = new TutorialSystem(game);
+    let path = null;
+    sup.walk = (p) => { path = p; };
+    t.goTo(game, sup, 47.0, 22.4);
+    expect(path).not.toBeNull();
+    // Each leg, sampled finely, stays on open floor.
+    let [x, y] = [sup.x, sup.y];
+    for (const [nx, ny] of path) {
+      for (let s = 0; s <= 40; s++) {
+        const cx = Math.floor(x + ((nx - x) * s) / 40);
+        const cy = Math.floor(y + ((ny - y) * s) / 40);
+        expect(grid[cy][cx], `(${cx}, ${cy}) on the way to (${nx}, ${ny})`).toBe(0);
+      }
+      [x, y] = [nx, ny];
+    }
+    for (const d of TUTORIAL_MAP.doors.door6) expect(grid[d.y][d.x]).toBe(0);
+  });
+});

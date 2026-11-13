@@ -39,6 +39,9 @@ export class Player {
     this.health = PLAYER_MAX_HP;
     this.maxHealth = PLAYER_MAX_HP;
     this.armor = 0;
+    // The gear bonuses these stats were built with (src/systems/gear-sync.js);
+    // a fresh player has none on.
+    this._gearApplied = null;
     // Rounds carried per weapon id, each up to its maxAmmo × ammoCap. A gun
     // is stocked with its startAmmo the first time it is held (reserveOf).
     this.reserves = {};
@@ -78,7 +81,10 @@ export class Player {
     this.weaponSwayY = 0;
     this.weaponSwayTargetX = 0;
     this.weaponSwayTargetY = 0;
-    this.cameraPunch = 0; // Vertical camera recoil (radians); decays each frame
+    // A shot's kick: the frame's bump up and aside (radians); decays each
+    // frame. Visual only: it moves the drawn frame, never the aim.
+    this.cameraPunch = 0;
+    this.kickSide = 0;
     this.hurtTime = 0;
     this.alive = true;
     // Sprint & Dash
@@ -136,11 +142,13 @@ export class Player {
   /**
    * Once a frame: note a weapon switch, whatever made it (keys, wheel, pad,
    * touch, a pickup), so lastWeapon is always the one held before.
+   * @returns {boolean} whether the weapon changed since the last call
    */
   trackWeapon() {
-    if (this.currentWeapon === this._weaponSeen) return;
+    if (this.currentWeapon === this._weaponSeen) return false;
     if (this._weaponSeen >= 0) this.lastWeapon = this._weaponSeen;
     this._weaponSeen = this.currentWeapon;
+    return true;
   }
 
   /**
@@ -291,8 +299,9 @@ export class Player {
     "sprintDrainMult",
     "chronoEnergy",
     "maxChronoEnergy",
-    "aimOffsetX",
-    "aimOffsetY",
+    // Levels, loadouts and gear write it; saved so a continued run's stats
+    // all stand on the same gear (gearApplied in the saves).
+    "maxStamina",
   ];
 
   /**
@@ -362,7 +371,7 @@ export class Pickup {
    * @param {number} y - Spawn Y position
    * @param {string} type - Pickup type ("health", "ammo", "weapon", "gear")
    * @param {Object} extra - Additional properties: weaponId for weapons, or
-   *   slot/index/name/kind for a gear drop.
+   *   slot/pieceId/label/kind for a gear drop.
    */
   constructor(x, y, type, extra = {}) {
     this.x = x;
@@ -370,9 +379,9 @@ export class Pickup {
     this.type = type;
     this.active = true;
     this.weaponId = extra.weaponId;
-    // Gear drops carry which cosmetic slot and option they hand over.
+    // Gear drops carry which cosmetic slot and piece (by id) they hand over.
     this.slot = extra.slot;
-    this.slotIndex = extra.slotIndex;
+    this.pieceId = extra.pieceId;
     this.label = extra.label;
     this.kind = extra.kind;
   }

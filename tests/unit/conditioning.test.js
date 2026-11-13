@@ -11,6 +11,8 @@ import {
   SKILL_IDS,
   MAX_LEVEL,
 } from "../../src/systems/conditioning.js";
+import { WEAPONS } from "../../src/data/weapons.js";
+import { setAdsSteadiness, noteShotBloom, updateBloom, currentBloom, resetBloom } from "../../src/systems/aim.js";
 
 describe("conditioning levels", () => {
   it("starts every skill at level 0", () => {
@@ -82,5 +84,25 @@ describe("conditioning bonuses", () => {
     const b = conditioningBonuses(c);
     expect(b.staminaRegenMult).toBeCloseTo(1.2);
     expect(b.staminaBonus).toBe(10);
+  });
+});
+
+describe("Steadiness", () => {
+  it("Steadiness speeds hip recovery", () => {
+    const pistol = WEAPONS[0];
+    setAdsSteadiness(0.7);
+    try {
+      resetBloom();
+      for (let i = 0; i < 10; i++) noteShotBloom(pistol);
+      const from = currentBloom();
+      // Steadiness shortens the close, not the hold after the last shot.
+      updateBloom(pistol.bloom.delay);
+      expect(currentBloom()).toBe(from);
+      for (let i = 0; i < 10; i++) updateBloom(0.01);
+      expect(Math.abs(from - currentBloom() - 0.012 / 0.7)).toBeLessThanOrEqual(0.0005);
+    } finally {
+      setAdsSteadiness(1);
+      resetBloom();
+    }
   });
 });

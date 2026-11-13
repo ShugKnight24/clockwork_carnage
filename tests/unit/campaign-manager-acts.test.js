@@ -209,6 +209,14 @@ describe("CampaignManager on ACTS", () => {
     }
   });
 
+  it("starts a level looking level, wherever the last one ended", () => {
+    const { g, cm } = makeCampaign();
+    cm.act = ACTS[0].id;
+    g.player.lookShiftY = 0.5; // looking at the floor
+    cm.loadLevel(1);
+    expect(g.player.lookShiftY).toBe(0);
+  });
+
   it("wins when asked to load past the act's last level", () => {
     const { g, cm } = makeCampaign();
     cm.act = 1;

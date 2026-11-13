@@ -18,6 +18,7 @@ import { HT as SKIN, drawPanel as skinPanel, uiFont as skinFont, cachedSprite, b
 import { drawModernDamageNumber, drawModernBossNameCard, drawModernStageCleared, hudAnchors } from "./hud-modern.js";
 import { coverCone, blindFireNow } from "../systems/cover-play.js";
 import { drawReloadHud } from "./reload-hud.js";
+import { hostileUnderReticle } from "../systems/reticle-target.js";
 import { phoneMinimapSize } from "./touch-layout.js";
 
 /**
@@ -366,6 +367,8 @@ function drawPowerCellChip(ctx, s) {
  * handing over to a small sight dot that stays while aimed: the gun alone
  * did not show exactly where the round would go. Spread brackets show the
  * weapon's cone at this blend; a scoped weapon hands over to its scope.
+ * All of it turns red over an enemy the gun reaches (src/systems/reticle-
+ * target.js), brackets included: they are the biggest part of the reticle.
  */
 function drawAimReticle(ctx, game, cx, cy, barH = 0) {
   const blend = getAimBlend();
@@ -373,40 +376,87 @@ function drawAimReticle(ctx, game, cx, cy, barH = 0) {
   const wep = game.player.getWeaponDef?.();
   const w = game.hudW || ctx.canvas.width;
   const scoped = wep?.scope ? Math.max(0, Math.min(1, (blend - 0.35) / 0.45)) : 0;
-  if (show > 0.02) {
-    const a = ctx.globalAlpha;
-    ctx.globalAlpha = a * show;
-    drawCrosshair(ctx, cx, cy, game.settings.crosshair);
-    ctx.globalAlpha = a;
-  }
   // The cone in screen pixels, through the same (zoomed) view the world is drawn with.
   const fov = (effectiveAimFov(game.player, game.settings) * Math.PI) / 180;
   // Blind fire from cover sprays wider, and the brackets say so.
   const aim = game.player?.cover ? aimAnglesForGame(game) : null;
   const blind = !!aim && blindFireNow(game, aim.yaw, aim.pitch);
   const cone = (Math.tan(coverCone(game.player, currentSpread(wep), blind)) / Math.tan(fov / 2)) * (w / 2);
-  drawSpreadBrackets(ctx, cx, cy, cone, 1 - scoped);
-  drawAdsSight(ctx, cx, cy, Math.min(1, blend * 1.6) * (1 - scoped), (game.hudH || 900) / 900);
+  const sight = Math.min(1, blend * 1.6) * (1 - scoped);
+  const crosshair = show > 0.02 && game.settings.crosshair !== 5;
+  // One cast, and only when a mark will show it. A blind-fired round finds
+  // its own target, so the reticle never claims one.
+  const drawn = crosshair || sight > 0.01 || scoped > 0 || (cone >= 6 && scoped < 0.99);
+  const hostile = drawn && !blind && hostileUnderReticle(game);
+  if (show > 0.02) {
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * show;
+    drawCrosshair(ctx, cx, cy, game.settings.crosshair, { hostile });
+    ctx.globalAlpha = a;
+  }
+  drawSpreadBrackets(ctx, cx, cy, cone, 1 - scoped, hostile);
+  drawAdsSight(ctx, cx, cy, sight, (game.hudH || 900) / 900, { hostile });
   if (scoped > 0) {
     const since = game.time - (game.player.lastFireTime || -1e9);
     drawScope(ctx, cx, cy, w, (game.hudH || ctx.canvas.height) - barH, scoped, {
       time: game.time,
       steady: scopeSteadiness(),
       kick: since >= 0 && since < 250 ? 1 - since / 250 : 0,
+      hostile,
     });
+  }
+}
+
+/** frameShift's result, reused every frame: read it where it is made. */
+const _shift = { x: 0, y: 0 };
+
+/** This frame's move (moveWithFrame) without the roll, in a w×h HUD's pixels. */
+export function frameShift(game, w, h) {
+  const off = game._frameOffset;
+  _shift.x = off ? (off.x * w) / (game.canvas?.width || w) : 0;
+  _shift.y = off ? (off.y * h) / (game.canvas?.height || h) : 0;
+  return _shift;
+}
+
+/**
+ * Move a w×h HUD the way the world was moved this frame (game._frameOffset,
+ * set by src/rendering/render-pipeline.js renderWorld in the scene canvas's
+ * pixels): shake, view bob and a shot's kick. The HUD canvas is CSS-sized and
+ * the scene canvas render-sized, so the offset is scaled across; the roll
+ * turns about the same point of the screen, the middle.
+ */
+export function moveWithFrame(ctx, game, w, h) {
+  const off = game._frameOffset;
+  if (!off || (!off.x && !off.y && !off.roll)) return;
+  const shift = frameShift(game, w, h);
+  ctx.translate(shift.x, shift.y);
+  if (off.roll) {
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(off.roll);
+    ctx.translate(-w / 2, -h / 2);
   }
 }
 
 /**
  * The centre of the view: crosshair (or sights/scope), the reload bar under
- * it, the power-cell chip and the hit marker, in that order.
+ * it, the power-cell chip and the hit marker, in that order. All but the chip
+ * (a corner plate) move with the frame, so the reticle stays on the world
+ * point the round goes to while the frame shakes or kicks.
  */
 export function drawReticleStack(ctx, game, s, w, h, barH) {
   const { x: chx, y: chy } = reticlePoint(w, h, barH, game.player);
+  ctx.save();
+  // Kept to the view: the scope's tube overshoots the edges so a moved frame
+  // shows no gap, and must not black out the HUD bar below.
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h - barH);
+  ctx.clip();
+  moveWithFrame(ctx, game, w, h);
   drawAimReticle(ctx, game, chx, chy, barH);
   drawReloadHud(ctx, game, chx, chy);
-  drawPowerCellChip(ctx, s);
   drawHitMarker(ctx, s, chx, chy);
+  ctx.restore();
+  drawPowerCellChip(ctx, s);
 }
 
 /**

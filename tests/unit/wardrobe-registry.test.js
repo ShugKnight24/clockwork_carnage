@@ -1,0 +1,671 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { BODY_FRAMES, HELMET_STYLES, SHOULDER_STYLES, CAMO_STYLES } from "../../src/data/cosmetics.js";
+import { ACCESSORIES, ACCESSORY_SLOTS } from "../../src/data/accessories.js";
+import { WARDROBE_THEMES, FACE_HELMETS, themeOf } from "../../src/data/wardrobe-themes/index.js";
+import {
+  FRAME_ART,
+  HELMET_ART,
+  SHOULDER_ART,
+  HIDES,
+  HELMET_SEATS,
+  frameArt,
+  frameHides,
+  helmetArt,
+  helmetSeats,
+  shoulderArt,
+  validateWardrobe,
+} from "../../src/rendering/svg-art/wardrobe-themes/index.js";
+import { rigAnchors, buildAgentSvg, buildAgentParts, buildCastModel, framePose, withArm, withLeg, mix, RIG_DEFS, HELMET_KIT, HELMET_KIT_IDS, shoulderKit } from "../../src/rendering/svg-art/agent-rig.js";
+import { paintAccessories } from "../../src/rendering/svg-art/accessories/index.js";
+import { idScope } from "../../src/rendering/svg-art/id-scope.js";
+import { STAND } from "../../src/rendering/svg-art/models/hero.js";
+import { lookFromIds } from "./helpers/golden-looks.js";
+
+/** A frame's data entry, where its `hides` lives. */
+const FRAME = (id) => BODY_FRAMES.find((e) => e.id === id);
+const hidesOf = (id) => [...(FRAME(id).hides || [])];
+
+const LEGACY_FRAMES = ["standard", "strider", "vanguard", "operator", "wraith", "breacher"];
+const LEGACY_HELMETS = ["standard", "wide", "angular", "mohawk", "crested", "ordnance", "bucket", "crusader", "sealed", "reaper", "pilot", "bandana"];
+const LEGACY_SHOULDERS = ["none", "pads", "spikes", "pauldrons", "armored", "slab", "dome", "ordnance", "layered"];
+
+// The rig's fixed helmet badge point before the move (A.helmet), the same on every helmet.
+const LEGACY_BADGE = { x: -8.6, y: -90, rot: -8, size: 4.6 };
+
+// The rig's per-helmet tables before the move (SHELL_TOP, SHELL_HALF,
+// SIDE_RAIL); a helmet missing from one took the fallback (standard's top and
+// half, a -86.4 rail).
+const LEGACY_ANCHORS = {
+  standard: { top: -95, half: 11.2, rail: -86.4 },
+  wide: { top: -96.4, half: 14.2, rail: -86.4 },
+  angular: { top: -96, half: 12.2, rail: -86.4 },
+  mohawk: { top: -95, half: 11.7, rail: -86.4 },
+  crested: { top: -95.6, half: 11.4, rail: -86.4 },
+  ordnance: { top: -97.4, half: 12.5, rail: -79.4 },
+  bucket: { top: -93.2, half: 13.7, rail: -86.4 },
+  crusader: { top: -97, half: 11.7, rail: -86.4 },
+  sealed: { top: -95.8, half: 11.7, rail: -86.4 },
+  reaper: { top: -95, half: 11.2, rail: -86.4 },
+  pilot: { top: -95, half: 11.2, rail: -86.4 },
+  bandana: { top: -95, half: 11.2, rail: -86.4 },
+};
+
+describe("wardrobe registries", () => {
+  it("every theme has a short name for a one-tile caption", () => {
+    for (const t of WARDROBE_THEMES) {
+      expect(typeof t.short, t.id).toBe("string");
+      expect(t.short.length, t.id).toBeGreaterThan(0);
+      expect(t.short.length, t.id).toBeLessThanOrEqual(10);
+      expect(t.short.length, t.id).toBeLessThanOrEqual(t.name.length);
+    }
+  });
+
+  it("validateWardrobe() returns []", () => {
+    expect(validateWardrobe()).toEqual([]);
+  });
+
+  it("every BODY_FRAMES id has FRAME_ART", () => {
+    for (const { id } of BODY_FRAMES) expect(FRAME_ART[id], id).toBeTruthy();
+  });
+
+  it("BODY_FRAMES order equals issue theme order", () => {
+    expect(WARDROBE_THEMES[0].id).toBe("issue");
+    expect(BODY_FRAMES.map((e) => e.id)).toEqual(WARDROBE_THEMES.flatMap((t) => t.frames.map((e) => e.id)));
+    expect(WARDROBE_THEMES[0].frames.map((e) => e.id)).toEqual(LEGACY_FRAMES);
+  });
+
+  it("tags every table entry with its theme", () => {
+    for (const e of BODY_FRAMES) expect(e.theme).toBe(themeOf("frames", e.id));
+    expect(themeOf("frames", "wraith")).toBe("issue");
+    expect(themeOf("frames", "no-such-frame")).toBeUndefined();
+  });
+
+  it("names the hides vocabulary exactly", () => {
+    expect([...HIDES]).toEqual(["kit", "collar", "hips", "shoulders", "cape", "limbGlow"]);
+    expect(Object.isFrozen(HIDES)).toBe(true);
+  });
+
+  it("carries the legacy flags as hides words", () => {
+    expect(hidesOf("operator")).toEqual(["shoulders", "limbGlow"]);
+    expect(hidesOf("wraith")).toEqual(["cape", "limbGlow"]);
+    for (const id of ["standard", "strider", "vanguard", "breacher"]) expect(hidesOf(id)).toEqual([]);
+    expect(frameHides("operator", "shoulders")).toBe(true);
+    expect(frameHides("wraith", "cape")).toBe(true);
+    expect(frameHides("wraith", "shoulders")).toBe(false);
+    expect(frameHides("standard", "limbGlow")).toBe(false);
+  });
+
+  it("throws on an unknown frame rather than drawing another", () => {
+    expect(() => frameHides("no-such-frame", "cape")).toThrow(/no-such-frame/);
+    expect(() => frameArt("no-such-frame")).toThrow(/no-such-frame/);
+  });
+
+  it("freezes every theme, table, entry and art shape", () => {
+    for (const t of WARDROBE_THEMES) {
+      expect(Object.isFrozen(t)).toBe(true);
+      for (const key of ["frames", "helmets", "shoulders"]) {
+        expect(Object.isFrozen(t[key])).toBe(true);
+        for (const e of t[key]) expect(Object.isFrozen(e)).toBe(true);
+      }
+    }
+    expect(Object.isFrozen(WARDROBE_THEMES)).toBe(true);
+    for (const art of Object.values(FRAME_ART)) {
+      expect(Object.isFrozen(art)).toBe(true);
+      expect(Object.isFrozen(art.shape)).toBe(true);
+    }
+  });
+
+  it("the Strider names its bare right shoulder in its shape; no other legacy frame has one", () => {
+    expect(FRAME_ART.strider.shape.rightShoulder).toBe("none");
+    for (const id of LEGACY_FRAMES.filter((f) => f !== "strider")) expect(FRAME_ART[id].shape.rightShoulder, id).toBeUndefined();
+  });
+
+  it("rejects a hides word outside the vocabulary", () => {
+    expect(() => frameHides("standard", "helmet")).toThrow(/helmet/);
+  });
+
+  it("keeps hides on the frame's data entry, never on its art", () => {
+    for (const [id, art] of Object.entries(FRAME_ART)) expect("hides" in art.shape, id).toBe(false);
+    const art = [{ id: "issue", frames: { standard: { shape: { width: 1, shoulder: 1, hides: [] }, layers: () => ({}) } } }];
+    const themes = [{ id: "issue", frames: [{ id: "standard", hides: ["helmet"] }], helmets: [], shoulders: [] }];
+    const errors = validateWardrobe(themes, art, {});
+    expect(errors).toContain('frames: art "standard" declares shape.hides, which belongs on its data entry');
+    expect(errors).toContain('frames: "standard" hides unknown layer "helmet"');
+  });
+});
+
+describe("helmets", () => {
+  it("every HELMET_STYLES id has HELMET_ART with numeric anchors", () => {
+    for (const { id } of HELMET_STYLES) {
+      const art = HELMET_ART[id];
+      expect(art, id).toBeTruthy();
+      expect(typeof art.paint, id).toBe("function");
+      for (const key of ["top", "half", "rail"]) expect(Number.isFinite(art.anchors[key]), `${id} ${key}`).toBe(true);
+    }
+  });
+
+  it("HELMET_STYLES order equals issue theme order", () => {
+    expect(HELMET_STYLES.map((e) => e.id)).toEqual(WARDROBE_THEMES.flatMap((t) => t.helmets.map((e) => e.id)));
+    expect(WARDROBE_THEMES[0].helmets.map((e) => e.id)).toEqual(LEGACY_HELMETS);
+    for (const e of HELMET_STYLES) expect(e.theme).toBe(themeOf("helmets", e.id));
+  });
+
+  it("carries today's anchors per helmet, and rigAnchors seats crown gear on them", () => {
+    for (const id of LEGACY_HELMETS) {
+      expect({ ...HELMET_ART[id].anchors }, id).toEqual({ ...LEGACY_ANCHORS[id], badge: LEGACY_BADGE });
+      const { top, half, rail } = LEGACY_ANCHORS[id];
+      const A = rigAnchors(STAND, [0, 0], "standing", id);
+      expect(A.helmet, id).toEqual(LEGACY_BADGE);
+      expect(A.crown.y, id).toBeCloseTo(top + 0.8, 10);
+      expect(A.browL.y, id).toBeCloseTo(top + 7.6, 10);
+      expect(A.sideL.x, id).toBeCloseTo(-half + 0.2, 10);
+      expect(A.sideL.y, id).toBe(rail);
+    }
+  });
+
+  it("FACE_HELMETS equals the open helmets, derived from the data and read-only", () => {
+    expect([...FACE_HELMETS].sort()).toEqual(["bandana", "brim", "bubble", "ledmask", "mohawk", "wide"]);
+    expect([...FACE_HELMETS].sort()).toEqual(HELMET_STYLES.filter((e) => e.face === true).map((e) => e.id).sort());
+    expect(() => FACE_HELMETS.add("standard")).toThrow();
+    expect(() => FACE_HELMETS.delete("wide")).toThrow();
+    expect(() => FACE_HELMETS.clear()).toThrow();
+    expect(FACE_HELMETS.has("wide")).toBe(true);
+    expect(FACE_HELMETS.size).toBe(6);
+  });
+
+  it("throws on an unknown helmet rather than drawing another", () => {
+    expect(() => helmetArt("no-such-helmet")).toThrow(/no-such-helmet/);
+    expect(() => rigAnchors(STAND, [0, 0], "standing", "no-such-helmet")).toThrow(/no-such-helmet/);
+  });
+
+  it("freezes every helmet's art and anchors", () => {
+    for (const art of Object.values(HELMET_ART)) {
+      expect(Object.isFrozen(art)).toBe(true);
+      expect(Object.isFrozen(art.anchors)).toBe(true);
+      if (art.anchors.badge) expect(Object.isFrozen(art.anchors.badge)).toBe(true);
+      expect(art.seats, "seats belong on the data entry").toBeUndefined();
+      expect(art.faceSlots, "faceSlots belong on the data entry").toBeUndefined();
+    }
+  });
+
+  it("seats accessories on every helmet but the Centurion's crown and the Do-Rag's cloth, and names the seats exactly", () => {
+    expect([...HELMET_SEATS]).toEqual(["crown", "brow", "side", "ears"]);
+    expect(Object.isFrozen(HELMET_SEATS)).toBe(true);
+    for (const id of LEGACY_HELMETS.filter((h) => h !== "bandana")) {
+      expect(helmetSeats(id), id).toEqual({ crown: id !== "mohawk", brow: true, side: true, ears: true });
+      expect(rigAnchors(STAND, [0, 0], "standing", id).seats, id).toEqual(helmetSeats(id));
+    }
+    const mohawk = HELMET_STYLES.find((e) => e.id === "mohawk");
+    expect(mohawk.seats).toEqual({ crown: false });
+    expect(Object.isFrozen(mohawk.seats)).toBe(true);
+    // Cloth has nothing to mount a plume, night vision or a rail lamp on; a
+    // headset rides on its own band.
+    expect(helmetSeats("bandana")).toEqual({ crown: false, brow: false, side: false, ears: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "bandana").seats).toEqual(helmetSeats("bandana"));
+    expect(ACCESSORIES.helmet.find((e) => e.id === "comms").seat).toBe("ears");
+  });
+
+  it("every helmet accessory names the seat it needs", () => {
+    for (const item of ACCESSORIES.helmet.slice(1)) expect(HELMET_SEATS, item.id).toContain(item.seat);
+  });
+
+  it("no module keeps its own list of open helmets", () => {
+    const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
+    expect(read("src/rendering/svg-art/agent-rig.js")).not.toMatch(/OPEN_HELMETS/);
+    for (const p of ["src/ui/portrait-modern.js", "src/ui/character-creator.js", "js/components/agent-showroom.js", "src/rendering/svg-art/agent-rig.js"]) {
+      const src = read(p);
+      expect(src, p).toMatch(/import \{[^}]*\bFACE_HELMETS\b[^}]*\} from "[./]*\/?(?:src\/)?data\/wardrobe-themes\/index\.js"/);
+      expect(src, p).not.toMatch(/new Set\(\[\s*"wide"/);
+    }
+  });
+});
+
+describe("the Exo-Frame theme", () => {
+  it("comes second, with one frame, helmet and shoulder, all earned with Act 4", () => {
+    expect(WARDROBE_THEMES.map((t) => t.id).slice(0, 2)).toEqual(["issue", "exo"]);
+    const exo = WARDROBE_THEMES[1];
+    expect(exo.name).toBe("Exo-Frame");
+    expect(exo.frames.map((e) => [e.id, e.tier])).toEqual([["exo", 5]]);
+    expect(exo.helmets.map((e) => [e.id, e.tier])).toEqual([["cockpit", 5]]);
+    expect(exo.shoulders.map((e) => [e.id, e.tier])).toEqual([["pods", 5]]);
+    for (const [table, id] of [["frames", "exo"], ["helmets", "cockpit"], ["shoulders", "pods"]]) expect(themeOf(table, id)).toBe("exo");
+  });
+
+  it("grows the silhouette, hides no stock layer, and seats the cockpit's gear on its cage and sensor blocks", () => {
+    expect({ ...FRAME_ART.exo.shape }).toEqual({ width: 1.14, shoulder: 1.2 });
+    expect(hidesOf("exo")).toEqual([]);
+    expect(helmetSeats("cockpit")).toEqual({ crown: true, brow: true, side: true, ears: true });
+    const A = rigAnchors(STAND, [0, 0], "standing", "cockpit");
+    expect(A.crown.y).toBeCloseTo(-100.8, 10);
+    expect(A.sideL.x).toBeCloseTo(-15.8, 10);
+    expect(A.helmet).toEqual({ x: -7.6, y: -93.4, rot: -6, size: 4.2 });
+    expect(FACE_HELMETS.has("cockpit")).toBe(false);
+  });
+});
+
+// The themes in creator order; the spike's later themes join as they are ported.
+const THEME_ORDER = ["issue", "exo", "marshal", "ronin", "horologist", "runner", "diver", "ranger", "chronomancer"];
+
+describe("the spike themes", () => {
+  const spike = () => WARDROBE_THEMES.filter((t) => !THEME_ORDER.slice(0, 2).includes(t.id));
+
+  it("every theme ported so far is registered in theme order", () => {
+    const ids = WARDROBE_THEMES.map((t) => t.id);
+    expect(ids).toEqual(THEME_ORDER.slice(0, ids.length));
+  });
+
+  it("each has one frame, helmet and shoulder, all its own, the helmet a tier after the rest", () => {
+    for (const t of spike()) {
+      expect(t.frames).toHaveLength(1);
+      expect(t.helmets).toHaveLength(1);
+      expect(t.shoulders).toHaveLength(1);
+      expect(t.shoulders[0].tier, t.id).toBe(t.frames[0].tier);
+      expect(t.helmets[0].tier, t.id).toBe(t.frames[0].tier + 1);
+      for (const table of ["frames", "helmets", "shoulders"]) expect(themeOf(table, t[table][0].id), t.id).toBe(t.id);
+    }
+  });
+
+  it("the Marshal's duster covers the kit, the hip plates, the cape and the limb light; the brim is an open hat with no brow seat", () => {
+    expect(hidesOf("duster")).toEqual(["kit", "hips", "cape", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "brim")).toMatchObject({ face: true, visor: false });
+    expect(helmetSeats("brim")).toEqual({ crown: true, brow: false, side: true, ears: true });
+    expect(HELMET_ART.brim.anchors.badge).toBe(false);
+  });
+});
+
+describe("the Ronin theme", () => {
+  it("wears the laced plate over the suit, the kabuto's crest and fitting take the crown and brow, the badge rides the wing", () => {
+    expect(hidesOf("lamellar")).toEqual([]);
+    expect(FRAME_ART.lamellar.shape.softTorso).toBe(true);
+    expect(HELMET_STYLES.find((e) => e.id === "kabuto").visor).toBe(false);
+    expect(FACE_HELMETS.has("kabuto")).toBe(false);
+    expect(helmetSeats("kabuto")).toEqual({ crown: false, brow: false, side: true, ears: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "kabuto").helmet).toEqual({ x: -15.6, y: -86.8, rot: -12, size: 3.8 });
+  });
+});
+
+describe("the Horologist theme", () => {
+  it("wears brass plate over the suit, the clockface's winding crown and dial take the crown and brow, the badge rides the bezel", () => {
+    expect(hidesOf("clockwork")).toEqual([]);
+    expect(FRAME_ART.clockwork.shape.softTorso).toBe(true);
+    expect(HELMET_STYLES.find((e) => e.id === "clockface").visor).toBe(false);
+    expect(FACE_HELMETS.has("clockface")).toBe(false);
+    expect(helmetSeats("clockface")).toEqual({ crown: false, brow: false, side: true, ears: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "clockface").helmet).toEqual({ x: -7.9, y: -90.3, rot: -10, size: 3.2 });
+  });
+});
+
+describe("the Neon Runner theme", () => {
+  it("the jacket covers the kit, collar and limb light; the LED mask is a bare face with no crown seat", () => {
+    expect(hidesOf("streetwear")).toEqual(["kit", "collar", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "ledmask")).toMatchObject({ face: true, visor: false });
+    expect(helmetSeats("ledmask")).toEqual({ crown: false, brow: true, side: true, ears: true });
+    expect(HELMET_ART.ledmask.anchors.badge).toBe(false);
+  });
+});
+
+describe("the Abyssal Diver theme", () => {
+  it("the canvas suit covers the kit, collar, hip plates, cape and limb light; the porthole is sealed, its crown and brow taken", () => {
+    expect(hidesOf("diving")).toEqual(["kit", "collar", "hips", "cape", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "porthole").visor).toBe(false);
+    expect(FACE_HELMETS.has("porthole")).toBe(false);
+    expect(helmetSeats("porthole")).toEqual({ crown: false, brow: false, side: true, ears: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "porthole").helmet).toEqual({ x: -10.4, y: -91.6, rot: -20, size: 3.8 });
+  });
+});
+
+describe("the Void Ranger theme", () => {
+  it("the pressure suit covers the kit, collar, hip plates and limb light; the bubble is open glass that takes no gear", () => {
+    expect(hidesOf("spacesuit")).toEqual(["kit", "collar", "hips", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "bubble")).toMatchObject({ face: true, visor: false });
+    expect(helmetSeats("bubble")).toEqual({ crown: false, brow: false, side: false, ears: false });
+    expect(HELMET_ART.bubble.anchors.badge).toBe(false);
+  });
+});
+
+describe("the Chronomancer theme", () => {
+  it("the robe covers the kit, hip plates, cape and limb light; the hood's halo and hollow take the crown and brow, the badge rides the clasp", () => {
+    expect(hidesOf("vestment")).toEqual(["kit", "hips", "cape", "limbGlow"]);
+    expect(HELMET_STYLES.find((e) => e.id === "hood").visor).toBe(false);
+    expect(FACE_HELMETS.has("hood")).toBe(false);
+    expect(helmetSeats("hood")).toEqual({ crown: false, brow: false, side: true, ears: true });
+    expect(rigAnchors(STAND, [0, 0], "standing", "hood").helmet).toEqual({ x: 0, y: -64.6, rot: 0, size: 3.6 });
+  });
+});
+
+describe("every theme piece draws cleanly", () => {
+  // Each theme's own set: both builds and poses, realistic, the head tile,
+  // a face peek and both builds fallen. No NaN or undefined in the markup,
+  // ids unique in the figure (and, in an SVG, all under its prefix), every
+  // url(#…) one of its own.
+  const looks = WARDROBE_THEMES.filter((t) => t.id !== "issue").map((t) => [t.id, { frame: t.frames[0].id, helmet: t.helmets[0].id, shoulder: t.shoulders[0].id }]);
+  const check = (markup, prefix) => {
+    expect(markup).not.toMatch(/NaN|undefined/);
+    // Well-formed attributes: one never runs into the next.
+    expect(markup).not.toMatch(/"[a-zA-Z:-]+="/);
+    const ids = [...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+    if (prefix) expect(ids.filter((i) => !i.startsWith(prefix))).toEqual([]);
+    for (const [, ref] of markup.matchAll(/url\(#([^)]+)\)/g)) expect(ids, ref).toContain(ref);
+  };
+  it.each(looks)("%s", (id, pieces) => {
+    const svg = (ids, opts) => check(buildAgentSvg(lookFromIds(ids), { ...opts, idPrefix: "t-" }), "t-");
+    for (const body of ["masc", "fem"]) {
+      const ids = { ...pieces, body };
+      for (const pose of ["idle", "hero"]) {
+        svg(ids, { pose });
+        svg(ids, { pose, realistic: true });
+      }
+      svg(ids, { headOnly: true });
+      svg(ids, { headOnly: true, realistic: true });
+      svg(ids, { pose: "bust", peek: true });
+      for (const realistic of [false, true]) {
+        const fallen = buildCastModel(lookFromIds(ids), "hero_fallen", { realistic });
+        check(`<defs>${fallen.defs}</defs>` + fallen.layers.map((l) => l.markup).join(""));
+      }
+    }
+  });
+});
+
+describe("frames draw each limb on its own", () => {
+  // The fallen agent paints each limb's frame layer at that limb's depth
+  // (withArm, withLeg), so a frame's arms and legs layers must come out the
+  // same limb by limb.
+  const layer = (key) => (id, P, c) => FRAME_ART[id].layers(P, c, { mix, ...idScope().kit(`frame-${id}`) })[key];
+  const arms = layer("arms");
+  const legs = layer("legs");
+  const glow = layer("glow");
+  // Top-level elements of a markup string, each with its children.
+  const elements = (markup) => {
+    const out = [];
+    let depth = 0;
+    let start = 0;
+    for (const m of markup.matchAll(/<(\/?)[a-zA-Z][^>]*?(\/?)>/g)) {
+      if (depth === 0 && !m[1]) start = m.index;
+      if (m[2]) {
+        if (depth === 0) out.push(markup.slice(start, m.index + m[0].length));
+      } else if (m[1]) {
+        depth--;
+        if (depth === 0) out.push(markup.slice(start, m.index + m[0].length));
+      } else depth++;
+    }
+    return out;
+  };
+  const counts = (list) => list.reduce((m, e) => m.set(e, (m.get(e) || 0) + 1), new Map());
+  it.each(Object.keys(FRAME_ART))("%s", (id) => {
+    for (const body of ["masc", "fem"]) {
+      const c = buildAgentParts(lookFromIds({ frame: id, body })).look;
+      for (const pose of ["standing", "armed", "fallen"]) {
+        const P = framePose(pose, c.fem);
+        expect(arms(id, withArm(P, 0), c) + arms(id, withArm(P, 1), c), `arms ${body} ${pose}`).toBe(arms(id, P, c));
+        expect(legs(id, withLeg(P, 0), c) + legs(id, withLeg(P, 1), c), `legs ${body} ${pose}`).toBe(legs(id, P, c));
+        // Light split by arm: each element of the whole figure's glow comes
+        // out of one side or both (light that is no arm's), as often as in
+        // the whole; nothing is lost, duplicated or made up.
+        const whole = counts(elements(glow(id, P, c)));
+        const [g0, g1] = [0, 1].map((i) => counts(elements(glow(id, withArm(P, i), c))));
+        const keys = new Set([...whole.keys(), ...g0.keys(), ...g1.keys()]);
+        for (const e of keys) expect(Math.max(g0.get(e) || 0, g1.get(e) || 0), `glow ${body} ${pose} ${e.slice(0, 80)}`).toBe(whole.get(e) || 0);
+        if (pose !== "fallen") continue;
+        // The fallen agent lies on arm 1: its light is the free arm's split
+        // alone, so every element of arm 0's glow shines and nothing only
+        // arm 1 lights does.
+        const cast = buildCastModel(lookFromIds({ frame: id, body }), "hero_fallen").layers[2].markup;
+        const seen = (e) => cast.split(e).length - 1;
+        for (const [e, n] of g0) expect(seen(e), `fallen free arm ${body} ${e.slice(0, 80)}`).toBeGreaterThanOrEqual(n);
+        for (const e of g1.keys()) if (!g0.has(e)) expect(seen(e), `fallen trapped arm ${body} ${e.slice(0, 80)}`).toBe(0);
+      }
+    }
+  });
+});
+
+describe("painters name only their own ids and the rig's shared defs", () => {
+  const refs = (markup) => [...markup.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]);
+  const idsIn = (markup) => [...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  // Every url(#…) is the piece's own (K.uid, under its prefix) or a shared def.
+  // The helmet kit's own inline ids pass where the kit drew them.
+  const expectOwn = (markup, prefix, what, kitIds = []) => {
+    for (const ref of refs(markup)) {
+      const kit = kitIds.includes(ref) && idsIn(markup).includes(ref);
+      expect(ref.startsWith(prefix) || RIG_DEFS.includes(ref) || kit, `${what}: url(#${ref})`).toBe(true);
+    }
+  };
+  const lookOf = (ids) => buildAgentParts(lookFromIds(ids)).look;
+  const PIECE = /^(frame|helmet|shoulder|glove|acc)-/;
+
+  it("RIG_DEFS is what every figure defines", () => {
+    for (const ids of [{}, { camo: CAMO_STYLES[1].id }, { body: "fem" }]) {
+      for (const key of ["hero", "hero_fallen"]) {
+        for (const realistic of [false, true]) {
+          const own = idsIn(buildCastModel(lookFromIds(ids), key, { realistic }).defs);
+          for (const id of RIG_DEFS) expect(own, `${JSON.stringify(ids)} ${key} realistic=${realistic}`).toContain(id);
+        }
+      }
+      const plain = idsIn(buildAgentParts(lookFromIds(ids)).defs).filter((i) => !PIECE.test(i) && i !== "capeCut");
+      expect([...plain].sort()).toEqual([...RIG_DEFS].sort());
+    }
+  });
+
+  it.each(Object.keys(FRAME_ART))("frame %s", (id) => {
+    for (const body of ["masc", "fem"]) {
+      const c = lookOf({ frame: id, body });
+      for (const pose of ["standing", "armed", "fallen"]) {
+        const scope = idScope();
+        const out = FRAME_ART[id].layers(framePose(pose, c.fem), c, { mix, ...scope.kit(`frame-${id}`) });
+        expectOwn(Object.values(out).join("") + scope.markup(), `frame-${id}-`, `frame ${id} ${body} ${pose}`);
+      }
+    }
+  });
+
+  it.each(Object.keys(HELMET_ART))("helmet %s", (id) => {
+    for (const body of ["masc", "fem"]) {
+      const scope = idScope();
+      const out = HELMET_ART[id].paint(lookOf({ helmet: id, body }), { ...HELMET_KIT, ...scope.kit(`helmet-${id}`) });
+      expectOwn(out.front + out.glow + scope.markup(), `helmet-${id}-`, `helmet ${id} ${body}`, HELMET_KIT_IDS);
+    }
+  });
+
+  it.each(Object.keys(SHOULDER_ART))("shoulder %s", (id) => {
+    const c = lookOf({ shoulder: id });
+    for (const s of [-1, 1]) {
+      const scope = idScope();
+      expectOwn(SHOULDER_ART[id].paint(c, s, shoulderKit(id, s, 0, scope)) + scope.markup(), `shoulder-${id}-`, `shoulder ${id} ${s}`);
+    }
+  });
+
+  it.each(ACCESSORY_SLOTS.map((s) => s.id))("accessories %s", (slot) => {
+    const c = lookOf({});
+    // Under an open helmet, so the eyes and face slots are drawn too.
+    const A = rigAnchors(STAND, [0, 0], "standing", "wide");
+    for (const { id } of ACCESSORIES[slot]) {
+      if (id === "none") continue;
+      const out = paintAccessories({ [slot]: id }, A, c);
+      const markup = ["back", "front", "top", "glow", "head", "headGlow", "face", "faceGlow", "skin", "defs"].map((k) => out[k]).join("");
+      expect(markup, `${slot} ${id} draws`).not.toBe("");
+      expectOwn(markup, `acc-${slot}-${id}-`, `${slot} ${id}`);
+    }
+  });
+});
+
+describe("shoulders", () => {
+  it("every SHOULDER_STYLES id has SHOULDER_ART", () => {
+    for (const { id } of SHOULDER_STYLES) {
+      expect(SHOULDER_ART[id], id).toBeTruthy();
+      expect(typeof SHOULDER_ART[id].paint, id).toBe("function");
+    }
+  });
+
+  it("SHOULDER_STYLES order equals issue theme order", () => {
+    expect(SHOULDER_STYLES.map((e) => e.id)).toEqual(WARDROBE_THEMES.flatMap((t) => t.shoulders.map((e) => e.id)));
+    expect(WARDROBE_THEMES[0].shoulders.map((e) => e.id)).toEqual(LEGACY_SHOULDERS);
+    for (const e of SHOULDER_STYLES) expect(e.theme).toBe(themeOf("shoulders", e.id));
+  });
+
+  it("throws on an unknown shoulder rather than drawing another", () => {
+    expect(() => shoulderArt("no-such-shoulder")).toThrow(/no-such-shoulder/);
+  });
+
+  it("freezes every shoulder's art; no legacy piece caps the frame's scale", () => {
+    for (const [id, art] of Object.entries(SHOULDER_ART)) {
+      expect(Object.isFrozen(art), id).toBe(true);
+      if (LEGACY_SHOULDERS.includes(id)) expect(art.maxShoulderScale, id).toBeUndefined();
+    }
+  });
+});
+
+describe("validateWardrobe", () => {
+  const entry = (id) => ({ id, name: id, desc: id });
+  const art = () => ({ shape: { width: 1, shoulder: 1 }, layers: () => ({ under: "", legs: "", torso: "", arms: "", glow: "" }) });
+  const theme = (id, frames, helmets = [], shoulders = []) => ({ id, name: id, frames: frames.map(entry), helmets: helmets.map(entry), shoulders: shoulders.map(entry) });
+  const BADGE = { x: -8.6, y: -90, rot: -8, size: 4.6 };
+  const helm = (anchors = { top: -95, half: 11.2, rail: -86.4, badge: BADGE }) => ({ paint: () => ({ front: "", glow: "" }), anchors });
+  const pad = (extra = {}) => ({ paint: () => "", ...extra });
+
+  it("reports a duplicate id across themes", () => {
+    const themes = [theme("a", ["x"]), theme("b", ["x"])];
+    const msgs = validateWardrobe(themes, [{ id: "a", frames: { x: art() } }]);
+    expect(msgs.some((m) => /duplicate/.test(m) && /"x"/.test(m))).toBe(true);
+  });
+
+  it("reports an entry without art and art without an entry", () => {
+    const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { y: art() } }]);
+    expect(msgs.some((m) => /no art/.test(m) && /"x"/.test(m))).toBe(true);
+    expect(msgs.some((m) => /no entry/.test(m) && /"y"/.test(m))).toBe(true);
+  });
+
+  it("reports an unknown hides word", () => {
+    const t = theme("a", ["x"]);
+    const msgs = validateWardrobe([{ ...t, frames: [{ ...t.frames[0], hides: ["cape", "boots"] }] }], [{ id: "a", frames: { x: art() } }]);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toMatch(/"boots"/);
+  });
+
+  it("reports theme ids that do not match between data and art", () => {
+    const msgs = validateWardrobe([theme("a", [])], [{ id: "b", frames: {} }]);
+    expect(msgs.some((m) => /theme "a" has no art module/.test(m))).toBe(true);
+    expect(msgs.some((m) => /art module "b" has no data theme/.test(m))).toBe(true);
+  });
+
+  it("reports art filed under another theme than its entry", () => {
+    const msgs = validateWardrobe([theme("a", ["x"]), theme("b", [])], [{ id: "a", frames: {} }, { id: "b", frames: { x: art() } }]);
+    expect(msgs).toEqual([expect.stringMatching(/"x" is in theme "b" but its entry is in "a"/)]);
+  });
+
+  it("reports a rightShoulder that is not a shoulder id", () => {
+    const run = (rightShoulder) =>
+      validateWardrobe([theme("a", ["x"], [], ["p"])], [{ id: "a", frames: { x: { ...art(), shape: { width: 1, shoulder: 1, rightShoulder } } }, shoulders: { p: pad() } }]);
+    expect(run(undefined)).toEqual([]);
+    expect(run("p")).toEqual([]);
+    expect(run("q")).toEqual([expect.stringMatching(/frames: "x" shape\.rightShoulder "q" is not a shoulder/)]);
+  });
+
+  it("reports a frame without a layers function", () => {
+    const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: { ...art(), layers: "nope" } } }]);
+    expect(msgs).toEqual([expect.stringMatching(/"x" has no layers function/)]);
+  });
+
+  it("reports a width or shoulder that is not a finite number", () => {
+    const bad = { ...art(), shape: { width: Number.NaN, shoulder: "1" } };
+    const msgs = validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: bad } }]);
+    expect(msgs).toHaveLength(2);
+    expect(msgs.some((m) => /shape\.width/.test(m))).toBe(true);
+    expect(msgs.some((m) => /shape\.shoulder/.test(m))).toBe(true);
+  });
+
+  it("reports a helmet without art and helmet art without an entry", () => {
+    const msgs = validateWardrobe([theme("a", [], ["h"])], [{ id: "a", frames: {}, helmets: { g: helm() } }]);
+    expect(msgs).toHaveLength(2);
+    expect(msgs.some((m) => /^helmets: "h" .*no art/.test(m))).toBe(true);
+    expect(msgs.some((m) => /^helmets: art "g" .*no entry/.test(m))).toBe(true);
+  });
+
+  it("reports a duplicate helmet across themes and helmet art filed under another theme", () => {
+    const dup = validateWardrobe([theme("a", [], ["h"]), theme("b", [], ["h"])], [{ id: "a", helmets: { h: helm() } }, { id: "b" }]);
+    expect(dup.some((m) => /^helmets: duplicate id "h"/.test(m))).toBe(true);
+    const moved = validateWardrobe([theme("a", [], ["h"]), theme("b", [])], [{ id: "a" }, { id: "b", helmets: { h: helm() } }]);
+    expect(moved).toEqual([expect.stringMatching(/^helmets: art "h" is in theme "b" but its entry is in "a"/)]);
+  });
+
+  it("reports a helmet without a paint function", () => {
+    const msgs = validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: { ...helm(), paint: null } } }]);
+    expect(msgs).toEqual([expect.stringMatching(/helmets: "h" has no paint function/)]);
+  });
+
+  it("reports helmet anchors that are missing or not finite numbers", () => {
+    const bad = validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: helm({ top: Number.NaN, half: "11", rail: Infinity, badge: BADGE }) } }]);
+    expect(bad).toHaveLength(3);
+    for (const key of ["top", "half", "rail"]) expect(bad.some((m) => m.includes(`anchors.${key}`))).toBe(true);
+    // No anchors at all: the three numbers and the badge point's four.
+    const none = validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: { paint: () => ({}) } } }]);
+    expect(none).toHaveLength(7);
+  });
+
+  it("takes a badge point or badge: false, and reports a partial or missing one", () => {
+    const run = (badge) => validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: helm({ top: -95, half: 11.2, rail: -86.4, badge }) } }]);
+    expect(run(BADGE)).toEqual([]);
+    expect(run(false)).toEqual([]);
+    expect(run({ x: 1, y: 2, rot: 0 })).toEqual([expect.stringMatching(/"h" anchors\.badge\.size/)]);
+    expect(run(undefined)).toHaveLength(4);
+    expect(run(null)).toHaveLength(4);
+  });
+
+  /** A theme with one helmet entry `h`, its extra fields given. */
+  const withHelmet = (extra) => [{ id: "a", name: "a", frames: [], shoulders: [], helmets: [{ ...entry("h"), ...extra }] }];
+
+  it("reports an unknown seat word or a seat that is not true or false, on the data entry", () => {
+    const run = (seats) => validateWardrobe(withHelmet({ seats }), [{ id: "a", helmets: { h: helm() } }]);
+    expect(run({ crown: false, side: true })).toEqual([]);
+    expect(run({ crown: false, chin: false })).toEqual([expect.stringMatching(/"h" seats unknown seat "chin"/)]);
+    expect(run({ brow: "no" })).toEqual([expect.stringMatching(/"h" seats\.brow is not true or false/)]);
+  });
+
+  it("reports an unknown faceSlots word, one that is not true or false, and faceSlots on a helmet that hides the face", () => {
+    const run = (faceSlots, face = true) => validateWardrobe(withHelmet({ face, faceSlots }), [{ id: "a", helmets: { h: helm() } }]);
+    expect(run({ eyes: false })).toEqual([]);
+    expect(run({ eyes: true, face: false })).toEqual([]);
+    expect(run({ eyes: false, chin: false })).toEqual([expect.stringMatching(/"h" faceSlots unknown slot "chin"/)]);
+    expect(run({ face: "no" })).toEqual([expect.stringMatching(/"h" faceSlots\.face is not true or false/)]);
+    expect(run({ eyes: false }, false)).toEqual([expect.stringMatching(/"h" declares faceSlots but hides the face/)]);
+  });
+
+  it("reports a mouth that is not a MOUTHS word", () => {
+    const run = (mouth) => validateWardrobe(withHelmet({ mouth }), [{ id: "a", helmets: { h: helm() } }]);
+    expect(run("face")).toEqual([]);
+    expect(run("led")).toEqual([]);
+    expect(run("lips")).toEqual([expect.stringMatching(/"h" mouth "lips" is not one of face, led/)]);
+    expect(run(true)).toEqual([expect.stringMatching(/"h" mouth "true" is not one of/)]);
+  });
+
+  it("reports seats, faceSlots or mouth declared on a helmet's art: they belong on its data entry", () => {
+    const run = (art) => validateWardrobe([theme("a", [], ["h"])], [{ id: "a", helmets: { h: { ...helm(), ...art } } }]);
+    expect(run({ seats: { crown: false } })).toEqual([expect.stringMatching(/art "h" declares seats, which belongs on its data entry/)]);
+    expect(run({ faceSlots: { eyes: false } })).toEqual([expect.stringMatching(/art "h" declares faceSlots, which belongs on its data entry/)]);
+    expect(run({ mouth: "led" })).toEqual([expect.stringMatching(/art "h" declares mouth, which belongs on its data entry/)]);
+  });
+
+  it("reports a shoulder without art, shoulder art without an entry, and one filed under another theme", () => {
+    const msgs = validateWardrobe([theme("a", [], [], ["p"])], [{ id: "a", shoulders: { q: pad() } }]);
+    expect(msgs).toHaveLength(2);
+    expect(msgs.some((m) => /^shoulders: "p" .*no art/.test(m))).toBe(true);
+    expect(msgs.some((m) => /^shoulders: art "q" .*no entry/.test(m))).toBe(true);
+    const moved = validateWardrobe([theme("a", [], [], ["p"]), theme("b", [])], [{ id: "a" }, { id: "b", shoulders: { p: pad() } }]);
+    expect(moved).toEqual([expect.stringMatching(/^shoulders: art "p" is in theme "b" but its entry is in "a"/)]);
+  });
+
+  it("reports a shoulder without a paint function or with a maxShoulderScale that is not a finite number", () => {
+    const run = (art) => validateWardrobe([theme("a", [], [], ["p"])], [{ id: "a", shoulders: { p: art } }]);
+    expect(run(pad({ paint: undefined }))).toEqual([expect.stringMatching(/shoulders: "p" has no paint function/)]);
+    expect(run(pad({ maxShoulderScale: 1.1 }))).toEqual([]);
+    for (const bad of [Number.NaN, Infinity, "1", undefined]) {
+      expect(run(pad({ maxShoulderScale: bad })), String(bad)).toEqual([expect.stringMatching(/shoulders: "p" maxShoulderScale is not a finite number/)]);
+    }
+  });
+
+  it("passes a consistent pair", () => {
+    expect(validateWardrobe([theme("a", ["x"])], [{ id: "a", frames: { x: art(["kit"]) } }])).toEqual([]);
+    expect(validateWardrobe([theme("a", ["x"], ["h"])], [{ id: "a", frames: { x: art() }, helmets: { h: helm() } }])).toEqual([]);
+    expect(validateWardrobe([theme("a", [], [], ["p"])], [{ id: "a", shoulders: { p: pad({ maxShoulderScale: 1 }) } }])).toEqual([]);
+  });
+});
+

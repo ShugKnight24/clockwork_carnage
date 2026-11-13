@@ -323,7 +323,7 @@ export function createCampaignSweep(game, t) {
         else if (dist(tg) > 8) t.stepToward(game, tg.x, tg.y, face);
         else if (obj && obj.why !== "hunt" && obj.why !== "boss" && dist(tg) > 5) t.stepToward(game, obj.x, obj.y, face);
       } else if (obj && !holding) {
-        p.aimOffsetY = 0;
+        p.lookShiftY = 0;
         if (!t.stepToward(game, obj.x, obj.y)) {
           t.aimAt(game, obj.x, obj.y);
           game.keys[kb.moveForward] = true;

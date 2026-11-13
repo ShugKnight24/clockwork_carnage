@@ -131,7 +131,7 @@ const SUP_ROUTES = {
   // In at the door and round the benches, to where the cadet can see him.
   enter: [[27.5, 41.5], [24.5, 41.5], [23.0, 43.5], [18.5, 44.3]],
   // He leaves you to the suit and goes on ahead to the range.
-  ahead: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5], [29.5, 41.5], [34.5, 41.5], [37.5, 44.8]],
+  ahead: [[23.0, 43.5], [24.5, 41.5], [27.5, 41.5], [29.5, 41.5], [36.5, 41.5], [37.5, 44.8]],
   atRange: [[37.5, 44.8]],
   // At the alarm he goes down to his people the only way there is: Lift B,
   // the car the thing came up in. He turns in it to look at you.
@@ -599,11 +599,18 @@ function calibParts(c) {
  * north end, the one up close for blind fire, and how often the targets
  * put a round into your cover while you are down behind it.
  */
-const DRILL_TARGETS = [[41.5, 4.5], [46.5, 4.5]];
-const DRILL_BLIND_AT = [43.5, 6.5];
+const DRILL_TARGETS = [[41.5, 4.5], [46.5, 4.5], [38.5, 3.5], [43.5, 3.5], [48.5, 3.5], [50.5, 5.5], [39.5, 5.5]];
+const DRILL_BLIND_AT = [[43.5, 6.5], [41.5, 6.5], [46.5, 7.5]];
+/** The peek part's pairs, taken in turn from DRILL_TARGETS: a new pair each time both go down. */
+const DRILL_PAIRS = [[0, 1], [2, 4], [3, 5], [6, 1], [0, 4], [2, 5]];
 const DRILL_VOLLEY = 1.1;
 /** Blind shots that earn the blind-fire part without a kill: it's about keeping heads down. */
 const DRILL_BLIND_SHOTS = 4;
+
+/** The cover drill's `round`th pair of peek targets. */
+function drillPair(round) {
+  return DRILL_PAIRS[round % DRILL_PAIRS.length].map((i) => DRILL_TARGETS[i]);
+}
 
 /** The range's reload drill: active reloads it wants, and the Supervisor's word on a jam. */
 const RELOAD_GOAL = 2;
@@ -702,14 +709,47 @@ function setTimeoutGame(t, seconds, fn) {
 /**
  * A walking route over open floor from (x, y) to (tx, ty): the BFS field the
  * enemies steer by (src/systems/ai-nav.js), followed downhill, kept only at
- * its turns. Falls back to the straight line when there is no way.
+ * its turns. Falls back to the straight line when there is no way: callers
+ * that walk someone in sight check wayThrough() first.
  */
 function route(map, x, y, tx, ty) {
+  const cells = routeCells(map, x, y, tx, ty);
+  if (!cells) return [[tx, ty]];
+  // Keep the turns: a point where the direction changes.
+  const out = [];
+  for (let i = 0; i < cells.length - 1; i++) {
+    const [ax, ay] = i ? cells[i - 1] : [Math.floor(x) + 0.5, Math.floor(y) + 0.5];
+    const [bx, by] = cells[i];
+    const [nx, ny] = cells[i + 1];
+    if (Math.sign(bx - ax) !== Math.sign(nx - bx) || Math.sign(by - ay) !== Math.sign(ny - by)) out.push(cells[i]);
+  }
+  out.push([tx, ty]);
+  return out;
+}
+
+/**
+ * The doors (TUTORIAL_MAP.doors names) someone has to open to walk from
+ * (x, y) to (tx, ty): [] when the floor is open all the way, null when even
+ * with every door open there is no way.
+ */
+function wayThrough(map, x, y, tx, ty) {
+  if (routeCells(map, x, y, tx, ty)) return [];
+  const shut = Object.entries(TUTORIAL_MAP.doors).filter(([, cells]) => cells.some((d) => map.grid[d.y][d.x] !== 0));
+  const grid = map.grid.map((row) => row.slice());
+  for (const [, cells] of shut) for (const d of cells) grid[d.y][d.x] = 0;
+  const cells = routeCells({ ...map, grid }, x, y, tx, ty);
+  if (!cells) return null;
+  const on = new Set(cells.map(([cx, cy]) => `${Math.floor(cx)},${Math.floor(cy)}`));
+  return shut.filter(([, door]) => door.some((d) => on.has(`${d.x},${d.y}`))).map(([name]) => name);
+}
+
+/** The cell centres of the way from (x, y) down the nav field to (tx, ty), or null when there is none. */
+function routeCells(map, x, y, tx, ty) {
   const f = buildNavField(map, tx, ty);
   let cx = Math.floor(x);
   let cy = Math.floor(y);
   let d = f.dist[cy * f.w + cx];
-  if (!(d >= 0)) return [[tx, ty]];
+  if (!(d >= 0)) return null;
   const cells = [];
   for (let guard = 0; d > 0 && guard < 600; guard++) {
     let best = null;
@@ -731,16 +771,7 @@ function route(map, x, y, tx, ty) {
     d = best.d;
     cells.push([cx + 0.5, cy + 0.5]);
   }
-  // Keep the turns: a point where the direction changes.
-  const out = [];
-  for (let i = 0; i < cells.length - 1; i++) {
-    const [ax, ay] = i ? cells[i - 1] : [Math.floor(x) + 0.5, Math.floor(y) + 0.5];
-    const [bx, by] = cells[i];
-    const [nx, ny] = cells[i + 1];
-    if (Math.sign(bx - ax) !== Math.sign(nx - bx) || Math.sign(by - ay) !== Math.sign(ny - by)) out.push(cells[i]);
-  }
-  out.push([tx, ty]);
-  return out;
+  return cells;
 }
 
 /**
@@ -880,7 +911,13 @@ const LOGIC = {
     enter(t, g) {
       t.lockerLight(g, true);
       t.c.suited = false;
-      setTimeoutGame(t, 0.8, () => t.supWalk(g, "ahead"));
+      // He goes on ahead to the range, opening its door (door2, across his
+      // route) as he goes: shut, he walked through it. Its drills wait for
+      // their own steps, so the range open early holds nothing to find.
+      setTimeoutGame(t, 0.8, () => {
+        t.openDoors(g, "door2");
+        t.supWalk(g, "ahead");
+      });
     },
     update: (t) => t.c.suited,
     exit(t, g) {
@@ -1041,6 +1078,7 @@ const LOGIC = {
         if (on && still) c.read += dt;
         if (c.read >= CALIB_FRAME_TIME) {
           c.part = "eyes";
+          p.stamina = p.staminaCap ?? p.maxStamina;
           // What she hadn't got to about the last part is behind you now.
           t.script = t.script.filter((q) => q.step !== t.step);
           t.say(CALIB_LINES.eyes);
@@ -1086,9 +1124,11 @@ const LOGIC = {
         }
       }
       // The suit coming online: each bar is its part's reading, held there
-      // (no regen, no spending) until the part is done.
+      // (no regen, no spending) until the part is done. Then it is yours: a
+      // frame held full through the eyes and the anchor was stamina you could
+      // sprint on forever, off the pad, until the anchor took.
       const k = calibParts(c);
-      p.stamina = (p.staminaCap ?? p.maxStamina) * k.frame;
+      if (c.part === "frame") p.stamina = (p.staminaCap ?? p.maxStamina) * k.frame;
       p.chronoEnergy = p.maxChronoEnergy * k.anchor;
       p.chronoActive = false;
       if (c.rig) {
@@ -1481,11 +1521,11 @@ const LOGIC = {
 
   /**
    * Cover (src/systems/cover-play.js), on two holo blocks before the waves:
-   * take the first, pop up and drop two targets, blind-fire one more, then
-   * slide to the second. The targets fire into the block while you are down
-   * behind it, so a stopped round is felt, and a hit while you're up lands
-   * on the sim, not you. The counts are the game's (coverStats), taken from
-   * here on.
+   * take the first, then pop up and drop two targets and blind-fire the one
+   * up close, in either order, then slide to the second. The targets fire
+   * into the block while you are down behind it, so a stopped round is felt,
+   * and a hit while you're up lands on the sim, not you. The counts are the
+   * game's (coverStats), taken from here on.
    */
   coverDrill: {
     enter(t, g) {
@@ -1494,6 +1534,7 @@ const LOGIC = {
       t.c.stage = "take";
       t.c.base = { ...g.coverStats };
       t.c.blindShots = 0;
+      t.c.coverHipKills = 0;
       t.c.shots = g.shotsFired || 0;
       t.c.volley = DRILL_VOLLEY;
       t.c.retry = 1;
@@ -1507,10 +1548,10 @@ const LOGIC = {
         c.retry = 1;
         t.raiseCover(g, "drill");
       }
-      // Rounds fired from cover without the sights up: blind fire.
+      // Rounds fired from cover without the sights up: blind fire, whenever it comes.
       const fired = (g.shotsFired || 0) - c.shots;
       c.shots = g.shotsFired || 0;
-      if (fired > 0 && p.cover && !p.isAiming) c.blindShots += fired;
+      if (fired > 0 && c.stage === "fight" && p.cover && !p.isAiming) c.blindShots += fired;
       if (got("shotsBlocked") > 0 && !c.feltIt) {
         c.feltIt = true;
         t.say([["ARIA", "Hear that? That one had your name on it.", "happy"]]);
@@ -1518,25 +1559,31 @@ const LOGIC = {
       if (c.stage === "take") {
         g.objectiveWaypoint = DRILL_COVER.first;
         if (got("tookCover") + got("coverDashes") < 1) return false;
-        c.stage = "peek";
-        t.spawnTargets(g, "coverDrill", DRILL_TARGETS, 20, "henchman");
-        t.say([["LIN", "They shoot back now. Stay down and it hits the block. Aim to pop up, fire, drop.", "calm"]]);
-      } else if (c.stage === "peek") {
-        if (got("peekKills") < 2) {
-          if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", DRILL_TARGETS, 20, "henchman");
-        } else {
-          c.stage = "blind";
-          t.clearTargets(g, "coverDrill");
-          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
-          c.blindShots = 0;
-          c.coverHipKills = 0;
-          t.say([["LIN", "Now stay down and don't aim. Just fire. It's wild, but it keeps their heads down.", "excited"]]);
+        c.stage = "fight";
+        c.round = 0;
+        c.blindRound = 0;
+        c.blindShots = 0;
+        c.coverHipKills = 0;
+        t.spawnTargets(g, "coverDrill", drillPair(0), 20, "henchman");
+        t.spawnTargets(g, "coverBlind", [DRILL_BLIND_AT[0]], 10, "henchman");
+        t.say([
+          ["LIN", "They shoot back now. Stay down and it hits the block. Aim to pop up, fire, drop.", "calm"],
+          ["LIN", "The close one, stay down and don't aim. Just fire. It's wild, but it keeps their heads down.", "excited"],
+        ]);
+      } else if (c.stage === "fight") {
+        const peeked = got("peekKills") >= 2;
+        const blinded = got("blindFireKills") >= 1 || c.coverHipKills >= 1 || c.blindShots >= DRILL_BLIND_SHOTS;
+        // Each part's targets stand until that part is done, then go.
+        if (peeked) t.clearTargets(g, "coverDrill");
+        else if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", drillPair(++c.round), 20, "henchman");
+        if (blinded) t.clearTargets(g, "coverBlind");
+        else if (t.alive(g, "coverBlind") === 0) {
+          t.spawnTargets(g, "coverBlind", [DRILL_BLIND_AT[++c.blindRound % DRILL_BLIND_AT.length]], 10, "henchman");
         }
-      } else if (c.stage === "blind") {
-        if (got("blindFireKills") >= 1 || c.coverHipKills >= 1 || c.blindShots >= DRILL_BLIND_SHOTS) {
+        if (peeked && blinded) {
           c.stage = "dash";
           t.say([["LIN", "Next block, on your left. Look at it and go. Stay low.", "calm"]]);
-        } else if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT], 10, "henchman");
+        }
       } else if (c.stage === "dash") {
         g.objectiveWaypoint = DRILL_COVER.second;
         if (got("coverDashes") >= 1) return true;
@@ -1548,18 +1595,20 @@ const LOGIC = {
       const c = t.c;
       if (!c.base) return "";
       const got = (k) => (g.coverStats?.[k] ?? 0) - (c.base[k] ?? 0);
-      const at = ["take", "peek", "blind", "dash"].indexOf(c.stage);
-      const n = (i, have, of) => `${at > i ? of : Math.min(of, have)}/${of}`;
+      const took = c.stage !== "take";
+      const blindDone = got("blindFireKills") >= 1 || c.coverHipKills >= 1;
+      const n = (done, have, of) => `${done ? of : Math.min(of, have)}/${of}`;
       return [
-        `COVER ${n(0, got("tookCover") + got("coverDashes"), 1)}`,
-        `PEEK KILLS ${n(1, got("peekKills"), 2)}`,
-        `BLIND FIRE ${n(2, c.blindShots ?? 0, DRILL_BLIND_SHOTS)}`,
-        `COVER DASH ${n(3, got("coverDashes"), 1)}`,
+        `COVER ${n(took, got("tookCover") + got("coverDashes"), 1)}`,
+        `PEEK KILLS ${n(false, took ? got("peekKills") : 0, 2)}`,
+        `BLIND FIRE ${n(blindDone, c.blindShots ?? 0, DRILL_BLIND_SHOTS)}`,
+        `COVER DASH ${n(false, c.stage === "dash" ? got("coverDashes") : 0, 1)}`,
       ].join(" · ");
     },
     exit(t, g) {
       t.sim = null;
       t.clearTag(g, "coverDrill");
+      t.clearTag(g, "coverBlind");
       clearShots(g);
       t.say([["ARIA", "Like you've been doing it all your life.", "warm"]]);
     },
@@ -2498,12 +2547,22 @@ export class TutorialSystem {
     return { index: b, ...PROLOGUE_BEATS[b] };
   }
 
+  /**
+   * The step's clock starts again from 0; what is still to happen
+   * (setTimeoutGame) keeps its time from now. Set on the last step's clock, a
+   * squad told to move out as you skipped its lines walked a whole scene late.
+   */
+  _rebaseTimers() {
+    for (const q of this._timers) q.at -= this.clock;
+  }
+
   _enter(index) {
     const g = this.game;
     // The two steps before this one: their lines may still finish.
     this._recentSteps = [this.step, ...(this._recentSteps ?? [])].slice(0, 2);
     this.step = index;
     this.stepTime = performance.now();
+    this._rebaseTimers();
     this.clock = 0;
     this.c = { kills: 0, heads: 0, aimedKills: 0, shotgunKills: 0, chronoKills: 0, slides: 0, dashes: 0 };
     // What the last step called in and hasn't come yet stays away.
@@ -2762,6 +2821,17 @@ export class TutorialSystem {
       if (face) n.faceTo(face);
       return;
     }
+    // A shut door on the way: he opens it, rather than walk through the wall.
+    // No way even then: he is simply there, rather than cross the walls in sight.
+    const doors = wayThrough(g.map, n.x, n.y, x, y);
+    if (!doors) {
+      n.x = x;
+      n.y = y;
+      n.path = [];
+      if (face) n.faceTo(face);
+      return;
+    }
+    if (doors.length) this.openDoors(g, ...doors);
     n.walk(route(g.map, n.x, n.y, x, y), { then: (m) => face && m.faceTo(face) });
   }
 
@@ -2859,7 +2929,6 @@ export class TutorialSystem {
    * (read). Returns true when it was used here.
    */
   onInteract() {
-    const g = this.game;
     const id = this.def?.id;
     if (id === "suitUp") return this._openLocker();
     if (id === "breaker" && this._throwBreaker()) return true;
@@ -3714,7 +3783,7 @@ export class TutorialSystem {
     this.c.volley = DRILL_VOLLEY;
     const p = g.player;
     if (!inArea(p, "arena")) return;
-    const from = g.entities.find((e) => e._tutTag === "coverDrill" && e.type === "enemy" && e.health > 0);
+    const from = g.entities.find((e) => (e._tutTag === "coverDrill" || e._tutTag === "coverBlind") && e.type === "enemy" && e.health > 0);
     if (!from) return;
     const a = Math.atan2(p.y - from.y, p.x - from.x);
     const bolt = new Projectile(from.x + Math.cos(a) * 0.4, from.y + Math.sin(a) * 0.4, Math.cos(a), Math.sin(a), 5, 7, "enemy");
@@ -4233,6 +4302,7 @@ export class TutorialSystem {
     this.lockerLight(g, false);
     this.step = TUTORIAL_SANDBOX_STEP;
     this.stepTime = performance.now();
+    this._rebaseTimers();
     this.clock = 0;
     this._postCard(TUTORIAL_SANDBOX_STEP);
     g.objectiveWaypoint = null;

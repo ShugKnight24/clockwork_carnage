@@ -17,12 +17,14 @@ describe("PlayerUpdateSystem.look", () => {
     expect(mouse.dx).toBe(0);
   });
 
-  it("moves the grid reticle and consumes the delta", () => {
+  it("turns and tilts the grid view and consumes the delta", () => {
     const sys = new PlayerUpdateSystem();
     const p = new Player(5.5, 5.5);
     const mouse = { dx: 12, dy: -8 };
     sys.look({ player: p, mouse, settings: {}, world: null });
-    expect(p.aimOffsetX).not.toBe(0);
+    expect(p.angle).toBeGreaterThan(0);
+    expect(p.lookShiftY).toBeLessThan(0);
+    expect(p.aimOffsetX).toBe(0);
     expect(mouse.dx).toBe(0);
     expect(mouse.dy).toBe(0);
   });

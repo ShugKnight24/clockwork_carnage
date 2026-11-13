@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { GamepadManager } from "../../js/gamepad.js";
-import { applyAimDelta } from "../../src/systems/aim.js";
+import { centredLook } from "../../src/systems/aim.js";
 import { DEFAULT_SETTINGS, SETTINGS_REGISTRY, gamepadSettingsFrom } from "../../src/settings/registry.js";
 
 const stdPad = (axes) => ({
@@ -12,22 +12,22 @@ const stdPad = (axes) => ({
   buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes,
 });
 
-/** Reticle Y after one frame of right stick pushed down, as game.js feeds it. */
+/** Look shift after one frame of right stick pushed down, as game.js feeds it. */
 function padAimY(settings) {
   vi.stubGlobal("navigator", { getGamepads: () => [stdPad([0, 0, 0, 1])], userAgent: "" });
   vi.stubGlobal("window", { addEventListener: () => {}, removeEventListener: () => {} });
   const gm = new GamepadManager();
   gm.updateSettings(gamepadSettingsFrom(settings));
   const r = gm.poll(0);
-  const player = { aimOffsetX: 0, aimOffsetY: 0 };
-  applyAimDelta(player, 0, r.lookY * 0.01, settings);
-  return player.aimOffsetY;
+  const player = { angle: 0, lookShiftY: 0 };
+  centredLook(player, 0, r.lookY * 0.01, settings);
+  return player.lookShiftY;
 }
 
 const mouseAimY = (settings) => {
-  const player = { aimOffsetX: 0, aimOffsetY: 0 };
-  applyAimDelta(player, 0, 5, settings);
-  return player.aimOffsetY;
+  const player = { angle: 0, lookShiftY: 0 };
+  centredLook(player, 0, 5, settings);
+  return player.lookShiftY;
 };
 
 describe("invert Y", () => {

@@ -2,28 +2,25 @@
  * aim.test.js — Cursor / camera / projectile alignment.
  *
  * The reticle is the source of truth for shooting. These tests guard:
- *   1. screen reticle pos ↔ world ray are mathematically aligned
- *   2. mouse delta produces matching cursor + camera response
- *   3. recenter does NOT decay the reticle while player is idle / aiming
- *   4. fire-from-player-origin matches hit-test origin (no offset drift)
+ *   1. screen reticle pos ↔ world ray are mathematically aligned, for any
+ *      reticle offset the projection allows
+ *   2. fire-from-player-origin matches hit-test origin (no offset drift)
+ *   3. aiming in from cover waits for the pop-out
+ *   4. a shot's kick never moves where the next round goes (the bump moves
+ *      the drawn frame, reticle and all: frame-kick.test.js)
+ * Centred look itself (the only grid aim) is in centred-aim.test.js.
  */
 import { describe, it, expect } from "vitest";
 import {
-  applyAimDelta,
-  recenterAim,
   aimAngles,
   reticlePoint,
   aimHeightAtDistance,
   updateAdsFov,
   resetAdsFov,
-  effectiveAimFov,
   getAimBlend,
+  aimAnglesForGame,
 } from "../../src/systems/aim.js";
 import { rayEnemyHit } from "../../src/systems/combat.js";
-import {
-  PLAYER_AIM_LIMIT_X,
-  PLAYER_AIM_SENSITIVITY,
-} from "../../src/constants.js";
 
 const makePlayer = (over = {}) => ({
   x: 0, y: 0, angle: 0,
@@ -55,7 +52,7 @@ describe("aim — reticle ↔ world ray alignment", () => {
   });
 
   it("crosshair drawn at screen fraction maps to bullet hitting that ray", () => {
-    // Reticle painted at the right edge of the deadzone.
+    // Reticle painted right of centre.
     const p = makePlayer({ aimOffsetX: 0.15 });
     const { yaw, pitch } = aimAngles(p, 70);
     const dist = 12;
@@ -139,48 +136,6 @@ describe("aim — reticle ↔ world ray alignment", () => {
   });
 });
 
-describe("aim — applyAimDelta (cursor moves freely, camera takes overflow)", () => {
-  it("small dx moves only the reticle, no camera turn", () => {
-    const p = makePlayer();
-    const { overflowX } = applyAimDelta(p, 20, 0, { sensitivity: 1 });
-    expect(p.aimOffsetX).toBeCloseTo(20 * PLAYER_AIM_SENSITIVITY);
-    expect(overflowX).toBe(0);
-  });
-
-  it("oversized dx clamps reticle and returns overflow in mouse-pixel units", () => {
-    const p = makePlayer();
-    // Push way past the limit: dx = LIMIT/SENS * 4 → triple the deadzone.
-    const dx = (PLAYER_AIM_LIMIT_X / PLAYER_AIM_SENSITIVITY) * 4;
-    const { overflowX } = applyAimDelta(p, dx, 0, { sensitivity: 1 });
-    expect(p.aimOffsetX).toBeCloseTo(PLAYER_AIM_LIMIT_X);
-    // overflow should be the un-applied raw mouse pixels (positive), and
-    // roughly 3× the consumed amount.
-    expect(overflowX).toBeGreaterThan(0);
-    expect(overflowX).toBeCloseTo(dx - PLAYER_AIM_LIMIT_X / PLAYER_AIM_SENSITIVITY, 1);
-  });
-
-  it("invertX flips reticle direction without breaking overflow sign", () => {
-    const p = makePlayer();
-    applyAimDelta(p, 30, 0, { sensitivity: 1, invertX: true });
-    expect(p.aimOffsetX).toBeLessThan(0);
-  });
-});
-
-describe("aim — recenterAim", () => {
-  it("decays reticle gently toward zero", () => {
-    const p = makePlayer({ aimOffsetX: 0.1, aimOffsetY: 0.05 });
-    recenterAim(p, 1 / 60); // one frame
-    expect(Math.abs(p.aimOffsetX)).toBeLessThan(0.1);
-    expect(Math.abs(p.aimOffsetX)).toBeGreaterThan(0.05); // not violent
-  });
-
-  it("does not flip sign past zero in one step", () => {
-    const p = makePlayer({ aimOffsetX: 0.01 });
-    recenterAim(p, 1 / 60);
-    expect(p.aimOffsetX).toBeGreaterThanOrEqual(0);
-  });
-});
-
 describe("aim — projectile origin matches hit-test origin", () => {
   // The orchestrator now spawns projectiles at (player.x, player.y). The
   // projectile-update hit-test computes aimHeight = tan(pitch) * dist_traveled.
@@ -203,39 +158,6 @@ describe("aim — projectile origin matches hit-test origin", () => {
   });
 });
 
-describe("aim — aiming down sights keeps the target under the reticle", () => {
-  const settings = { fov: 70 };
-  const yawAt = (p) => aimAngles(p, effectiveAimFov(p, settings)).yaw;
-
-  it("holds the aimed-at yaw through the zoom and recentres the reticle", () => {
-    resetAdsFov();
-    const p = { angle: 1.2, aimOffsetX: 0.15, aimOffsetY: -0.2, isAiming: true };
-    const target = yawAt(p);
-    for (let i = 0; i < 60; i++) {
-      updateAdsFov(p, 1 / 60, settings);
-      expect(yawAt(p)).toBeCloseTo(target, 9);
-    }
-    expect(getAimBlend()).toBe(1);
-    expect(Math.abs(p.aimOffsetX)).toBeLessThan(0.002);
-    // Vertical aim is pitch, which the horizontal-only zoom leaves alone.
-    expect(p.aimOffsetY).toBe(-0.2);
-  });
-
-  it("holds it again on the way back out", () => {
-    const p = { angle: 0.4, aimOffsetX: 0.1, isAiming: true };
-    for (let i = 0; i < 30; i++) updateAdsFov(p, 1 / 60, settings);
-    p.aimOffsetX = 0.05; // the player nudges the aim while sighted
-    const target = yawAt(p);
-    p.isAiming = false;
-    for (let i = 0; i < 30; i++) {
-      updateAdsFov(p, 1 / 60, settings);
-      expect(yawAt(p)).toBeCloseTo(target, 9);
-    }
-    expect(getAimBlend()).toBe(0);
-    resetAdsFov();
-  });
-});
-
 describe("aim — from cover, the sights wait for the pop-out", () => {
   it("does not zoom until the peek is mostly up, then does", () => {
     resetAdsFov();
@@ -255,4 +177,26 @@ describe("aim — from cover, the sights wait for the pop-out", () => {
     expect(getAimBlend()).toBeGreaterThan(0);
     resetAdsFov();
   });
+});
+
+describe("aim — kick moves the frame, never the aim", () => {
+  const aimWith = (over) => {
+    const player = makePlayer({ angle: 0.4, aimOffsetY: -0.05, ...over });
+    return aimAnglesForGame({ player, settings: { fov: 70 }, canvas: { height: 720 }, hudH: 720 });
+  };
+
+  for (const [label, over] of [
+    ["from the hip", {}],
+    ["aimed", { isAiming: true }],
+    ["peeking from cover", { cover: { peek: 1 } }],
+    ["aimed from cover", { isAiming: true, cover: { peek: 1 } }],
+  ]) {
+    it(`cameraPunch does not change where the round goes (${label})`, () => {
+      resetAdsFov();
+      const still = aimWith({ ...over, cameraPunch: 0, kickSide: 0 });
+      const kicked = aimWith({ ...over, cameraPunch: 0.05, kickSide: 0.012 });
+      expect(Math.abs(kicked.yaw - still.yaw)).toBeLessThan(1e-9);
+      expect(Math.abs(kicked.pitch - still.pitch)).toBeLessThan(1e-9);
+    });
+  }
 });

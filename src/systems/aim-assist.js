@@ -1,19 +1,18 @@
 /**
- * Touch aim assist: a thumb on glass cannot hold a reticle on a far target the
- * way a mouse can, so on a touch device the aim slows as it crosses an enemy
+ * Touch and pad aim assist: a thumb on glass or a stick cannot hold a reticle
+ * on a far target the way a mouse can, so the aim slows as it crosses an enemy
  * (friction) and leans toward it while the player is aiming or moving
  * (pull). Nothing happens without input: it is help steering, not an aimbot.
  * With the sights up it leans toward the head, so a steady ADS shot is how
  * headshots are made on a phone.
  *
  * Grid levels only (the voxel Forge aims its own way). Pure apart from the
- * player it nudges; js/touch.js calls it.
+ * player it nudges; js/touch.js and src/systems/pad-look.js call it.
  */
 
-import { aimAnglesForGame, currentBarH, centredAim, CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN } from "./aim.js";
+import { aimAnglesForGame, CENTRED_LOOK_LIMIT, CENTRED_LOOK_DOWN } from "./aim.js";
 import { zoneAimHeight, enemyHitRadius } from "./combat.js";
 import { hasLineOfSight, eyeOffsetZ } from "./physics.js";
-import { PLAYER_AIM_LIMIT_Y } from "../constants.js";
 
 /** aimAssist setting values. */
 export const ASSIST_OFF = 0;
@@ -86,17 +85,8 @@ export function applyAssistPull(game, target, level, dt, input) {
   const strength = (level === ASSIST_LOW ? 0.45 : 1) * (p.isAiming ? 1.25 : 1) * Math.min(1, input);
   const k = 1 - Math.exp(-PULL_RATE * strength * Math.min(dt, 0.05));
   p.angle += target.dYaw * k;
-  // Under centred aim, pitch is the world's shift (aim.js sceneShiftPx):
-  // tan(pitch) falls one for one as lookShiftY rises.
-  if (centredAim()) {
-    const y = (p.lookShiftY || 0) - target.dTan * k;
-    p.lookShiftY = Math.max(-CENTRED_LOOK_LIMIT, Math.min(CENTRED_LOOK_DOWN, y));
-    return;
-  }
-  // Pitch lives in the reticle's vertical offset (aimAngles: tan(pitch)
-  // falls as offY rises, scaled by the view's share of the canvas).
-  const h = game.canvas?.height || 1;
-  const viewFrac = (h - currentBarH(game)) / h || 1;
-  const offY = (p.aimOffsetY || 0) - (target.dTan * k) / viewFrac;
-  p.aimOffsetY = Math.max(-PLAYER_AIM_LIMIT_Y, Math.min(PLAYER_AIM_LIMIT_Y, offY));
+  // Pitch is the world's shift under the centred reticle (aim.js
+  // sceneShiftPx): tan(pitch) falls one for one as lookShiftY rises.
+  const y = (p.lookShiftY || 0) - target.dTan * k;
+  p.lookShiftY = Math.max(-CENTRED_LOOK_LIMIT, Math.min(CENTRED_LOOK_DOWN, y));
 }

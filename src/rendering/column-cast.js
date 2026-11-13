@@ -45,14 +45,19 @@ export function createColumnHits(max = MAX_COLUMN_HITS) {
   };
 }
 
-/** Screen Y of a wall's top edge `frac` high at distance `d`, seen from eye height `eye`. */
+/**
+ * Screen Y of a wall's top edge `frac` high at distance `d`, seen from eye
+ * height `eye`. `h` is the vertical focal length (renderer focalY: the screen
+ * height times the sights' zoom).
+ */
 export function wallTopY(frac, d, h, horizon, eye = 0.5) {
   return horizon + ((eye - frac) * h) / d;
 }
 
 /**
  * March one screen column from (camX, camY) along (rayDirX, rayDirY).
- * `h` is the screen height, `horizon` the eye-level row (h/2 + yShift) and
+ * `h` is the vertical focal length (renderer focalY: the screen height times
+ * the sights' zoom), `horizon` the eye-level row (h/2 + the drawn shift) and
  * `eye` the eye's height in wall units (0.5 standing).
  * Fills `hits` front to back; the last hit is the one that closes the column.
  */

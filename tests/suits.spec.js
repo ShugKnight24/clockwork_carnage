@@ -23,18 +23,17 @@ for (const look of LOOKS) {
     const missing = await page.evaluate(async (l) => {
       const g = window.ccDebug.game;
       const m = await import("/src/systems/unlocks.js");
-      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.index);
+      for (const it of m.lockedItems(m.gameUnlockContext(g, { fresh: true }))) m.grantOwned(it.key, it.id);
       const d = await import("/src/data/cosmetics.js");
       const missing = [];
-      const idx = (table, id) => {
-        const i = table.findIndex((t) => t.id === id);
-        if (i < 0) missing.push(id);
-        return Math.max(0, i);
+      const known = (table, id) => {
+        if (!table.some((t) => t.id === id)) missing.push(id);
+        return id;
       };
-      g.character.armorIndex = idx(d.ARMOR_STYLES, l.armor);
-      g.character.helmetIndex = idx(d.HELMET_STYLES, l.helmet);
-      g.character.shoulderIndex = idx(d.SHOULDER_STYLES, l.shoulder);
-      g.character.visorIndex = idx(d.VISOR_STYLES, l.visor);
+      g.character.armor = known(d.ARMOR_STYLES, l.armor);
+      g.character.helmet = known(d.HELMET_STYLES, l.helmet);
+      g.character.shoulder = known(d.SHOULDER_STYLES, l.shoulder);
+      g.character.visor = known(d.VISOR_STYLES, l.visor);
       const el = document.querySelector("agent-showroom");
       if (el?.isOpen) el.renderAll();
       return missing;

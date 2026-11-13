@@ -11,11 +11,16 @@ import { noteQuit } from "./playtest-log.js";
 import { shareSession } from "./playtest-export.js";
 import {
   CREATOR_CATEGORIES,
+  cssScale,
+  faceSlotFoot,
   getCreatorLayout,
+  hairColorSwatches,
+  listWindow,
   setCreatorCategory,
   tabRect,
 } from "../ui/character-creator.js";
-import { getIndex, withIndex, togglePlacement } from "../core/character-fields.js";
+import { getIndex, withIndex, withTint, togglePlacement } from "../core/character-fields.js";
+import { PAINT_SWATCHES } from "../data/accessories.js";
 import { isCompactPhone } from "../ui/layout.js";
 import { gameUnlockContext, isUnlocked } from "./unlocks.js";
 
@@ -28,9 +33,9 @@ export function handleCreatorClick(game, e) {
 
   const w = game.canvas.width;
   const h = game.canvas.height;
-  const isMobile = game.isTouchDevice && w < 700;
+  const isMobile = game.isTouchDevice && w / cssScale(w) < 700;
   const categories = CREATOR_CATEGORIES;
-  const L = getCreatorLayout(w, h, isMobile, !!game.isTouchDevice);
+  const L = getCreatorLayout(w, h, isMobile, !!game.isTouchDevice, game.touchControls?.safeArea);
 
   // Tab click detection — the strip wraps over several rows once there are
   // more tabs than fit across the screen.
@@ -53,20 +58,37 @@ export function handleCreatorClick(game, e) {
   const items = curCat.data;
   if (!items) return;
 
-  // Same window the renderer uses — L.maxBySpace is derived from panel height.
-  const maxVisible = Math.min(items.length, L.maxBySpace);
+  // The hair colour row under the cuts (HAIR tab): same boxes the renderer draws.
+  if (curCat.key === "hair") {
+    const hit = hairColorSwatches(L).rects.findIndex((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+    if (hit >= 0) {
+      Object.assign(game.character, withIndex(game.character, "hairColor", hit));
+      game.audio.menuSelect();
+      return;
+    }
+  }
+
+  // The paint swatches under a tintable eyes / face item: the renderer's boxes.
+  const paint = faceSlotFoot(L, curCat, game.character)?.tint;
+  if (paint) {
+    const hit = paint.rects.findIndex((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+    if (hit >= 0) {
+      Object.assign(game.character, withTint(game.character, paint.slot, PAINT_SWATCHES[hit].hex));
+      game.audio.menuSelect();
+      return;
+    }
+  }
+
+  // The rows the renderer drew (listWindow): theme captions take no tap.
   const selIdx = curCat.multi
     ? Math.min(Math.max(game.creatorPlacementSel | 0, 0), items.length - 1)
     : getIndex(game.character, curCat.key);
-  let scrollOff = 0;
-  if (selIdx >= maxVisible) scrollOff = selIdx - maxVisible + 1;
 
   if (mx >= L.contentX && mx <= L.contentX + L.listW) {
-    for (let vi = 0; vi < maxVisible; vi++) {
-      const idx = vi + scrollOff;
-      if (idx >= items.length) break;
-      const iy = L.contentY + 8 + vi * L.itemH;
-      if (my >= iy && my <= iy + L.itemH) {
+    for (const row of listWindow(L, curCat, game.character, selIdx)) {
+      if (row.type !== "item") continue;
+      const idx = row.i;
+      if (my >= row.y && my <= row.y + row.h) {
         // PLACE toggles where the badge is worn; every other tab picks one
         // option, writing through character-fields so nested badge and gear
         // keys land in the right place.
@@ -76,7 +98,7 @@ export function handleCreatorClick(game, e) {
           game.audio.menuSelect();
           return;
         }
-        if (!isUnlocked(curCat.key, idx, gameUnlockContext(game))) return;
+        if (!isUnlocked(curCat.key, items[idx].id, gameUnlockContext(game))) return;
         Object.assign(game.character, withIndex(game.character, curCat.key, idx));
         return;
       }

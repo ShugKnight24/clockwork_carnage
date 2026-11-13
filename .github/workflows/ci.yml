@@ -53,9 +53,13 @@ jobs:
   # 60 s timeout. Playwright's --shard cuts by file order, which put every
   # gameplay spec on one shard, so the groups are listed by hand, balanced on
   # measured time. A spec added to test:pr goes in one of these groups too.
+  # Pinned, not ubuntu-latest: each Playwright release ships browser builds for
+  # the Ubuntu releases it knows, and when latest moved to 26.04 the WebKit this
+  # Playwright has (built for 24.04) could not start. Move this with an upgrade
+  # of @playwright/test that has builds for the newer image.
   e2e:
     name: e2e (${{ matrix.group }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -91,12 +95,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The browsers are built against the OS's system libraries, so the cache
+      # is keyed on the OS release and architecture as well as the Playwright
+      # version: a runner image on a new release downloads fresh browsers
+      # instead of restoring ones that cannot load there.
+      - name: Playwright cache key
+        id: pw-key
+        run: |
+          . /etc/os-release
+          echo "key=playwright-chromium-webkit-${ID}${VERSION_ID}-$(uname -m)-$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: ${{ steps.pw-key.outputs.key }}
 
       - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'

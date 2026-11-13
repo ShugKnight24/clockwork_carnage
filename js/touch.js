@@ -21,13 +21,13 @@ import {
   campaignPromptLayout,
 } from "../src/ui/layout.js";
 import { isPrimaryTouchDevice } from "../src/utils/device.js";
-import { setCentredAim } from "../src/systems/aim.js";
 import { UI, drawButton } from "../src/ui/modern-ui-kit.js";
 import { touchZones, HIT_SHRINK } from "../src/ui/touch-layout.js";
+import { creatorTouchControls, drawCreatorTouchHints } from "../src/ui/character-creator.js";
 import { isReloading } from "../src/systems/reload.js";
 import { gyroLookDelta, gyroActive, webkitRotationOrder } from "../src/systems/gyro-aim.js";
 import { findAssistTarget, assistFriction, applyAssistPull } from "../src/systems/aim-assist.js";
-import { PLAYER_MOUSE_TURN_RATE } from "../src/constants.js";
+import { CENTRED_LOOK_RATE } from "../src/systems/aim.js";
 
 /** A press shorter than this latches AIM or SLOW on; a longer one holds it. */
 const TAP_LATCH_MS = 250;
@@ -63,8 +63,6 @@ export class TouchControls {
 
     const tc = new TouchControls(game);
     tc.setup();
-    // The reticle stays centred and a drag turns the view (src/systems/aim.js).
-    setCentredAim(true);
     return tc;
   }
 
@@ -750,11 +748,11 @@ export class TouchControls {
     const angle = screen.orientation?.angle ?? window.orientation ?? 0;
     this.gyroWebkit ??= webkitRotationOrder();
     const { yaw, pitch } = gyroLookDelta(e.rotationRate, angle, dt, this.gyroWebkit);
-    // Pixels whose camera turn (player-update applyMouseAim) is that many
-    // radians, times the gyro's own gain; the sights' zoom then scales it
-    // down like any other look input.
+    // Pixels whose view turn (centredLook in src/systems/aim.js) is that
+    // many radians, times the gyro's own gain; the sights' zoom then scales
+    // it down like any other look input.
     const gain = Number(g.settings.gyroSensitivity) || 2;
-    const pxPerRad = gain / (PLAYER_MOUSE_TURN_RATE * (p.rotSpeed || 3) * (g.settings.sensitivity || 1));
+    const pxPerRad = gain / (CENTRED_LOOK_RATE * (g.settings.sensitivity || 1));
     g.mouse.dx += yaw * pxPerRad;
     g.mouse.dy -= pitch * pxPerRad;
   }
@@ -817,9 +815,10 @@ export class TouchControls {
     this.assistLast = now;
     const level = Number(g.settings.aimAssist) || 0;
     this.assistTarget = level ? findAssistTarget(g) : null;
-    const p = g.player;
     // The pull follows the aim you give it: a drag, or the trigger. Walking alone leans nothing.
-    const input = this.lookedThisFrame ? 1 : p?.isFiring ? 0.4 : 0;
+    // Only a touch trigger (the fire button or auto-fire): a pad's isFiring
+    // would add this pull on top of the pad's own (src/systems/pad-look.js).
+    const input = this.lookedThisFrame ? 1 : this.activeButtons.has("fire") ? 0.4 : 0;
     applyAssistPull(g, this.assistTarget, level, dt, input);
     this.lookedThisFrame = false;
   }
@@ -1425,28 +1424,18 @@ export class TouchControls {
     ctx.fillText("\u25C0", 30, 72);
     ctx.fillText("\u25B6", w - 30, 72);
 
-    // Hint text
-    ctx.font = "11px monospace";
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.fillText(
-      "Tap tabs \u00B7 \u25C0 \u25B6 to switch \u00B7 Tap items to select",
-      w / 2,
-      btnY - 12,
-    );
+    // Hints in the lanes beside the buttons, clear of the panels and the
+    // edge zones; left out where a lane is too narrow.
+    drawCreatorTouchHints(ctx, bounds.controls, this.game);
 
     ctx.globalAlpha = 1;
   }
 
   /** Shared creator button bounds — used by both touch handler and renderer */
   _creatorButtonBounds(w, h) {
-    const sa = this.safeArea;
-    const btnH = 52;
-    const btnW = Math.min(140, Math.max(110, w * 0.18));
-    const gap = 16;
-    const btnY = h - btnH - 16 - sa.bottom;
-    const saveX = w / 2 + gap / 2;
-    const cancelX = w / 2 - gap / 2 - btnW;
-    return { btnH, btnW, gap, btnY, saveX, cancelX };
+    const controls = creatorTouchControls(w, h, this.safeArea);
+    const { back, save } = controls;
+    return { btnH: save.h, btnW: save.w, btnY: save.y, saveX: save.x, cancelX: back.x, controls };
   }
 
   renderPauseButtons(ctx) {
