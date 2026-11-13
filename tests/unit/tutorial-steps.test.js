@@ -344,3 +344,36 @@ describe("the prologue's timers across a step change", () => {
     expect(t._timers[0].at).toBeCloseTo(0.6);
   });
 });
+
+// Sent across the floor in sight, the Supervisor keeps to it: a shut door on
+// the way is opened, never walked through, and he never crosses a wall.
+describe("the Supervisor's walks", () => {
+  it("opens his office door on the way back from the range", async () => {
+    const { TutorialSystem } = await import("../../js/tutorial-system.js");
+    const { Npc } = await import("../../js/npc.js");
+    const { TUTORIAL_MAP } = await import("../../src/data/levels/tutorial.js");
+    const grid = TUTORIAL_MAP.grid.map((row) => row.slice());
+    // Every door shut, as before the trials open them.
+    for (const cells of Object.values(TUTORIAL_MAP.doors)) for (const d of cells) grid[d.y][d.x] = 5;
+    const map = { ...TUTORIAL_MAP, grid };
+    const player = { x: 38.5, y: 42.5 };
+    const sup = new Npc(37.5, 44.8, "supervisor", { name: "Supervisor Simon" });
+    const game = { map, player, entities: [sup], keys: {}, audio: {} };
+    const t = new TutorialSystem(game);
+    let path = null;
+    sup.walk = (p) => { path = p; };
+    t.goTo(game, sup, 47.0, 22.4);
+    expect(path).not.toBeNull();
+    // Each leg, sampled finely, stays on open floor.
+    let [x, y] = [sup.x, sup.y];
+    for (const [nx, ny] of path) {
+      for (let s = 0; s <= 40; s++) {
+        const cx = Math.floor(x + ((nx - x) * s) / 40);
+        const cy = Math.floor(y + ((ny - y) * s) / 40);
+        expect(grid[cy][cx], `(${cx}, ${cy}) on the way to (${nx}, ${ny})`).toBe(0);
+      }
+      [x, y] = [nx, ny];
+    }
+    for (const d of TUTORIAL_MAP.doors.door6) expect(grid[d.y][d.x]).toBe(0);
+  });
+});

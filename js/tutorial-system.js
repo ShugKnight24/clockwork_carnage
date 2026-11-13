@@ -709,14 +709,47 @@ function setTimeoutGame(t, seconds, fn) {
 /**
  * A walking route over open floor from (x, y) to (tx, ty): the BFS field the
  * enemies steer by (src/systems/ai-nav.js), followed downhill, kept only at
- * its turns. Falls back to the straight line when there is no way.
+ * its turns. Falls back to the straight line when there is no way: callers
+ * that walk someone in sight check wayThrough() first.
  */
 function route(map, x, y, tx, ty) {
+  const cells = routeCells(map, x, y, tx, ty);
+  if (!cells) return [[tx, ty]];
+  // Keep the turns: a point where the direction changes.
+  const out = [];
+  for (let i = 0; i < cells.length - 1; i++) {
+    const [ax, ay] = i ? cells[i - 1] : [Math.floor(x) + 0.5, Math.floor(y) + 0.5];
+    const [bx, by] = cells[i];
+    const [nx, ny] = cells[i + 1];
+    if (Math.sign(bx - ax) !== Math.sign(nx - bx) || Math.sign(by - ay) !== Math.sign(ny - by)) out.push(cells[i]);
+  }
+  out.push([tx, ty]);
+  return out;
+}
+
+/**
+ * The doors (TUTORIAL_MAP.doors names) someone has to open to walk from
+ * (x, y) to (tx, ty): [] when the floor is open all the way, null when even
+ * with every door open there is no way.
+ */
+function wayThrough(map, x, y, tx, ty) {
+  if (routeCells(map, x, y, tx, ty)) return [];
+  const shut = Object.entries(TUTORIAL_MAP.doors).filter(([, cells]) => cells.some((d) => map.grid[d.y][d.x] !== 0));
+  const grid = map.grid.map((row) => row.slice());
+  for (const [, cells] of shut) for (const d of cells) grid[d.y][d.x] = 0;
+  const cells = routeCells({ ...map, grid }, x, y, tx, ty);
+  if (!cells) return null;
+  const on = new Set(cells.map(([cx, cy]) => `${Math.floor(cx)},${Math.floor(cy)}`));
+  return shut.filter(([, door]) => door.some((d) => on.has(`${d.x},${d.y}`))).map(([name]) => name);
+}
+
+/** The cell centres of the way from (x, y) down the nav field to (tx, ty), or null when there is none. */
+function routeCells(map, x, y, tx, ty) {
   const f = buildNavField(map, tx, ty);
   let cx = Math.floor(x);
   let cy = Math.floor(y);
   let d = f.dist[cy * f.w + cx];
-  if (!(d >= 0)) return [[tx, ty]];
+  if (!(d >= 0)) return null;
   const cells = [];
   for (let guard = 0; d > 0 && guard < 600; guard++) {
     let best = null;
@@ -738,16 +771,7 @@ function route(map, x, y, tx, ty) {
     d = best.d;
     cells.push([cx + 0.5, cy + 0.5]);
   }
-  // Keep the turns: a point where the direction changes.
-  const out = [];
-  for (let i = 0; i < cells.length - 1; i++) {
-    const [ax, ay] = i ? cells[i - 1] : [Math.floor(x) + 0.5, Math.floor(y) + 0.5];
-    const [bx, by] = cells[i];
-    const [nx, ny] = cells[i + 1];
-    if (Math.sign(bx - ax) !== Math.sign(nx - bx) || Math.sign(by - ay) !== Math.sign(ny - by)) out.push(cells[i]);
-  }
-  out.push([tx, ty]);
-  return out;
+  return cells;
 }
 
 /**
@@ -2792,6 +2816,17 @@ export class TutorialSystem {
       if (face) n.faceTo(face);
       return;
     }
+    // A shut door on the way: he opens it, rather than walk through the wall.
+    // No way even then: he is simply there, rather than cross the walls in sight.
+    const doors = wayThrough(g.map, n.x, n.y, x, y);
+    if (!doors) {
+      n.x = x;
+      n.y = y;
+      n.path = [];
+      if (face) n.faceTo(face);
+      return;
+    }
+    if (doors.length) this.openDoors(g, ...doors);
     n.walk(route(g.map, n.x, n.y, x, y), { then: (m) => face && m.faceTo(face) });
   }
 
