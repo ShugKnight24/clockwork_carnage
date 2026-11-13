@@ -2112,15 +2112,18 @@ function botCadet(game) {
         if (p.coverDashTarget) game.dashFromKeys();
         return stepGame(game, 1);
       }
-      const e = live("coverDrill")[0];
+      // Blind fire at the close one first, then peek at the pairs.
+      const blind = live("coverBlind")[0];
+      const e = blind ?? live("coverDrill")[0];
       if (!e) return stepGame(game, 1);
       aimAt(game, e.x, e.y);
       aimForHead(game, e);
       // Peek: sights up stands the cadet over the block; fire once up.
       // Blind: sights down, fire over the top.
-      p.isAiming = stage === "peek";
+      const peek = !blind;
+      p.isAiming = peek;
       pull = !pull;
-      p.isFiring = pull && (stage !== "peek" || p.coverPeeking);
+      p.isFiring = pull && (!peek || p.coverPeeking);
       stepGame(game, 1);
       p.isFiring = false;
     },

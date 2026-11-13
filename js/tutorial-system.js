@@ -1521,11 +1521,11 @@ const LOGIC = {
 
   /**
    * Cover (src/systems/cover-play.js), on two holo blocks before the waves:
-   * take the first, pop up and drop two targets, blind-fire one more, then
-   * slide to the second. The targets fire into the block while you are down
-   * behind it, so a stopped round is felt, and a hit while you're up lands
-   * on the sim, not you. The counts are the game's (coverStats), taken from
-   * here on.
+   * take the first, then pop up and drop two targets and blind-fire the one
+   * up close, in either order, then slide to the second. The targets fire
+   * into the block while you are down behind it, so a stopped round is felt,
+   * and a hit while you're up lands on the sim, not you. The counts are the
+   * game's (coverStats), taken from here on.
    */
   coverDrill: {
     enter(t, g) {
@@ -1534,6 +1534,7 @@ const LOGIC = {
       t.c.stage = "take";
       t.c.base = { ...g.coverStats };
       t.c.blindShots = 0;
+      t.c.coverHipKills = 0;
       t.c.shots = g.shotsFired || 0;
       t.c.volley = DRILL_VOLLEY;
       t.c.retry = 1;
@@ -1547,10 +1548,10 @@ const LOGIC = {
         c.retry = 1;
         t.raiseCover(g, "drill");
       }
-      // Rounds fired from cover without the sights up, once the drill asks for them: blind fire.
+      // Rounds fired from cover without the sights up: blind fire, whenever it comes.
       const fired = (g.shotsFired || 0) - c.shots;
       c.shots = g.shotsFired || 0;
-      if (fired > 0 && c.stage === "blind" && p.cover && !p.isAiming) c.blindShots += fired;
+      if (fired > 0 && c.stage === "fight" && p.cover && !p.isAiming) c.blindShots += fired;
       if (got("shotsBlocked") > 0 && !c.feltIt) {
         c.feltIt = true;
         t.say([["ARIA", "Hear that? That one had your name on it.", "happy"]]);
@@ -1558,28 +1559,30 @@ const LOGIC = {
       if (c.stage === "take") {
         g.objectiveWaypoint = DRILL_COVER.first;
         if (got("tookCover") + got("coverDashes") < 1) return false;
-        c.stage = "peek";
+        c.stage = "fight";
         c.round = 0;
+        c.blindRound = 0;
+        c.blindShots = 0;
+        c.coverHipKills = 0;
         t.spawnTargets(g, "coverDrill", drillPair(0), 20, "henchman");
-        t.say([["LIN", "They shoot back now. Stay down and it hits the block. Aim to pop up, fire, drop.", "calm"]]);
-      } else if (c.stage === "peek") {
-        if (got("peekKills") < 2) {
-          if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", drillPair(++c.round), 20, "henchman");
-        } else {
-          c.stage = "blind";
-          c.round = 0;
-          t.clearTargets(g, "coverDrill");
-          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT[0]], 10, "henchman");
-          c.blindShots = 0;
-          c.coverHipKills = 0;
-          t.say([["LIN", "Now stay down and don't aim. Just fire. It's wild, but it keeps their heads down.", "excited"]]);
+        t.spawnTargets(g, "coverBlind", [DRILL_BLIND_AT[0]], 10, "henchman");
+        t.say([
+          ["LIN", "They shoot back now. Stay down and it hits the block. Aim to pop up, fire, drop.", "calm"],
+          ["LIN", "The close one, stay down and don't aim. Just fire. It's wild, but it keeps their heads down.", "excited"],
+        ]);
+      } else if (c.stage === "fight") {
+        const peeked = got("peekKills") >= 2;
+        const blinded = got("blindFireKills") >= 1 || c.coverHipKills >= 1 || c.blindShots >= DRILL_BLIND_SHOTS;
+        // Each part's targets stand until that part is done, then go.
+        if (peeked) t.clearTargets(g, "coverDrill");
+        else if (t.alive(g, "coverDrill") === 0) t.spawnTargets(g, "coverDrill", drillPair(++c.round), 20, "henchman");
+        if (blinded) t.clearTargets(g, "coverBlind");
+        else if (t.alive(g, "coverBlind") === 0) {
+          t.spawnTargets(g, "coverBlind", [DRILL_BLIND_AT[++c.blindRound % DRILL_BLIND_AT.length]], 10, "henchman");
         }
-      } else if (c.stage === "blind") {
-        if (got("blindFireKills") >= 1 || c.coverHipKills >= 1 || c.blindShots >= DRILL_BLIND_SHOTS) {
+        if (peeked && blinded) {
           c.stage = "dash";
           t.say([["LIN", "Next block, on your left. Look at it and go. Stay low.", "calm"]]);
-        } else if (t.alive(g, "coverDrill") === 0) {
-          t.spawnTargets(g, "coverDrill", [DRILL_BLIND_AT[++c.round % DRILL_BLIND_AT.length]], 10, "henchman");
         }
       } else if (c.stage === "dash") {
         g.objectiveWaypoint = DRILL_COVER.second;
@@ -1592,18 +1595,20 @@ const LOGIC = {
       const c = t.c;
       if (!c.base) return "";
       const got = (k) => (g.coverStats?.[k] ?? 0) - (c.base[k] ?? 0);
-      const at = ["take", "peek", "blind", "dash"].indexOf(c.stage);
-      const n = (i, have, of) => `${at > i ? of : Math.min(of, have)}/${of}`;
+      const took = c.stage !== "take";
+      const blindDone = got("blindFireKills") >= 1 || c.coverHipKills >= 1;
+      const n = (done, have, of) => `${done ? of : Math.min(of, have)}/${of}`;
       return [
-        `COVER ${n(0, got("tookCover") + got("coverDashes"), 1)}`,
-        `PEEK KILLS ${n(1, got("peekKills"), 2)}`,
-        `BLIND FIRE ${n(2, c.blindShots ?? 0, DRILL_BLIND_SHOTS)}`,
-        `COVER DASH ${n(3, got("coverDashes"), 1)}`,
+        `COVER ${n(took, got("tookCover") + got("coverDashes"), 1)}`,
+        `PEEK KILLS ${n(false, took ? got("peekKills") : 0, 2)}`,
+        `BLIND FIRE ${n(blindDone, c.blindShots ?? 0, DRILL_BLIND_SHOTS)}`,
+        `COVER DASH ${n(false, c.stage === "dash" ? got("coverDashes") : 0, 1)}`,
       ].join(" · ");
     },
     exit(t, g) {
       t.sim = null;
       t.clearTag(g, "coverDrill");
+      t.clearTag(g, "coverBlind");
       clearShots(g);
       t.say([["ARIA", "Like you've been doing it all your life.", "warm"]]);
     },
@@ -3779,7 +3784,7 @@ export class TutorialSystem {
     this.c.volley = DRILL_VOLLEY;
     const p = g.player;
     if (!inArea(p, "arena")) return;
-    const from = g.entities.find((e) => e._tutTag === "coverDrill" && e.type === "enemy" && e.health > 0);
+    const from = g.entities.find((e) => (e._tutTag === "coverDrill" || e._tutTag === "coverBlind") && e.type === "enemy" && e.health > 0);
     if (!from) return;
     const a = Math.atan2(p.y - from.y, p.x - from.x);
     const bolt = new Projectile(from.x + Math.cos(a) * 0.4, from.y + Math.sin(a) * 0.4, Math.cos(a), Math.sin(a), 5, 7, "enemy");

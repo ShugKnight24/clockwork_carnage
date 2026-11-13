@@ -283,22 +283,43 @@ describe("the cover drill", () => {
     return { t, game, player, targets, downAll };
   }
 
-  it("counts blind fire only once the blind part starts", async () => {
+  it("counts blind fire and peek kills in either order", async () => {
     const { t, game, player } = await drilling();
+    // Hip shots before cover count for nothing.
+    game.shotsFired = 2;
+    t.logic.update(t, game);
     game.coverStats.tookCover = 1;
     t.logic.update(t, game);
-    expect(t.c.stage).toBe("peek");
-    // Hip shots from cover while the drill still wants peek kills.
+    expect(t.c.stage).toBe("fight");
+    expect(game.entities.some((e) => e._tutTag === "coverBlind" && e.health > 0)).toBe(true);
+    // Blind fire first, with no peek kills yet: it counts.
     player.cover = {};
-    game.shotsFired = 3;
-    t.logic.update(t, game);
-    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 0/4");
-    game.coverStats.peekKills = 2;
-    t.logic.update(t, game);
-    expect(t.c.stage).toBe("blind");
     game.shotsFired = 5;
     t.logic.update(t, game);
-    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 2/4");
+    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 3/4");
+    game.shotsFired = 6;
+    t.logic.update(t, game);
+    expect(t.logic.progress(t, game)).toContain("BLIND FIRE 4/4");
+    expect(t.c.stage).toBe("fight");
+    // Its target goes once it's done; the peek pair stays up.
+    expect(game.entities.some((e) => e._tutTag === "coverBlind" && e.health > 0)).toBe(false);
+    expect(game.entities.some((e) => e._tutTag === "coverDrill" && e.health > 0)).toBe(true);
+    game.coverStats.peekKills = 2;
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("dash");
+  });
+
+  it("takes a kill from cover with the sights down as blind fire", async () => {
+    const { t, game, player } = await drilling();
+    game.coverStats.peekKills = 2;
+    game.coverStats.tookCover = 1;
+    t.logic.update(t, game);
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("fight");
+    Object.assign(player, { cover: {}, weapons: [0], currentWeapon: 0 });
+    t.noteKill({});
+    t.logic.update(t, game);
+    expect(t.c.stage).toBe("dash");
   });
 
   it("stands its targets up somewhere new each time they go down", async () => {
