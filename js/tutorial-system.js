@@ -2929,7 +2929,6 @@ export class TutorialSystem {
    * (read). Returns true when it was used here.
    */
   onInteract() {
-    const g = this.game;
     const id = this.def?.id;
     if (id === "suitUp") return this._openLocker();
     if (id === "breaker" && this._throwBreaker()) return true;
