@@ -3300,7 +3300,12 @@ export class Game {
       }
 
       if (e.type === "health") {
-        if (this.player.health >= this.player.maxHealth && this.mode !== "tutorial") continue;
+        if (this.player.health >= this.player.maxHealth) {
+          // Full: it stays on the floor. The prologue's lesson still counts
+          // the cadet finding it (the "patch" step waits on a pickup).
+          if (this.mode === "tutorial") this.tutorialPickedUp = true;
+          continue;
+        }
         this.player.health = Math.min(
           this.player.maxHealth,
           this.player.health + 25,
